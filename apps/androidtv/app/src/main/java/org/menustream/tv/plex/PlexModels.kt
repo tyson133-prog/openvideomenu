@@ -39,7 +39,21 @@ data class MediaContainer(
     val machineIdentifier: String? = null,
     @SerialName("Directory") val directories: List<PlexDirectory> = emptyList(),
     @SerialName("Metadata") val metadata: List<PlexItem> = emptyList(),
+    @SerialName("Hub") val hubs: List<PlexHub> = emptyList(),
 )
+
+@Serializable
+data class PlexHub(val type: String = "", val title: String = "", @SerialName("Metadata") val metadata: List<PlexItem> = emptyList())
+
+/** An entry of /library/sections/{id}/firstCharacter: a letter (or "#") and how many titles start with it. */
+@Serializable
+data class PlexLetter(val key: String, val title: String, val size: Int = 0)
+
+@Serializable
+data class LettersResponse(@SerialName("MediaContainer") val container: LettersContainer)
+
+@Serializable
+data class LettersContainer(@SerialName("Directory") val letters: List<PlexLetter> = emptyList())
 
 @Serializable
 data class PlexDirectory(val key: String, val title: String, val type: String)
@@ -50,6 +64,15 @@ data class PlexItem(
     val key: String = "",
     val type: String = "",
     val title: String = "",
+    /** Episodes: show and season titles, season and episode numbers. */
+    val grandparentTitle: String? = null,
+    val grandparentRatingKey: String? = null,
+    val grandparentThumb: String? = null,
+    val parentTitle: String? = null,
+    val parentIndex: Int? = null,
+    val index: Int? = null,
+    val leafCount: Int? = null,
+    val childCount: Int? = null,
     val year: Int? = null,
     val thumb: String? = null,
     val art: String? = null,

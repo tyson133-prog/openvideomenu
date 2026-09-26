@@ -96,6 +96,44 @@ class PlexServer(
     suspend fun movies(sectionKey: String): List<PlexItem> =
         container("/library/sections/$sectionKey/all", "type" to "1").metadata
 
+    /** A limited page of a list (Plex accepts the container range as query parameters too). */
+    private suspend fun page(path: String, size: Int, vararg params: Pair<String, String>): List<PlexItem> =
+        container(path, "X-Plex-Container-Start" to "0", "X-Plex-Container-Size" to "$size", *params).metadata
+
+    suspend fun onDeck(sectionKey: String? = null, size: Int = 30): List<PlexItem> =
+        page(if (sectionKey == null) "/library/onDeck" else "/library/sections/$sectionKey/onDeck", size)
+
+    suspend fun recentlyAdded(sectionKey: String? = null, size: Int = 30): List<PlexItem> =
+        page(if (sectionKey == null) "/library/recentlyAdded" else "/library/sections/$sectionKey/recentlyAdded", size)
+
+    /** The first letters that titles in a section start with, with counts ("#" for digits/symbols). */
+    suspend fun letters(sectionKey: String): List<PlexLetter> =
+        http.getJson<LettersResponse>(url("/library/sections/$sectionKey/firstCharacter"), identity.headers(token)).container.letters
+
+    /** All titles in a section starting with [letter] (the key from [letters]). */
+    suspend fun byLetter(sectionKey: String, letter: PlexLetter): List<PlexItem> =
+        container("/library/sections/$sectionKey/firstCharacter/${letter.key}").metadata
+
+    suspend fun search(query: String): List<PlexItem> =
+        container("/hubs/search", "query" to query, "limit" to "20").hubs
+            .filter { it.type == "movie" || it.type == "show" || it.type == "episode" }
+            .flatMap { it.metadata }
+
+    /** Seasons of a show, or episodes of a season. */
+    suspend fun children(ratingKey: String): List<PlexItem> = container("/library/metadata/$ratingKey/children").metadata
+
+    /** Every episode of a show, with file paths. */
+    suspend fun allEpisodes(showKey: String): List<PlexItem> = container("/library/metadata/$showKey/allLeaves").metadata
+
+    /** Movies in a section whose title contains [title] (Plex matches substrings). */
+    suspend fun moviesTitled(sectionKey: String, title: String): List<PlexItem> =
+        container("/library/sections/$sectionKey/all", "type" to "1", "title" to title).metadata
+
+    /** Shows in a TV section with this exact title. */
+    suspend fun showsTitled(sectionKey: String, title: String): List<PlexItem> =
+        container("/library/sections/$sectionKey/all", "type" to "2", "title" to title).metadata
+            .filter { it.title.equals(title, ignoreCase = true) }
+
     /** Full metadata for one item, including chapters and file paths. */
     suspend fun item(ratingKey: String): PlexItem? =
         container("/library/metadata/$ratingKey", "includeChapters" to "1").metadata.firstOrNull()

@@ -14,7 +14,8 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.darkColorScheme
 import org.menustream.tv.ui.BusyScreen
 import org.menustream.tv.ui.FailedScreen
-import org.menustream.tv.ui.LibraryScreen
+import org.menustream.tv.ui.BrowseScreen
+import org.menustream.tv.ui.ShowScreen
 import org.menustream.tv.ui.MenuScreen
 import org.menustream.tv.ui.PickServerScreen
 import org.menustream.tv.ui.PlayScreen
@@ -46,23 +47,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(vm: AppViewModel) {
     val screen by vm.screen.collectAsStateWithLifecycle()
-    val source by vm.menuSource.collectAsStateWithLifecycle()
     MaterialTheme(colorScheme = darkColorScheme()) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (val s = screen) {
                 is Screen.Busy -> BusyScreen(s.message)
                 is Screen.SignIn -> SignInScreen(s.code, s.error, vm::signIn)
                 is Screen.PickServer -> PickServerScreen(s.servers) { vm.connect(it) }
-                is Screen.Library -> LibraryScreen(
-                    rows = s.movies,
-                    source = source,
-                    posterUrl = { row -> row.item.thumb?.let { vm.server?.imageUrl(it, 300, 450) } },
-                    imageHeaders = vm.server?.authHeaders() ?: emptyMap(),
-                    onOpen = { vm.open(it) },
-                    onSetServer = { vm.useAssetServer(it) },
-                )
-                is Screen.Menu -> MenuScreen(vm, s.open, onExit = vm::backToLibrary)
-                is Screen.Play -> PlayScreen(s.request, onDone = vm::backToLibrary)
+                Screen.Browse -> BrowseScreen(vm)
+                is Screen.Show -> {
+                    androidx.activity.compose.BackHandler { vm.back() }
+                    ShowScreen(vm, s.state)
+                }
+                is Screen.Menu -> MenuScreen(vm, s.open, onExit = vm::back)
+                is Screen.Play -> PlayScreen(s.request, onDone = vm::back)
                 is Screen.Failed -> FailedScreen(s.message, onRetry = { vm.start() }, onSignOut = vm::signOut)
             }
         }

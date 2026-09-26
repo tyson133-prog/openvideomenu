@@ -71,19 +71,26 @@ fun discoverAssetServers(context: Context): Flow<List<DiscoveredServer>> = callb
     val found = linkedMapOf<String, DiscoveredServer>()
     val executor = Executors.newSingleThreadExecutor()
 
+    // A server may advertise several addresses (machines with VMware/WSL/Docker/VPN adapters);
+    // use the first one whose health check answers from here. Runs on the discovery executor.
     fun publish(info: NsdServiceInfo) {
-        val host = (if (Build.VERSION.SDK_INT >= 34) info.hostAddresses.firstOrNull() else @Suppress("DEPRECATION") info.host)
-            ?.hostAddress ?: return
-        val url = if (host.contains(':')) "http://[$host]:${info.port}" else "http://$host:${info.port}"
-        found[info.serviceName] = DiscoveredServer(info.serviceName, url)
-        trySend(found.values.toList())
+        val hosts = (if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else listOfNotNull(@Suppress("DEPRECATION") info.host))
+            .mapNotNull { it.hostAddress }
+            .sortedBy { it.contains(':') } // IPv4 first
+        val url = hosts.map { h -> if (h.contains(':')) "http://[${h.substringBefore('%')}]:${info.port}" else "http://$h:${info.port}" }
+            .firstOrNull { url -> runCatching { Http.probe.newCall(Request.Builder().url("$url/v1/health").build()).execute().use { it.isSuccessful } }.getOrDefault(false) }
+            ?: return
+        synchronized(found) {
+            found[info.serviceName] = DiscoveredServer(info.serviceName, url)
+            trySend(found.values.toList())
+        }
     }
 
     val listener = object : NsdManager.DiscoveryListener {
         override fun onServiceFound(info: NsdServiceInfo) {
             if (Build.VERSION.SDK_INT >= 34) {
                 nsd.registerServiceInfoCallback(info, executor, object : NsdManager.ServiceInfoCallback {
-                    override fun onServiceUpdated(updated: NsdServiceInfo) = publish(updated)
+                    override fun onServiceUpdated(updated: NsdServiceInfo) = executor.execute { publish(updated) }
                     override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {}
                     override fun onServiceLost() {}
                     override fun onServiceInfoCallbackUnregistered() {}
@@ -91,14 +98,16 @@ fun discoverAssetServers(context: Context): Flow<List<DiscoveredServer>> = callb
             } else {
                 @Suppress("DEPRECATION")
                 nsd.resolveService(info, object : NsdManager.ResolveListener {
-                    override fun onServiceResolved(resolved: NsdServiceInfo) = publish(resolved)
+                    override fun onServiceResolved(resolved: NsdServiceInfo) = executor.execute { publish(resolved) }
                     override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {}
                 })
             }
         }
         override fun onServiceLost(info: NsdServiceInfo) {
-            found.remove(info.serviceName)
-            trySend(found.values.toList())
+            synchronized(found) {
+                found.remove(info.serviceName)
+                trySend(found.values.toList())
+            }
         }
         override fun onDiscoveryStarted(serviceType: String) {}
         override fun onDiscoveryStopped(serviceType: String) {}

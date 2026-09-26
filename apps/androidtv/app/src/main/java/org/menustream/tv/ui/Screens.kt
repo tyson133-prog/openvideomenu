@@ -47,8 +47,6 @@ import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
 import org.menustream.tv.AppViewModel
-import org.menustream.tv.MenuSource
-import org.menustream.tv.MovieRow
 import org.menustream.tv.OpenMenu
 import org.menustream.tv.menu.MenuWebView
 import org.menustream.tv.menu.PageMessage
@@ -110,82 +108,6 @@ fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit
     }
 }
 
-@Composable
-fun LibraryScreen(
-    rows: List<MovieRow>,
-    source: MenuSource,
-    posterUrl: (MovieRow) -> String?,
-    imageHeaders: Map<String, String>,
-    onOpen: (MovieRow) -> Unit,
-    onSetServer: (String?) -> Unit,
-) {
-    var editing by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Movies", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.width(24.dp))
-            Text(source.status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Button(onClick = { editing = !editing }) { Text(if (editing) "Close" else "Menu server…") }
-        }
-        if (editing) AssetServerEditor(source.url) { editing = false; onSetServer(it) }
-        Spacer(Modifier.height(16.dp))
-        val first = remember { FocusRequester() }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(6),
-            contentPadding = PaddingValues(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            items(rows, key = { it.item.ratingKey }) { row ->
-                val index = rows.indexOf(row)
-                Card(onClick = { onOpen(row) }, modifier = if (index == 0) Modifier.focusRequester(first) else Modifier) {
-                    Box(Modifier.aspectRatio(2f / 3f).fillMaxWidth().background(Color(0xFF222222))) {
-                        val url = posterUrl(row)
-                        if (url != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current).data(url)
-                                    .httpHeaders(NetworkHeaders.Builder().apply { imageHeaders.forEach { (k, v) -> set(k, v) } }.build())
-                                    .build(),
-                                contentDescription = row.item.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        } else {
-                            Text(row.item.title, modifier = Modifier.align(Alignment.Center).padding(8.dp))
-                        }
-                        if (row.menu != null) {
-                            Text(
-                                "DISC MENU",
-                                style = MaterialTheme.typography.labelSmall.copy(color = Color.Black, fontWeight = FontWeight.Bold),
-                                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
-                                    .background(Gold, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        LaunchedEffect(rows.isNotEmpty()) { if (rows.isNotEmpty()) runCatching { first.requestFocus() } }
-    }
-}
-
-@Composable
-private fun AssetServerEditor(current: String?, onDone: (String?) -> Unit) {
-    var text by remember { mutableStateOf(current ?: "") }
-    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Menu server address:")
-        BasicTextField(
-            value = text,
-            onValueChange = { text = it },
-            singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
-            modifier = Modifier.width(360.dp).background(Color(0xFF333333), RoundedCornerShape(6.dp)).padding(10.dp),
-        )
-        Button(onClick = { onDone(text.ifBlank { null }) }) { Text("Use") }
-        Button(onClick = { onDone(null) }) { Text("Find automatically") }
-    }
-}
-
 /** A title's disc menu, with native playback layered on top when a button plays something. */
 @Composable
 fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
@@ -208,9 +130,22 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             }
         }
     }
-    DisposableEffect(web) {
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(web, lifecycle) {
         web.open()
-        onDispose { web.destroy() }
+        // Home/other apps: pause the page (its menu music and motion stop), resume on return.
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> web.onPause()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> web.onResume()
+                else -> {}
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            web.destroy()
+        }
     }
     BackHandler {
         val p = playing

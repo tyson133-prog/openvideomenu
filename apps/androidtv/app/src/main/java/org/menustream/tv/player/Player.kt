@@ -54,7 +54,13 @@ fun VideoPlayer(
             prepare()
         }
     }
-    DisposableEffect(player) {
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(player, lifecycle) {
+        // Pause when the app goes to the background (Home); the viewer resumes with play.
+        val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.pause()
+        }
+        lifecycle.addObserver(lifecycleObserver)
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) onEnded()
@@ -77,6 +83,7 @@ fun VideoPlayer(
         player.addListener(listener)
         onReady(PlayerHandle(player))
         onDispose {
+            lifecycle.removeObserver(lifecycleObserver)
             player.removeListener(listener)
             player.release()
         }

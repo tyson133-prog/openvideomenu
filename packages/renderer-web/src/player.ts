@@ -108,6 +108,10 @@ export class MenuPlayer {
     this.input = options.input ?? new KeyboardInput();
     this.input.attach((key) => this.onKey(key));
 
+    // Pause menu music/motion while the page is hidden (browser tab switched, TV app sent to the
+    // background with Home) and pick up where it was when it comes back.
+    document.addEventListener("visibilitychange", this.onVisibility);
+
     this.resizeObserver = new ResizeObserver(() => this.layout());
     this.resizeObserver.observe(this.root);
     this.preloadImages();
@@ -120,6 +124,7 @@ export class MenuPlayer {
 
   destroy() {
     this.input.detach();
+    document.removeEventListener("visibilitychange", this.onVisibility);
     this.resizeObserver.disconnect();
     this.stopIntroWatch();
     this.stopBackground();
@@ -271,6 +276,17 @@ export class MenuPlayer {
       this.playWithAutoplayFallback(el);
     }
   }
+
+  private readonly onVisibility = () => {
+    if (document.hidden) {
+      this.stopBackground();
+      if (!this.transitionVideo.hidden) this.transitionVideo.pause();
+    } else if (this.state.mode === "menu") {
+      for (const el of [this.bgVideo, this.bgAudio]) if (el) this.playWithAutoplayFallback(el);
+    } else if (this.state.mode === "transition") {
+      this.playWithAutoplayFallback(this.transitionVideo);
+    }
+  };
 
   private stopBackground() {
     this.bgVideo?.pause();
