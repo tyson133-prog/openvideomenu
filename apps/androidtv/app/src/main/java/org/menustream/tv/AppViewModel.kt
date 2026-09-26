@@ -361,7 +361,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun play(item: PlexItem, startSeconds: Double) {
         val plex = server ?: return
         val part = item.part ?: return
-        go(Screen.Play(PlayRequest(plex.partUrl(part), plex.authHeaders(), startSeconds, item.title)))
+        go(Screen.Play(PlayRequest(plex.partUrl(part), plex.authHeaders(), startSeconds, item.title, reporterFor(item))))
+    }
+
+    /**
+     * Sends playback state to Plex (timeline), so resume points and watched status match other Plex apps.
+     * One session id per playback; failures are ignored (playback matters more than the report).
+     */
+    private fun reporterFor(item: PlexItem): org.menustream.tv.player.PlaybackReporter {
+        val plex = server
+        val session = java.util.UUID.randomUUID().toString()
+        return org.menustream.tv.player.PlaybackReporter { state, positionMs, durationMs ->
+            if (plex == null) return@PlaybackReporter
+            viewModelScope.launch {
+                attempt { plex.timeline(item.ratingKey, state, positionMs, durationMs.takeIf { it > 0 } ?: (item.duration ?: 0), session) }
+            }
+        }
     }
 
     /** Resolve a menu button's media to something the native player can play. */
@@ -369,7 +384,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val plex = server ?: return null
         val item = open.media[mediaId] ?: return null
         val part = item.part ?: return null
-        return PlayRequest(plex.partUrl(part), plex.authHeaders(), start, item.title)
+        return PlayRequest(plex.partUrl(part), plex.authHeaders(), start, item.title, reporterFor(item))
     }
 
     fun imageUrl(path: String?, width: Int, height: Int): String? = path?.let { server?.imageUrl(it, width, height) }

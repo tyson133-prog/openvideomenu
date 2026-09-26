@@ -18,8 +18,19 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 
+/** Receives playback state for the media server: "playing", "paused" or "stopped", with times in ms. */
+fun interface PlaybackReporter {
+    fun report(state: String, positionMs: Long, durationMs: Long)
+}
+
 /** What to play: a direct-play URL plus the headers it needs (the Plex token). */
-data class PlayRequest(val url: String, val headers: Map<String, String>, val startSeconds: Double, val title: String)
+data class PlayRequest(
+    val url: String,
+    val headers: Map<String, String>,
+    val startSeconds: Double,
+    val title: String,
+    val reporter: PlaybackReporter? = null,
+)
 
 /**
  * Hardware/platform decoders first (and audio passthrough over HDMI when the TV or receiver supports it);
@@ -61,9 +72,18 @@ fun VideoPlayer(
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.pause()
         }
         lifecycle.addObserver(lifecycleObserver)
+        val report = { state: String ->
+            request.reporter?.report(state, player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it > 0 } ?: 0)
+        }
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) onEnded()
+                if (state == Player.STATE_ENDED) {
+                    report("stopped")
+                    onEnded()
+                }
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (player.playbackState != Player.STATE_ENDED) report(if (isPlaying) "playing" else "paused")
             }
             override fun onPlayerError(error: PlaybackException) {
                 onError(
@@ -83,9 +103,17 @@ fun VideoPlayer(
         player.addListener(listener)
         onReady(PlayerHandle(player))
         onDispose {
+            if (player.playbackState != Player.STATE_ENDED) report("stopped")
             lifecycle.removeObserver(lifecycleObserver)
             player.removeListener(listener)
             player.release()
+        }
+    }
+    // While playing, keep the server's progress current (Plex expects about every 10 s).
+    androidx.compose.runtime.LaunchedEffect(player) {
+        while (true) {
+            kotlinx.coroutines.delay(10_000)
+            if (player.isPlaying) request.reporter?.report("playing", player.currentPosition, player.duration.coerceAtLeast(0))
         }
     }
     AndroidView(

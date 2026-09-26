@@ -141,6 +141,28 @@ class PlexServer(
     /** Local extras (Trailers/, Featurettes/, Other/, ...) with their file paths. */
     suspend fun extras(ratingKey: String): List<PlexItem> = container("/library/metadata/$ratingKey/extras").metadata
 
+    /**
+     * Report playback to Plex so resume points and watched status stay in sync with other Plex apps.
+     * Send on every state change and about every 10 s while playing; past Plex's watched threshold
+     * (90% by default) a "stopped" report marks the item watched.
+     */
+    suspend fun timeline(ratingKey: String, state: String, positionMs: Long, durationMs: Long, sessionId: String) {
+        val u = url(
+            "/:/timeline",
+            "ratingKey" to ratingKey,
+            "key" to "/library/metadata/$ratingKey",
+            "state" to state,
+            "time" to "$positionMs",
+            "duration" to "$durationMs",
+        )
+        withContext(Dispatchers.IO) {
+            http.newCall(Request.Builder().url(u).headers(identity.headers(token) + ("X-Plex-Session-Identifier" to sessionId)).build())
+                .execute().use { res ->
+                    if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "timeline $state ${positionMs / 1000}s -> HTTP ${res.code}")
+                }
+        }
+    }
+
     /** Direct-play URL for a file part. The token travels as a header, not in the URL. */
     fun partUrl(part: PlexPart): String = url(part.key)
 
