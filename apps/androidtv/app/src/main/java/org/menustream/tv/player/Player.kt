@@ -100,7 +100,8 @@ fun VideoPlayer(
                             (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         ) {
                             503, 404 -> "Plex says this file isn't available right now. Rescan the library in Plex, then try again."
-                            401, 403 -> "Plex refused access to this file. Try signing in again."
+                            401 -> "Plex refused access to this file. Try signing in again."
+                            403 -> "The server owner hasn't allowed downloads for your account, which this app needs for now."
                             else -> "The media server couldn't send this file (${error.errorCodeName})."
                         }
                         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,

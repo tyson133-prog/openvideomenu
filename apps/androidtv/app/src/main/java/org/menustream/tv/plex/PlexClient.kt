@@ -163,8 +163,14 @@ class PlexServer(
         }
     }
 
-    /** Direct-play URL for a file part. The token travels as a header, not in the URL. */
-    fun partUrl(part: PlexPart): String = url(part.key)
+    /**
+     * Direct-play URL for a file part. The token travels as a header, not in the URL.
+     *
+     * Plex Media Server 1.43+ answers plain part requests with 503; the file is served (with Range
+     * support) when requested as a download. Servers can disable downloads for shared users, who then
+     * get 403 here until transcoded playback is supported.
+     */
+    fun partUrl(part: PlexPart): String = url(part.key, "download" to "1")
 
     /** Headers needed to fetch [partUrl] and images. */
     fun authHeaders(): Map<String, String> = identity.headers(token)
