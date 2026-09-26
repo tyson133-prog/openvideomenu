@@ -3,6 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@menustream/core";
 import { findManifests } from "./files.js";
+import { checkAssetFiles } from "./media-check.js";
 
 export interface CatalogMedia {
   id: string;
@@ -26,6 +27,8 @@ export interface CatalogEntry {
   url: string;
   valid: boolean;
   errors?: string[];
+  /** Problems that don't stop the menu working everywhere: missing menu art, MP4s without faststart. */
+  warnings?: string[];
   version?: string;
   title?: { name: string; year?: number; ids?: Record<string, string | undefined> };
   source?: { kind: string; generator?: string };
@@ -144,6 +147,10 @@ export class Catalog {
       return p.startsWith("../") || p === ".." ? undefined : p;
     };
     const isRelative = (ref: string) => !/^[a-z][a-z0-9+.-]*:/i.test(ref) && !ref.startsWith("/");
+    const assets = menuAssets(m).map(inRoot).filter((p): p is string => p !== undefined);
+    const warnings = checkAssetFiles(assets.map((a) => ({ shown: a, file: join(this.roots[root]!, ...a.split("/")) })));
+    if (m.version !== FORMAT_VERSION && Number(m.version.split(".")[1]) > Number(FORMAT_VERSION.split(".")[1]))
+      warnings.unshift(`Written for ${m.version}; this server reads ${FORMAT_VERSION}. Newer fields are ignored.`);
     return {
       ...base,
       valid: true,
@@ -158,10 +165,8 @@ export class Catalog {
         ref: media.ref,
         path: typeof media.ref === "string" && isRelative(media.ref) ? inRoot(media.ref) : undefined,
       })),
-      assets: menuAssets(m).map(inRoot).filter((p): p is string => p !== undefined),
-      ...(m.version !== FORMAT_VERSION && Number(m.version.split(".")[1]) > Number(FORMAT_VERSION.split(".")[1])
-        ? { errors: [`Written for ${m.version}; this server reads ${FORMAT_VERSION}. Newer fields are ignored.`] }
-        : {}),
+      assets,
+      ...(warnings.length ? { warnings } : {}),
     };
   }
 }

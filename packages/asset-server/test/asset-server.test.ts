@@ -253,6 +253,45 @@ describe("isLocalAddress", () => {
   ])("%s → %s", (ip, expected) => expect(isLocalAddress(ip)).toBe(expected));
 });
 
+describe("isFaststart / checkAssetFiles", () => {
+  const box = (type: string, payload = 8) => {
+    const b = Buffer.alloc(8 + payload);
+    b.writeUInt32BE(8 + payload, 0);
+    b.write(type, 4, "latin1");
+    return b;
+  };
+  const largeMdat = () => {
+    const b = Buffer.alloc(24);
+    b.writeUInt32BE(1, 0); // size 1 → 64-bit size follows
+    b.write("mdat", 4, "latin1");
+    b.writeBigUInt64BE(24n, 8);
+    return b;
+  };
+
+  it("detects where the index is", async () => {
+    const { isFaststart, checkAssetFiles } = await import("../src/index.js");
+    write("mp4/fast.m4a", Buffer.concat([box("ftyp"), box("moov"), box("mdat", 100)]));
+    write("mp4/slow.m4a", Buffer.concat([box("ftyp"), box("mdat", 100), box("moov")]));
+    write("mp4/slow64.mp4", Buffer.concat([box("ftyp"), largeMdat(), box("moov")]));
+    write("mp4/skip.mp4", Buffer.concat([box("ftyp"), box("free", 40), box("moov"), box("mdat")]));
+    const f = (n: string) => join(root, "mp4", n);
+    expect(isFaststart(f("fast.m4a"))).toBe(true);
+    expect(isFaststart(f("slow.m4a"))).toBe(false);
+    expect(isFaststart(f("slow64.mp4"))).toBe(false);
+    expect(isFaststart(f("skip.mp4"))).toBe(true);
+    expect(isFaststart(join(root, "Movie (2020)/menus/bg.jpg"))).toBeUndefined();
+
+    const problems = checkAssetFiles([
+      { shown: "fast.m4a", file: f("fast.m4a") },
+      { shown: "slow.m4a", file: f("slow.m4a") },
+      { shown: "missing.png", file: f("missing.png") },
+    ]);
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toMatch(/slow\.m4a has its index at the end.*faststart/);
+    expect(problems[1]).toBe("Menu asset not found: missing.png");
+  });
+});
+
 describe("NoAuth", () => {
   it("allows everything (testing only)", async () => expect(await new NoAuth().allows(undefined)).toBe(true));
 });

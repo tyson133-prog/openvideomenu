@@ -6,3 +6,4 @@ export { isLocalAddress, NoAuth, PlexTokenCheck } from "./auth.js";
 export type { TokenCheck } from "./auth.js";
 export { advertise, localIPv4s, SERVICE_TYPE } from "./discovery.js";
 export { CONTENT_TYPES, contentType, findManifests, sendFile } from "./files.js";
+export { checkAssetFiles, isFaststart } from "./media-check.js";

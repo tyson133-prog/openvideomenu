@@ -66,6 +66,7 @@ async function main() {
   const invalid = found.filter((e) => !e.valid);
   console.log(`Found ${found.length} manifest(s) in ${o.media.join(", ")}${invalid.length ? ` (${invalid.length} with problems)` : ""}`);
   for (const e of invalid) console.warn(`  ${e.path}: ${e.errors?.[0]}`);
+  for (const e of found) for (const w of e.warnings ?? []) console.warn(`  ${e.path}: ${w}`);
 
   const server = createAssetServer({ catalog, auth, allowRemote: o.allowRemote, log: (l) => console.log(l) });
   await new Promise<void>((resolve, reject) => {
