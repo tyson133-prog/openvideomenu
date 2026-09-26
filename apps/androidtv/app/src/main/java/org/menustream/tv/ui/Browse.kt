@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +71,16 @@ fun BrowseScreen(vm: AppViewModel) {
     var editingServer by remember { mutableStateOf(false) }
     val tab = tabs.getOrNull(selected)
     LaunchedEffect(tab) { tab?.let { vm.loadTab(it) } }
+    // Start with the first poster focused, so the first remote press already moves around.
+    val firstTile = remember { androidx.compose.ui.focus.FocusRequester() }
+    var focusedOnce by rememberSaveable { mutableStateOf(false) }
+    val firstRowReady = rows[BrowseTab.Discs.id]?.isNotEmpty() == true
+    LaunchedEffect(firstRowReady) {
+        if (firstRowReady && !focusedOnce && tab == BrowseTab.Discs) {
+            kotlinx.coroutines.delay(100)
+            focusedOnce = runCatching { firstTile.requestFocus() }.isSuccess
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -93,7 +104,9 @@ fun BrowseScreen(vm: AppViewModel) {
                 val letterState = letters[tab.id]
                 LazyColumn(contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (tabRows == null) item { Text("Loading…", modifier = Modifier.padding(16.dp)) }
-                    items(tabRows ?: emptyList(), key = { "row:" + it.title }) { row -> TileRowView(vm, row) }
+                    items(tabRows ?: emptyList(), key = { "row:" + it.title }) { row ->
+                        TileRowView(vm, row, if (row == tabRows?.firstOrNull()) firstTile else null)
+                    }
                     if (tab is BrowseTab.Discs && tabRows != null && tabRows.none { it.title == "Disc Menus" }) {
                         item { Text("No disc menus yet. Put a .menustream.json manifest next to a title.", modifier = Modifier.padding(16.dp)) }
                     }
@@ -124,17 +137,20 @@ fun BrowseScreen(vm: AppViewModel) {
 }
 
 @Composable
-fun TileRowView(vm: AppViewModel, row: TileRow) {
+fun TileRowView(vm: AppViewModel, row: TileRow, firstFocus: androidx.compose.ui.focus.FocusRequester? = null) {
     Column {
         Text(row.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 32.dp)) {
-            items(row.tiles, key = { it.key }) { TileCard(vm, it) }
+            items(row.tiles, key = { it.key }) { tile ->
+                val m = if (firstFocus != null && tile == row.tiles.first()) Modifier.focusRequester(firstFocus) else Modifier
+                TileCard(vm, tile, m)
+            }
         }
     }
 }
 
 @Composable
-fun TileCard(vm: AppViewModel, tile: Tile) {
+fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
     val (title, subtitle, thumb, hasMenu) = when (tile) {
         is Tile.Media -> {
             val i = tile.item
@@ -149,7 +165,7 @@ fun TileCard(vm: AppViewModel, tile: Tile) {
         is Tile.Disc -> Quad(tile.entry.title?.name ?: "Disc", discLabel(tile), tile.show?.thumb, true)
     }
     Column(Modifier.width(PosterWidth)) {
-        Card(onClick = { vm.open(tile) }) {
+        Card(onClick = { vm.open(tile) }, modifier = modifier) {
             Box(Modifier.width(PosterWidth).height(PosterWidth * 1.5f).background(Color(0xFF222222))) {
                 val url = vm.imageUrl(thumb, 264, 396)
                 if (url != null) {

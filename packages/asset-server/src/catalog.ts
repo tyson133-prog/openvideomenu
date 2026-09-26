@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import { join, posix, resolve, sep } from "node:path";
+import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@menustream/core";
 import { findManifests } from "./files.js";
 
@@ -75,7 +75,10 @@ export class Catalog {
     const base = this.roots[root];
     if (base === undefined) return undefined;
     const full = resolve(base, ...normalized.split("/"));
-    return full.startsWith(base + sep) ? full : undefined;
+    // Containment via relative(): a plain prefix check breaks on roots that resolve with a trailing
+    // separator, such as UNC shares ("\\server\share\") and drive roots ("D:\").
+    const rel = relative(base, full);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? full : undefined;
   }
 
   scan() {

@@ -80,6 +80,29 @@ describe("Catalog", () => {
   });
 });
 
+describe("Catalog roots", () => {
+  it("serves files under roots given with a trailing separator (UNC shares and drive roots resolve that way)", () => {
+    const withSlash = new Catalog([root + "/"]);
+    withSlash.entries();
+    expect(withSlash.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
+    expect(withSlash.resolveFile(0, "Movie (2020)/Movie (2020).mp4")).toBeUndefined();
+    expect(withSlash.resolveFile(0, "../secrets.txt")).toBeUndefined();
+  });
+
+  it.runIf(process.platform === "win32")("serves files under a UNC-style root", () => {
+    // \\localhost\X$\... is a UNC path to the same folder; it resolves with a trailing separator.
+    const drive = root.slice(0, 1);
+    const unc = new Catalog([`\\\\localhost\\${drive}$${root.slice(2)}`]);
+    try {
+      unc.entries(true);
+    } catch {
+      return; // admin shares disabled on this machine: nothing to test
+    }
+    if (unc.entries().length === 0) return;
+    expect(unc.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
+  });
+});
+
 describe("server", () => {
   let base: string;
   let close: () => void;
