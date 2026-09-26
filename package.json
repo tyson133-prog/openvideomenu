@@ -7,12 +7,13 @@
   "workspaces": [
     "packages/core",
     "packages/renderer-web",
+    "packages/asset-server",
     "packages/cli"
   ],
   "scripts": {
-    "build": "npm run build -w @menustream/core && npm run build -w @menustream/renderer-web && npm run build -w @menustream/cli",
+    "build": "npm run build -w @menustream/core && npm run build -w @menustream/renderer-web && npm run build -w @menustream/asset-server && npm run build -w @menustream/cli",
     "test": "vitest run",
-    "typecheck": "tsc -b packages/core packages/renderer-web packages/cli",
+    "typecheck": "tsc -b packages/core packages/renderer-web packages/asset-server packages/cli",
     "preview:sintel": "node packages/cli/dist/main.js preview examples/sintel",
     "preview:dvd": "node packages/cli/dist/main.js preview examples/dvd-shaped"
   },

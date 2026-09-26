@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+examples
+private
+scripts
+conformance
+spec
+.git

@@ -6,3 +6,4 @@ export { step, initialState, startTime, nearestButton } from "./navigator.js";
 export type { Key, NavEvent, Effect, NavState, MenuPosition, StepResult } from "./navigator.js";
 export { resolvePath, resolveMedia } from "./resolve.js";
 export type { MediaResolver } from "./resolve.js";
+export { menuAssets } from "./assets.js";

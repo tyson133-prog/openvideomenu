@@ -7,10 +7,13 @@
   "bin": {
     "menustream": "dist/main.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@menustream/core": "0.1.0",
-    "@menustream/renderer-web": "0.1.0"
+    "@menustream/renderer-web": "0.1.0",
+    "@menustream/asset-server": "0.1.0"
   },
   "scripts": {
     "build": "tsc -b"

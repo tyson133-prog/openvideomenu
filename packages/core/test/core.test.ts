@@ -45,3 +45,18 @@ describe("parseManifest", () => {
     expect(result.errors[0]!.message).toMatch(/Not valid JSON/);
   });
 });
+
+describe("menuAssets", () => {
+  it("lists menu art but never media refs or absolute URLs", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { menuAssets } = await import("../src/index.js");
+    const c = JSON.parse(readFileSync(new URL("../../../conformance/cases/08-motion-buttonsat.json", import.meta.url), "utf8"));
+    expect(menuAssets(c.manifest)).toEqual(["menus/main.jpg", "menus/main.m4a", "menus/main.mp4"]);
+    const t = JSON.parse(readFileSync(new URL("../../../conformance/cases/09-transition-skip.json", import.meta.url), "utf8"));
+    expect(menuAssets(t.manifest)).toEqual(["menus/extras.mp4", "menus/main.mp4", "menus/to-extras.mp4"]);
+    const d = JSON.parse(readFileSync(new URL("../../../conformance/cases/07-dvd-shaped.json", import.meta.url), "utf8"));
+    const assets = menuAssets(d.manifest);
+    expect(assets).toContain("menus/vts1-pgc2-b1-selected.png");
+    expect(assets.some((a: string) => a.endsWith(".mkv"))).toBe(false);
+  });
+});

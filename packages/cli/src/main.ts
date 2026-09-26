@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { FORMAT_NAME, FORMAT_VERSION, parseManifest } from "@menustream/core";
-import { findManifests } from "./find.js";
+import { findManifests } from "@menustream/asset-server";
 import { startPreview } from "./serve.js";
 
 const USAGE = `${FORMAT_NAME} ${FORMAT_VERSION} (draft)
