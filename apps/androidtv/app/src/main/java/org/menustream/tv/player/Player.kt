@@ -72,8 +72,11 @@ fun VideoPlayer(
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.pause()
         }
         lifecycle.addObserver(lifecycleObserver)
+        // Only report to the server once playback has really started: a file that fails to open must
+        // not overwrite the title's resume point (e.g. with a chapter start that never played).
+        var started = false
         val report = { state: String ->
-            request.reporter?.report(state, player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it > 0 } ?: 0)
+            if (started) request.reporter?.report(state, player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it > 0 } ?: 0)
         }
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -83,6 +86,7 @@ fun VideoPlayer(
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) started = true
                 if (player.playbackState != Player.STATE_ENDED) report(if (isPlaying) "playing" else "paused")
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -92,8 +96,15 @@ fun VideoPlayer(
                         PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                         PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
                         -> "This file needs transcoding, which isn't supported yet."
-                        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> when (
+                            (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
+                        ) {
+                            503, 404 -> "Plex says this file isn't available right now. Rescan the library in Plex, then try again."
+                            401, 403 -> "Plex refused access to this file. Try signing in again."
+                            else -> "The media server couldn't send this file (${error.errorCodeName})."
+                        }
                         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
                         -> "Couldn't reach the media server."
                         else -> "Playback failed: ${error.errorCodeName}"
                     },
