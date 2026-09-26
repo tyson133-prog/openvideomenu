@@ -117,7 +117,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var sections: List<PlexDirectory> = emptyList()
     private var signInJob: Job? = null
 
-    init {
+    private var begun = false
+
+    /** Start once the app may use the network (see [LocalNetwork]); later calls do nothing. */
+    fun begin() {
+        if (begun) return
+        begun = true
         start()
     }
 

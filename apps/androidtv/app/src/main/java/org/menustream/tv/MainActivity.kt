@@ -7,6 +7,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -24,10 +25,55 @@ import org.menustream.tv.ui.SignInScreen
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
 
+    /** null = no need to ask; false = asking or refused (see [LocalNetwork]). */
+    private var networkAllowed by androidx.compose.runtime.mutableStateOf<Boolean?>(null)
+    private val askNetwork = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+        networkAllowed = granted
+        if (granted) vm.begin()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { App(vm) }
+        setContent {
+            when (networkAllowed) {
+                false -> org.menustream.tv.ui.NetworkPermissionScreen(onAllow = ::requestNetwork)
+                else -> App(vm)
+            }
+        }
+        if (LocalNetwork.mustAsk(this)) {
+            networkAllowed = false
+            requestNetwork()
+        } else {
+            vm.begin()
+        }
         handleDebugIntent()
+    }
+
+    private var askedNetwork = false
+
+    /**
+     * Ask for the permission; after the viewer has refused twice Android stops showing the prompt, so
+     * send them to the app's settings page instead of a button that does nothing.
+     */
+    private fun requestNetwork() {
+        if (askedNetwork && !shouldShowRequestPermissionRationale(LocalNetwork.PERMISSION)) {
+            startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(android.net.Uri.fromParts("package", packageName, null)),
+            )
+            return
+        }
+        askedNetwork = true
+        askNetwork.launch(LocalNetwork.PERMISSION)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from Settings with the permission now granted.
+        if (networkAllowed == false && !LocalNetwork.mustAsk(this)) {
+            networkAllowed = true
+            vm.begin()
+        }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {

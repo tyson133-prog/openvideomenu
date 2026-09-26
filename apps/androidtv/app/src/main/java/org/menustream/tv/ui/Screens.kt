@@ -193,3 +193,18 @@ fun PlayScreen(request: PlayRequest, onDone: () -> Unit) {
         else Centered { Text(error!!, style = MaterialTheme.typography.headlineSmall) }
     }
 }
+
+/** Shown on Android 17+ until the viewer allows access to the home network. */
+@Composable
+fun NetworkPermissionScreen(onAllow: () -> Unit) = Centered {
+    Text("Allow access to your home network", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(16.dp))
+    Text(
+        "MenuStream needs it to reach your Plex server and the menu server on your network. It connects to nothing else there.",
+        style = MaterialTheme.typography.titleMedium,
+    )
+    Spacer(Modifier.height(24.dp))
+    val focus = remember { FocusRequester() }
+    Button(onClick = onAllow, modifier = Modifier.focusRequester(focus)) { Text("Allow") }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+}

@@ -16,7 +16,8 @@ android {
     defaultConfig {
         applicationId = appId
         minSdk = 26
-        targetSdk = 36
+        // -PtargetSdkOverride=37 builds a test variant for checking Android 17 behaviour (local-network permission).
+        targetSdk = (project.findProperty("targetSdkOverride") as String?)?.toInt() ?: 36
         versionCode = 1
         versionName = "0.1.0"
     }

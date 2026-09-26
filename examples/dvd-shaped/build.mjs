@@ -26,19 +26,29 @@ const SH = 480;
 const DW = 853;
 const toStorageX = (x) => Math.round((x * SW) / DW);
 
+// Each episode is a different real-world rip format, so one copy of this show tests them all.
+const H264 = ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30"];
 const EPISODES = [
-  { id: "s01e01", file: "Season 01/Example Show - s01e01 - Pilot.mp4", title: "Pilot" },
-  { id: "s01e02", file: "Season 01/Example Show - s01e02 - The Second One.mp4", title: "The Second One" },
-  { id: "s01e03", file: "Season 01/Example Show - s01e03 - Finale.mp4", title: "Finale" },
+  { id: "s01e01", file: "Season 01/Example Show - s01e01 - Pilot.mp4", title: "Pilot", format: "H.264 + AAC (MP4)",
+    codecs: [...H264, "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart"] },
+  { id: "s01e02", file: "Season 01/Example Show - s01e02 - The Second One.mkv", title: "The Second One", format: "H.264 + AC-3 (MKV)",
+    codecs: [...H264, "-c:a", "ac3", "-b:a", "192k"] },
+  { id: "s01e03", file: "Season 01/Example Show - s01e03 - Finale.mkv", title: "Finale", format: "MPEG-2 + DTS (MKV, like a DVD rip)",
+    codecs: ["-c:v", "mpeg2video", "-b:v", "4M", "-c:a", "dca", "-strict", "-2", "-b:a", "768k"] },
 ];
-const EGG = { id: "egg", file: "Season 00/Example Show - s00e01 - Blooper Reel.mp4", title: "Blooper Reel" };
+const EGG = { id: "egg", file: "Season 00/Example Show - s00e01 - Blooper Reel.mp4", title: "Blooper Reel", format: "H.264 + AAC (MP4)",
+  codecs: [...H264, "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart"] };
 
 // --- media: short test clips with chapters -------------------------------------------------------
 for (const [i, ep] of [...EPISODES, EGG].entries()) {
   if (existsSync(at(ep.file))) continue;
   ffmpeg(["-f", "lavfi", "-i", `testsrc=size=720x480:rate=24:duration=60`, "-f", "lavfi", "-i", `sine=frequency=${330 + i * 110}:duration=60`,
-    "-vf", `setsar=32/27,${drawtext(font, ep.title, { x: "(w-text_w)/2", y: "h*0.4", size: 44 })}`,
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", at(ep.file)]);
+    "-vf", [
+      "setsar=32/27",
+      drawtext(font, ep.title, { x: "(w-text_w)/2", y: "h*0.36", size: 44 }),
+      drawtext(font, ep.format, { x: "(w-text_w)/2", y: "h*0.36+60", size: 26, color: "yellow" }),
+    ].join(","),
+    "-ac", "2", ...ep.codecs, at(ep.file)]);
 }
 
 // --- menu art (drawn at 853x480, squeezed to 720x480) ---------------------------------------------
