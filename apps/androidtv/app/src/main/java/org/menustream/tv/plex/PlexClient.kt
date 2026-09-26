@@ -164,13 +164,38 @@ class PlexServer(
     }
 
     /**
-     * Direct-play URL for a file part. The token travels as a header, not in the URL.
-     *
-     * Plex Media Server 1.43+ answers plain part requests with 503; the file is served (with Range
-     * support) when requested as a download. Servers can disable downloads for shared users, who then
-     * get 403 here until transcoded playback is supported.
+     * Ask Plex to approve direct play of one file before streaming it. Plex's API docs require a
+     * playback decision before a part is requested; without one the server may make an "ad-hoc"
+     * decision, which clients "should not rely on" — PMS 1.43.4 answers such requests with 503.
+     * The part must then be requested with the same X-Plex-Session-Identifier.
      */
-    fun partUrl(part: PlexPart): String = url(part.key, "download" to "1")
+    suspend fun directPlayDecision(ratingKey: String, mediaIndex: Int, partIndex: Int, sessionId: String): DecisionContainer =
+        http.getJson<DecisionResponse>(
+            url(
+                "/video/:/transcode/universal/decision",
+                "path" to "/library/metadata/$ratingKey",
+                "mediaIndex" to "$mediaIndex",
+                "partIndex" to "$partIndex",
+                "directPlay" to "1",
+                "directStream" to "1",
+                "directStreamAudio" to "1",
+                "protocol" to "http",
+                "location" to "lan",
+                // Decide on the file itself, not a guessed client profile (needs directPlay=1 and both indices).
+                "hasMDE" to "1",
+                "session" to sessionId,
+            ),
+            identity.headers(token) + ("X-Plex-Session-Identifier" to sessionId),
+        ).container
+
+    /**
+     * URL for a file part. The token travels as a header, not in the URL. Request it with the session
+     * id of a direct-play decision ([directPlayDecision]). [download] is the fallback when Plex won't
+     * give a decision: it serves the raw file at download priority, and servers can forbid it for
+     * shared users (403).
+     */
+    fun partUrl(part: PlexPart, download: Boolean = false): String =
+        if (download) url(part.key, "download" to "1") else url(part.key)
 
     /** Headers needed to fetch [partUrl] and images. */
     fun authHeaders(): Map<String, String> = identity.headers(token)

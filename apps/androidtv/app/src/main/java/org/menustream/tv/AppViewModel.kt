@@ -25,6 +25,7 @@ import org.menustream.tv.plex.PlexItem
 import org.menustream.tv.plex.PlexLetter
 import org.menustream.tv.plex.PlexResource
 import org.menustream.tv.plex.PlayablePart
+import org.menustream.tv.plex.PlexPart
 import org.menustream.tv.plex.PlexServer
 import org.menustream.tv.plex.filesOf
 import org.menustream.tv.store.Settings
@@ -369,19 +370,47 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         go(Screen.Menu(OpenMenu(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, null)))
     }
 
-    fun play(item: PlexItem, startSeconds: Double) {
-        val plex = server ?: return
-        val part = item.part ?: return
-        go(Screen.Play(PlayRequest(plex.partUrl(part), plex.authHeaders(), startSeconds, item.title, reporterFor(item))))
+    fun play(item: PlexItem, startSeconds: Double): Job = viewModelScope.launch {
+        val part = item.part ?: return@launch
+        val request = playRequest(item, part, startSeconds) ?: return@launch
+        go(Screen.Play(request))
+    }
+
+    /**
+     * Plex's playback handshake: ask for a direct-play decision for this exact file, then stream the
+     * part with the same session id, and report progress with it too. If Plex won't approve direct
+     * play, fall back to fetching the raw file as a download (lower priority; can be forbidden for
+     * shared users). Transcoding comes later.
+     */
+    private suspend fun playRequest(item: PlexItem, part: PlexPart, startSeconds: Double): PlayRequest? {
+        val plex = server ?: return null
+        val session = java.util.UUID.randomUUID().toString()
+        val mediaIndex = item.media.indexOfFirst { m -> m.parts.any { it.id == part.id } }.coerceAtLeast(0)
+        val partIndex = item.media.getOrNull(mediaIndex)?.parts?.indexOfFirst { it.id == part.id }?.coerceAtLeast(0) ?: 0
+        val decision = attempt { plex.directPlayDecision(item.ratingKey, mediaIndex, partIndex, session) }
+        val directPlay = decision.getOrNull()?.directPlayOk == true
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d(
+                "MenuStream",
+                "decision ${item.ratingKey} m$mediaIndex p$partIndex: " +
+                    (decision.getOrNull()?.explanation ?: decision.exceptionOrNull()?.toString()) + if (directPlay) "" else " -> download fallback",
+            )
+        }
+        return PlayRequest(
+            url = plex.partUrl(part, download = !directPlay),
+            headers = plex.authHeaders() + ("X-Plex-Session-Identifier" to session),
+            startSeconds = startSeconds,
+            title = item.title,
+            reporter = reporterFor(item, session),
+        )
     }
 
     /**
      * Sends playback state to Plex (timeline), so resume points and watched status match other Plex apps.
-     * One session id per playback; failures are ignored (playback matters more than the report).
+     * Uses the playback's session id; failures are ignored (playback matters more than the report).
      */
-    private fun reporterFor(item: PlexItem): org.menustream.tv.player.PlaybackReporter {
+    private fun reporterFor(item: PlexItem, session: String): org.menustream.tv.player.PlaybackReporter {
         val plex = server
-        val session = java.util.UUID.randomUUID().toString()
         return org.menustream.tv.player.PlaybackReporter { state, positionMs, durationMs ->
             if (plex == null) return@PlaybackReporter
             viewModelScope.launch {
@@ -391,10 +420,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Resolve a menu button's media to something the native player can play. */
-    fun requestFor(open: OpenMenu, mediaId: String, start: Double): PlayRequest? {
-        val plex = server ?: return null
+    suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double): PlayRequest? {
         val (item, part) = open.media[mediaId] ?: return null
-        return PlayRequest(plex.partUrl(part), plex.authHeaders(), start, item.title, reporterFor(item))
+        return playRequest(item, part, start)
     }
 
     fun imageUrl(path: String?, width: Int, height: Int): String? = path?.let { server?.imageUrl(it, width, height) }

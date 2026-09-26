@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -116,12 +117,13 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     var playing by remember { mutableStateOf<PlayRequest?>(null) }
     var handle by remember { mutableStateOf<PlayerHandle?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     lateinit var web: MenuWebView
     web = remember {
         MenuWebView(context, assets) { msg ->
             when (msg) {
                 PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
-                is PageMessage.Play -> {
+                is PageMessage.Play -> scope.launch {
                     val request = vm.requestFor(open, msg.mediaId, msg.start)
                     if (request == null) web.playError("\"${msg.label}\" isn't in your Plex library.") else playing = request
                 }

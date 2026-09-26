@@ -95,6 +95,23 @@ data class PlexItem(
     val allParts: List<PlexPart> get() = media.flatMap { it.parts }
 }
 
+@Serializable
+data class DecisionResponse(@SerialName("MediaContainer") val container: DecisionContainer)
+
+/** Result of /video/:/transcode/universal/decision. 1000 = OK (e.g. "Direct play OK."). */
+@Serializable
+data class DecisionContainer(
+    val mdeDecisionCode: Int? = null,
+    val mdeDecisionText: String? = null,
+    val generalDecisionCode: Int? = null,
+    val generalDecisionText: String? = null,
+    val directPlayDecisionCode: Int? = null,
+    val directPlayDecisionText: String? = null,
+) {
+    val directPlayOk: Boolean get() = mdeDecisionCode == 1000 || directPlayDecisionCode == 1000
+    val explanation: String get() = listOfNotNull(mdeDecisionText, directPlayDecisionText, generalDecisionText).joinToString("; ")
+}
+
 /** A specific file of a Plex item: what a menu button actually plays. */
 data class PlayablePart(val item: PlexItem, val part: PlexPart)
 
