@@ -1,6 +1,6 @@
 {
   "format": "menustream",
-  "version": "0.1",
+  "version": "0.2",
   "title": {
     "name": "Sintel",
     "year": 2010,
@@ -74,8 +74,16 @@
       },
       "background": {
         "image": "menus/main.jpg",
-        "color": "#000"
+        "color": "#000",
+        "video": {
+          "src": "menus/main-loop.mp4",
+          "loopStart": 2.5
+        },
+        "audio": {
+          "src": "menus/menu-music.m4a"
+        }
       },
+      "buttonsAt": 2.5,
       "defaultButton": "play",
       "buttons": [
         {
@@ -151,7 +159,8 @@
           },
           "action": {
             "type": "goto",
-            "menu": "extras"
+            "menu": "extras",
+            "transition": "menus/to-extras.mp4"
           }
         }
       ]

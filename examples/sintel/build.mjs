@@ -99,6 +99,28 @@ menuFrame(38, at("menus", "main.jpg"), [
 underlineHighlight(420, 64, gold).save(at("menus", "item-selected.png"));
 underlineHighlight(420, 64, white, { glow: 1.6 }).save(at("menus", "item-activated.png"));
 
+// v0.2 motion: the dunes drift behind the menu (slowed 2x). The title and items fade in during a
+// 2.5 s intro (buttonsAt), then the clip loops from 2.5 s. The still main.jpg stays as the poster.
+const MAIN_BUTTONS_AT = 2.5;
+const fadeIn = (from, dur) => `alpha='min(max((t-${from})/${dur},0),1)'`;
+ffmpeg(["-ss", "36.3", "-t", "3.5", "-i", trailerSrc, "-an", "-vf", [
+  "setpts=2.0*PTS",
+  fill(W, H),
+  "fps=25",
+  "eq=brightness=-0.06",
+  "vignette=PI/4",
+  drawtext(font, "SINTEL", { x: "(w-text_w)/2", y: 70, size: 120, color: "white@0.95", extra: `borderw=1:bordercolor=black@0.3:${fadeIn(0.2, 1.2)}` }),
+  ...main.items.map((i) => drawtext(font, i.text, { x: main.x + 40, y: i.y + 12, size: 38, extra: fadeIn(1.3, 1.2) })),
+].join(","), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", at("menus", "main-loop.mp4")]);
+
+// Menu music: 40 s of the score from the end credits, faded so the loop point is soft.
+ffmpeg(["-ss", "800", "-t", "40", "-i", scoreSrc, "-af", "afade=t=in:d=1.5,afade=t=out:st=37:d=3", "-c:a", "aac", "-b:a", "128k", at("menus", "menu-music.m4a")]);
+
+// Transition into Special Features: 1.4 s of the dragon's flight, with its sound.
+ffmpeg(["-ss", "26", "-t", "1.4", "-i", trailerSrc, "-vf", `${fill(W, H)},fps=25,fade=t=in:d=0.25,fade=t=out:st=1.1:d=0.3`,
+  "-af", "afade=t=in:d=0.2,afade=t=out:st=1.1:d=0.3", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+  "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", at("menus", "to-extras.mp4")]);
+
 // Scene selection: dark background with a 3x2 grid of chapter thumbnails.
 const thumbW = 320;
 const thumbH = 180;
@@ -159,7 +181,7 @@ const chapterLabel = (n) => `Chapter ${n}`;
 
 const manifest = {
   format: "menustream",
-  version: "0.1",
+  version: "0.2",
   title: { name: "Sintel", year: 2010, ids: { imdb: "tt1727587", tmdb: "45745" } },
   source: { kind: "authored", generator: "examples/sintel/build.mjs" },
   media: {
@@ -177,12 +199,18 @@ const manifest = {
     main: {
       label: "Main menu",
       canvas: { width: W, height: H, aspect: "16:9" },
-      background: { image: "menus/main.jpg", color: "#000" },
+      background: {
+        image: "menus/main.jpg",
+        color: "#000",
+        video: { src: "menus/main-loop.mp4", loopStart: MAIN_BUTTONS_AT },
+        audio: { src: "menus/menu-music.m4a" },
+      },
+      buttonsAt: MAIN_BUTTONS_AT,
       defaultButton: "play",
       buttons: [
         listButton(main.items[0], main.x, { down: "scenes" }, { type: "play", media: "feature" }),
         listButton(main.items[1], main.x, { up: "play", down: "extras" }, { type: "goto", menu: "scenes" }),
-        listButton(main.items[2], main.x, { up: "scenes" }, { type: "goto", menu: "extras" }),
+        listButton(main.items[2], main.x, { up: "scenes" }, { type: "goto", menu: "extras", transition: "menus/to-extras.mp4" }),
       ],
     },
     scenes: {

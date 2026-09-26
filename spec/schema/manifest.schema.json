@@ -1,101 +1,189 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:menustream:schema:manifest:0.1",
-  "title": "MenuStream manifest v0.1 (draft)",
+  "$id": "urn:menustream:schema:manifest:0.2",
+  "title": "MenuStream manifest v0.2 (draft)",
   "description": "Disc-style menus over existing media files. Structural rules only; cross-references (menu ids, button ids, media ids, chapter numbers) are checked by the reference validator and described in spec/menustream-v0.1.md. Unknown properties are allowed (readers ignore them); vendor extensions use keys starting with \"x-\".",
   "type": "object",
-  "required": ["format", "version", "title", "media", "fallback"],
+  "required": [
+    "format",
+    "version",
+    "title",
+    "media",
+    "fallback"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "format": { "const": "menustream" },
-    "version": { "type": "string", "pattern": "^0\\.[0-9]+$" },
-    "title": { "$ref": "#/$defs/title" },
-    "source": { "$ref": "#/$defs/source" },
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "menustream"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+$"
+    },
+    "title": {
+      "$ref": "#/$defs/title"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
     "media": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": { "$ref": "#/$defs/media" }
+      "additionalProperties": {
+        "$ref": "#/$defs/media"
+      }
     },
     "menus": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/$defs/menu" }
+      "additionalProperties": {
+        "$ref": "#/$defs/menu"
+      }
     },
-    "rootMenu": { "$ref": "#/$defs/id" },
-    "firstPlay": { "$ref": "#/$defs/action" },
+    "rootMenu": {
+      "$ref": "#/$defs/id"
+    },
+    "firstPlay": {
+      "$ref": "#/$defs/action"
+    },
     "fallback": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/fallbackGroup" }
+      "items": {
+        "$ref": "#/$defs/fallbackGroup"
+      }
     }
   },
-  "dependentRequired": { "menus": ["rootMenu"] },
+  "dependentRequired": {
+    "menus": [
+      "rootMenu"
+    ]
+  },
   "$defs": {
-    "id": { "type": "string", "minLength": 1 },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
     "path": {
       "description": "Relative path (resolved against the manifest's location, forward slashes) or absolute URL.",
       "type": "string",
       "minLength": 1
     },
-    "seconds": { "type": "number", "minimum": 0 },
-    "color": { "type": "string" },
+    "seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "color": {
+      "type": "string"
+    },
     "title": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "year": { "type": "integer" },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "year": {
+          "type": "integer"
+        },
         "ids": {
           "type": "object",
           "properties": {
-            "imdb": { "type": "string" },
-            "tmdb": { "type": "string" },
-            "tvdb": { "type": "string" }
+            "imdb": {
+              "type": "string"
+            },
+            "tmdb": {
+              "type": "string"
+            },
+            "tvdb": {
+              "type": "string"
+            }
           },
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
     "source": {
       "type": "object",
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "type": "string", "minLength": 1 },
-        "generator": { "type": "string" }
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generator": {
+          "type": "string"
+        }
       }
     },
     "mediaRef": {
       "oneOf": [
-        { "$ref": "#/$defs/path" },
+        {
+          "$ref": "#/$defs/path"
+        },
         {
           "type": "object",
-          "required": ["scheme", "id"],
+          "required": [
+            "scheme",
+            "id"
+          ],
           "properties": {
-            "scheme": { "type": "string", "minLength": 1 },
-            "id": { "type": "string", "minLength": 1 }
+            "scheme": {
+              "type": "string",
+              "minLength": 1
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       ]
     },
     "media": {
       "type": "object",
-      "required": ["ref"],
+      "required": [
+        "ref"
+      ],
       "properties": {
-        "ref": { "$ref": "#/$defs/mediaRef" },
-        "label": { "type": "string" },
+        "ref": {
+          "$ref": "#/$defs/mediaRef"
+        },
+        "label": {
+          "type": "string"
+        },
         "kind": {
           "description": "feature, episode, trailer, featurette, behindthescenes, deleted, interview, scene, short, other (other values allowed).",
           "type": "string"
         },
-        "duration": { "$ref": "#/$defs/seconds" },
+        "duration": {
+          "$ref": "#/$defs/seconds"
+        },
         "chapters": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["time"],
+            "required": [
+              "time"
+            ],
             "properties": {
-              "time": { "$ref": "#/$defs/seconds" },
-              "label": { "type": "string" },
-              "thumbnail": { "$ref": "#/$defs/path" }
+              "time": {
+                "$ref": "#/$defs/seconds"
+              },
+              "label": {
+                "type": "string"
+              },
+              "thumbnail": {
+                "$ref": "#/$defs/path"
+              }
             }
           }
         }
@@ -105,24 +193,49 @@
       "description": "[x, y, width, height] in canvas pixels.",
       "type": "array",
       "prefixItems": [
-        { "type": "number" },
-        { "type": "number" },
-        { "type": "number", "minimum": 0 },
-        { "type": "number", "minimum": 0 }
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        }
       ],
       "minItems": 4,
       "maxItems": 4
     },
     "canvas": {
       "type": "object",
-      "required": ["width", "height"],
+      "required": [
+        "width",
+        "height"
+      ],
       "properties": {
-        "width": { "type": "integer", "minimum": 1 },
-        "height": { "type": "integer", "minimum": 1 },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
         "aspect": {
           "oneOf": [
-            { "type": "string", "pattern": "^\\s*[0-9]+(\\.[0-9]+)?\\s*([:/]\\s*[0-9]+(\\.[0-9]+)?\\s*)?$" },
-            { "type": "number", "exclusiveMinimum": 0 }
+            {
+              "type": "string",
+              "pattern": "^\\s*[0-9]+(\\.[0-9]+)?\\s*([:/]\\s*[0-9]+(\\.[0-9]+)?\\s*)?$"
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
           ]
         }
       }
@@ -130,137 +243,337 @@
     "buttonState": {
       "type": "object",
       "properties": {
-        "image": { "$ref": "#/$defs/path" },
-        "rect": { "$ref": "#/$defs/rect" },
-        "textColor": { "$ref": "#/$defs/color" },
-        "fill": { "$ref": "#/$defs/color" }
+        "image": {
+          "$ref": "#/$defs/path"
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "textColor": {
+          "$ref": "#/$defs/color"
+        },
+        "fill": {
+          "$ref": "#/$defs/color"
+        }
       }
     },
     "button": {
       "type": "object",
-      "required": ["id", "rect", "action"],
+      "required": [
+        "id",
+        "rect",
+        "action"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "rect": { "$ref": "#/$defs/rect" },
-        "label": { "type": "string" },
-        "a11yLabel": { "type": "string" },
-        "showLabel": { "type": "boolean" },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "label": {
+          "type": "string"
+        },
+        "a11yLabel": {
+          "type": "string"
+        },
+        "showLabel": {
+          "type": "boolean"
+        },
         "states": {
           "type": "object",
           "properties": {
-            "normal": { "$ref": "#/$defs/buttonState" },
-            "selected": { "$ref": "#/$defs/buttonState" },
-            "activated": { "$ref": "#/$defs/buttonState" }
+            "normal": {
+              "$ref": "#/$defs/buttonState"
+            },
+            "selected": {
+              "$ref": "#/$defs/buttonState"
+            },
+            "activated": {
+              "$ref": "#/$defs/buttonState"
+            }
           }
         },
         "nav": {
           "type": "object",
           "properties": {
-            "up": { "$ref": "#/$defs/id" },
-            "down": { "$ref": "#/$defs/id" },
-            "left": { "$ref": "#/$defs/id" },
-            "right": { "$ref": "#/$defs/id" }
+            "up": {
+              "$ref": "#/$defs/id"
+            },
+            "down": {
+              "$ref": "#/$defs/id"
+            },
+            "left": {
+              "$ref": "#/$defs/id"
+            },
+            "right": {
+              "$ref": "#/$defs/id"
+            }
           }
         },
-        "autoAction": { "type": "boolean" },
-        "action": { "$ref": "#/$defs/action" }
+        "autoAction": {
+          "type": "boolean"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        }
       },
-      "if": { "properties": { "showLabel": { "const": true } }, "required": ["showLabel"] },
-      "then": { "required": ["label"] }
+      "if": {
+        "properties": {
+          "showLabel": {
+            "const": true
+          }
+        },
+        "required": [
+          "showLabel"
+        ]
+      },
+      "then": {
+        "required": [
+          "label"
+        ]
+      }
     },
     "menu": {
       "type": "object",
-      "required": ["canvas", "buttons"],
+      "required": [
+        "canvas",
+        "buttons"
+      ],
       "properties": {
-        "canvas": { "$ref": "#/$defs/canvas" },
+        "canvas": {
+          "$ref": "#/$defs/canvas"
+        },
         "background": {
           "type": "object",
           "properties": {
-            "image": { "$ref": "#/$defs/path" },
-            "color": { "$ref": "#/$defs/color" }
+            "image": {
+              "$ref": "#/$defs/path"
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "video": {
+              "$ref": "#/$defs/loopingMedia"
+            },
+            "audio": {
+              "$ref": "#/$defs/loopingMedia"
+            }
           }
         },
-        "label": { "type": "string" },
-        "defaultButton": { "$ref": "#/$defs/id" },
-        "autoNav": { "type": "boolean" },
+        "label": {
+          "type": "string"
+        },
+        "defaultButton": {
+          "$ref": "#/$defs/id"
+        },
+        "autoNav": {
+          "type": "boolean"
+        },
         "buttons": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/button" }
+          "items": {
+            "$ref": "#/$defs/button"
+          }
+        },
+        "buttonsAt": {
+          "$ref": "#/$defs/seconds",
+          "description": "v0.2: seconds into the intro before buttons appear."
         }
       }
     },
     "playItem": {
       "type": "object",
-      "required": ["media"],
+      "required": [
+        "media"
+      ],
       "properties": {
-        "media": { "$ref": "#/$defs/id" },
-        "chapter": { "type": "integer", "minimum": 1 },
-        "start": { "$ref": "#/$defs/seconds" }
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "chapter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        }
       }
     },
     "afterAction": {
       "description": "Runs when playback completes. Must not start another playback.",
       "allOf": [
-        { "$ref": "#/$defs/action" },
-        { "properties": { "type": { "enum": ["goto", "back", "resume"] } } }
+        {
+          "$ref": "#/$defs/action"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "goto",
+                "back",
+                "resume"
+              ]
+            }
+          }
+        }
       ]
     },
     "action": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "enum": ["play", "playAll", "goto", "back", "resume"] }
+        "type": {
+          "enum": [
+            "play",
+            "playAll",
+            "goto",
+            "back",
+            "resume"
+          ]
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "type": { "const": "play" } } },
-          "then": {
-            "allOf": [{ "$ref": "#/$defs/playItem" }],
-            "properties": { "after": { "$ref": "#/$defs/afterAction" } }
-          }
-        },
-        {
-          "if": { "properties": { "type": { "const": "playAll" } } },
-          "then": {
-            "required": ["items"],
+          "if": {
             "properties": {
-              "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/playItem" } },
-              "after": { "$ref": "#/$defs/afterAction" }
+              "type": {
+                "const": "play"
+              }
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/playItem"
+              }
+            ],
+            "properties": {
+              "after": {
+                "$ref": "#/$defs/afterAction"
+              }
             }
           }
         },
         {
-          "if": { "properties": { "type": { "const": "goto" } } },
+          "if": {
+            "properties": {
+              "type": {
+                "const": "playAll"
+              }
+            }
+          },
           "then": {
-            "required": ["menu"],
-            "properties": { "menu": { "$ref": "#/$defs/id" }, "button": { "$ref": "#/$defs/id" } }
+            "required": [
+              "items"
+            ],
+            "properties": {
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/playItem"
+                }
+              },
+              "after": {
+                "$ref": "#/$defs/afterAction"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "goto"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "menu"
+            ],
+            "properties": {
+              "menu": {
+                "$ref": "#/$defs/id"
+              },
+              "button": {
+                "$ref": "#/$defs/id"
+              },
+              "transition": {
+                "$ref": "#/$defs/path",
+                "description": "v0.2: clip played before the menu opens."
+              }
+            }
           }
         }
       ]
     },
     "fallbackGroup": {
       "type": "object",
-      "required": ["label", "items"],
+      "required": [
+        "label",
+        "items"
+      ],
       "properties": {
-        "label": { "type": "string", "minLength": 1 },
-        "hidden": { "type": "boolean" },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hidden": {
+          "type": "boolean"
+        },
         "items": {
           "type": "array",
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["label", "action"],
+            "required": [
+              "label",
+              "action"
+            ],
             "properties": {
-              "label": { "type": "string", "minLength": 1 },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
               "action": {
                 "allOf": [
-                  { "$ref": "#/$defs/action" },
-                  { "properties": { "type": { "enum": ["play", "playAll"] } } }
+                  {
+                    "$ref": "#/$defs/action"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "play",
+                          "playAll"
+                        ]
+                      }
+                    }
+                  }
                 ]
               }
             }
           }
+        }
+      }
+    },
+    "loopingMedia": {
+      "description": "v0.2: plays once from 0, then loops from loopStart (default 0).",
+      "type": "object",
+      "required": [
+        "src"
+      ],
+      "properties": {
+        "src": {
+          "$ref": "#/$defs/path"
+        },
+        "loopStart": {
+          "$ref": "#/$defs/seconds"
         }
       }
     }

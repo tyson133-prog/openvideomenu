@@ -75,9 +75,20 @@ export interface Canvas {
 }
 
 export interface Background {
+  /** Still image. With `video`, it is the poster shown while loading and by players without motion support. */
   image?: string;
   /** CSS-style colour used behind/without the image. */
   color?: string;
+  /** Motion background (v0.2): plays once from 0, then loops from `loopStart`. May carry its own audio. */
+  video?: LoopingMedia;
+  /** Menu audio (v0.2), looping the same way. */
+  audio?: LoopingMedia;
+}
+
+export interface LoopingMedia {
+  src: string;
+  /** Seconds; after reaching the end, playback continues from here. Default 0 (loop the whole clip). */
+  loopStart?: number;
 }
 
 /** [x, y, width, height] in canvas pixels. */
@@ -119,6 +130,11 @@ export interface Menu {
   /** When true, a missing nav direction moves to the nearest button in that direction. */
   autoNav?: boolean;
   buttons: Button[];
+  /**
+   * v0.2: seconds into the menu's intro before buttons appear and respond (DVD menus often animate in).
+   * Measured on the background video when there is one. Any key skips straight to this point.
+   */
+  buttonsAt?: number;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -133,7 +149,7 @@ export interface PlayItem {
 export type Action =
   | ({ type: "play"; after?: Action } & PlayItem)
   | { type: "playAll"; items: PlayItem[]; after?: Action }
-  | { type: "goto"; menu: string; button?: string }
+  | { type: "goto"; menu: string; button?: string; /** v0.2: clip played before the menu opens (skippable). */ transition?: string }
   | { type: "back" }
   | { type: "resume" };
 

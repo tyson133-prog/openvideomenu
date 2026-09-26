@@ -21,7 +21,11 @@ export type NavEvent =
   /** The current playback item finished on its own. */
   | { type: "ended" }
   /** The viewer stopped playback early; position (seconds) is remembered for "resume". */
-  | { type: "stopped"; position: number };
+  | { type: "stopped"; position: number }
+  /** v0.2: the menu intro reached `buttonsAt`; buttons appear and respond. */
+  | { type: "buttonsReady" }
+  /** v0.2: a transition clip finished playing. */
+  | { type: "transitionEnded" };
 
 export type Effect =
   /** Start playing a media item from `start` seconds. */
@@ -29,7 +33,11 @@ export type Effect =
   /** Briefly show the button's activated state. */
   | { type: "activated"; menu: string; button: string }
   /** "back" was pressed at the top of the menu history; the host may close the player. */
-  | { type: "exit" };
+  | { type: "exit" }
+  /** v0.2: play a transition clip; report "transitionEnded" when it finishes. */
+  | { type: "transition"; src: string }
+  /** v0.2: the viewer skipped the menu intro; jump the background to `buttonsAt`. */
+  | { type: "skipIntro"; menu: string };
 
 export interface MenuPosition {
   menu: string;
@@ -37,9 +45,18 @@ export interface MenuPosition {
 }
 
 export interface NavState {
-  mode: "idle" | "menu" | "playing" | "fallback";
+  mode: "idle" | "menu" | "playing" | "fallback" | "transition";
   menu?: string;
   focus?: string;
+  /**
+   * v0.2: true when the current menu was entered fresh (start or goto), so its background plays its
+   * intro from 0. False when returning to it (back, end of playback): the intro is not replayed.
+   */
+  intro: boolean;
+  /** v0.2: false while a menu intro runs before `buttonsAt`; buttons are hidden and inactive. */
+  buttonsReady: boolean;
+  /** v0.2: the menu a running transition leads to. */
+  transitionTo?: { menu: string; button?: string };
   /** Menus to return to with "back". */
   history: MenuPosition[];
   /** Playback in progress: the item playing now and those still queued. */
@@ -53,7 +70,7 @@ export interface StepResult {
   effects: Effect[];
 }
 
-export const initialState = (): NavState => ({ mode: "idle", history: [] });
+export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true });
 
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
   const effects: Effect[] = [];
@@ -68,30 +85,29 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       break;
 
     case "press":
-      if (s.mode === "playing") {
-        // Players report the position with "stopped"; a bare "back" stops at an unknown position.
-        if (event.key === "back") finishPlayback(manifest, s, effects, { stoppedAt: undefined });
+    case "select":
+    case "activate":
+      // v0.2: any key or click skips a transition or a menu intro; the viewer is always in control.
+      // Pointer hover ("select") is ignored meanwhile, so moving the mouse doesn't skip anything.
+      if ((s.mode === "transition" || (s.mode === "menu" && !s.buttonsReady)) && event.type === "select") break;
+      if (s.mode === "transition") {
+        endTransition(manifest, s);
         break;
       }
-      if (s.mode !== "menu") break;
-      if (event.key === "enter") activate(manifest, s, s.focus!, effects);
-      else if (event.key === "back") goBack(s, effects);
-      else move(manifest, s, event.key, effects);
-      break;
-
-    case "select": {
-      if (s.mode !== "menu" || event.button === s.focus) break;
-      const button = findButton(menuOf(manifest, s.menu!), event.button);
-      if (button) focusButton(manifest, s, button, effects);
-      break;
-    }
-
-    case "activate":
-      if (s.mode !== "menu") break;
-      if (findButton(menuOf(manifest, s.menu!), event.button)) {
-        s.focus = event.button;
-        activate(manifest, s, event.button, effects);
+      if (s.mode === "menu" && !s.buttonsReady) {
+        s.buttonsReady = true;
+        effects.push({ type: "skipIntro", menu: s.menu! });
+        break;
       }
+      handleInput(manifest, s, event, effects);
+      break;
+
+    case "buttonsReady":
+      if (s.mode === "menu") s.buttonsReady = true;
+      break;
+
+    case "transitionEnded":
+      if (s.mode === "transition") endTransition(manifest, s);
       break;
 
     case "ended":
@@ -113,6 +129,43 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
   return { state: s, effects };
 }
 
+function handleInput(
+  manifest: Manifest,
+  s: NavState,
+  event: Extract<NavEvent, { type: "press" | "select" | "activate" }>,
+  effects: Effect[],
+) {
+  switch (event.type) {
+    case "press":
+      if (s.mode === "playing") {
+        // Players report the position with "stopped"; a bare "back" stops at an unknown position.
+        if (event.key === "back") finishPlayback(manifest, s, effects, { stoppedAt: undefined });
+        break;
+      }
+      if (s.mode !== "menu") break;
+      if (event.key === "enter") activate(manifest, s, s.focus!, effects);
+      else if (event.key === "back") goBack(manifest, s, effects);
+      else move(manifest, s, event.key, effects);
+      break;
+
+    case "select": {
+      if (s.mode !== "menu" || event.button === s.focus) break;
+      const button = findButton(menuOf(manifest, s.menu!), event.button);
+      if (button) focusButton(manifest, s, button, effects);
+      break;
+    }
+
+    case "activate":
+      if (s.mode !== "menu") break;
+      if (findButton(menuOf(manifest, s.menu!), event.button)) {
+        s.focus = event.button;
+        activate(manifest, s, event.button, effects);
+      }
+      break;
+
+  }
+}
+
 // --- helpers -------------------------------------------------------------------------------
 
 function menuOf(manifest: Manifest, id: string): Menu {
@@ -131,14 +184,22 @@ function openRoot(manifest: Manifest, s: NavState) {
     s.menu = s.focus = undefined;
     return;
   }
-  enterMenu(manifest, s, manifest.rootMenu);
+  enterMenu(manifest, s, manifest.rootMenu, undefined, "intro");
 }
 
-function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId?: string) {
+function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: string | undefined, how: "intro" | "return") {
   const menu = menuOf(manifest, menuId);
   s.mode = "menu";
   s.menu = menuId;
   s.focus = buttonId ?? menu.defaultButton ?? menu.buttons[0]!.id;
+  s.intro = how === "intro";
+  s.buttonsReady = !(s.intro && (menu.buttonsAt ?? 0) > 0);
+  s.transitionTo = undefined;
+}
+
+function endTransition(manifest: Manifest, s: NavState) {
+  const to = s.transitionTo!;
+  enterMenu(manifest, s, to.menu, to.button, "intro");
 }
 
 function focusButton(manifest: Manifest, s: NavState, button: Button, effects: Effect[]) {
@@ -161,15 +222,13 @@ function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Ef
   run(manifest, s, button.action, effects, { pushHistory: true });
 }
 
-function goBack(s: NavState, effects: Effect[]) {
+function goBack(manifest: Manifest, s: NavState, effects: Effect[]) {
   const previous = s.history.pop();
   if (!previous) {
     effects.push({ type: "exit" });
     return;
   }
-  s.mode = "menu";
-  s.menu = previous.menu;
-  s.focus = previous.focus;
+  enterMenu(manifest, s, previous.menu, previous.focus, "return");
 }
 
 function currentPosition(s: NavState): MenuPosition | undefined {
@@ -181,11 +240,17 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
     case "goto": {
       const here = currentPosition(s);
       if (opts.pushHistory && here) s.history.push(here);
-      enterMenu(manifest, s, action.menu, action.button);
+      if (action.transition) {
+        s.mode = "transition";
+        s.transitionTo = { menu: action.menu, button: action.button };
+        effects.push({ type: "transition", src: action.transition });
+      } else {
+        enterMenu(manifest, s, action.menu, action.button, "intro");
+      }
       break;
     }
     case "back":
-      goBack(s, effects);
+      goBack(manifest, s, effects);
       break;
     case "play":
       startPlayback(manifest, s, [action], action.after, effects);
@@ -222,9 +287,7 @@ function finishPlayback(
 
   // Go back to where playback was started from, then run the after-action from there.
   if (playing.returnTo) {
-    s.mode = "menu";
-    s.menu = playing.returnTo.menu;
-    s.focus = playing.returnTo.focus;
+    enterMenu(manifest, s, playing.returnTo.menu, playing.returnTo.focus, "return");
   } else {
     openRoot(manifest, s);
   }

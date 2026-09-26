@@ -1,0 +1,28 @@
+{
+  "description": "Invalid v0.2 fields: a looping background without src, a negative loopStart and buttonsAt, and an empty transition.",
+  "level": 2,
+  "valid": false,
+  "schemaValid": false,
+  "errors": [
+    "/menus/main/background/video/src",
+    "/menus/main/background/audio/loopStart",
+    "/menus/main/buttonsAt",
+    "/menus/main/buttons/0/action/transition"
+  ],
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Bad Motion" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "background": { "video": { "loopStart": 2 }, "audio": { "src": "menus/a.m4a", "loopStart": -1 } },
+        "buttonsAt": -3,
+        "buttons": [{ "id": "go", "rect": [0, 0, 10, 10], "action": { "type": "goto", "menu": "main", "transition": "" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

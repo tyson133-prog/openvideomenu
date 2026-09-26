@@ -1,0 +1,45 @@
+{
+  "description": "Level 2 (v0.2 motion): a menu entered fresh plays its intro with buttons hidden until buttonsAt; any key or click skips the intro (without acting), pointer hover does not; returning to the menu (back, end of playback) does not replay the intro.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Motion" },
+    "media": { "feature": { "ref": "Motion.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "background": {
+          "image": "menus/main.jpg",
+          "video": { "src": "menus/main.mp4", "loopStart": 4 },
+          "audio": { "src": "menus/main.m4a", "loopStart": 0 }
+        },
+        "buttonsAt": 3.5,
+        "buttons": [
+          { "id": "play", "rect": [100, 500, 300, 60], "nav": { "down": "setup" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "setup", "rect": [100, 580, 300, 60], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "setup" } }
+        ]
+      },
+      "setup": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [{ "id": "done", "rect": [100, 500, 300, 60], "action": { "type": "back" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "intro": true, "buttonsReady": false } },
+    { "event": { "type": "select", "button": "setup" }, "expect": { "focus": "play", "buttonsReady": false, "effects": [] } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "play", "buttonsReady": true, "effects": [{ "type": "skipIntro", "menu": "main" }] } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "setup" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "setup", "intro": true, "buttonsReady": true } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "setup", "intro": false, "buttonsReady": true } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "intro": false, "buttonsReady": true } },
+    { "event": { "type": "start" }, "expect": { "buttonsReady": false } },
+    { "event": { "type": "buttonsReady" }, "expect": { "buttonsReady": true, "effects": [] } }
+  ]
+}

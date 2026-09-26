@@ -2,7 +2,7 @@
 
 **An open, royalty-free format that brings disc-style menus to the media you already have.**
 
-> v0.1 **draft**. Names and fields may change before v1.0.
+> v0.2 **draft**. Names and fields may change before v1.0.
 
 ## Why
 
@@ -51,7 +51,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 
 | Path | What it is |
 |---|---|
-| [`spec/menustream-v0.1.md`](spec/menustream-v0.1.md) | The format (draft) |
+| [`spec/menustream-v0.2.md`](spec/menustream-v0.2.md) | The format (draft) |
 | [`spec/schema/manifest.schema.json`](spec/schema/manifest.schema.json) | JSON Schema |
 | [`spec/COMPATIBILITY.md`](spec/COMPATIBILITY.md) | The backward-compatibility charter |
 | [`spec/profiles/dvd.md`](spec/profiles/dvd.md) | How disc importers map DVD menus into the format |

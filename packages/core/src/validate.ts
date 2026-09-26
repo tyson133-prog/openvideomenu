@@ -22,9 +22,10 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   source: ["kind", "generator"],
   media: ["ref", "label", "kind", "duration", "chapters"],
   chapter: ["time", "label", "thumbnail"],
-  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons"],
+  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt"],
   canvas: ["width", "height", "aspect"],
-  background: ["image", "color"],
+  background: ["image", "color", "video", "audio"],
+  loopingMedia: ["src", "loopStart"],
   button: ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action"],
   state: ["image", "rect", "textColor", "fill"],
   fallbackGroup: ["label", "hidden", "items"],
@@ -34,7 +35,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 const ACTION_KEYS: Record<string, readonly string[]> = {
   play: ["type", "media", "chapter", "start", "after"],
   playAll: ["type", "items", "after"],
-  goto: ["type", "menu", "button"],
+  goto: ["type", "menu", "button", "transition"],
   back: ["type"],
   resume: ["type"],
 };
@@ -257,10 +258,14 @@ class Validator {
           this.error(`${path}/background/image`, "Must be a path or URL.");
         if (bg.color !== undefined && typeof bg.color !== "string")
           this.error(`${path}/background/color`, "Must be a colour string.");
+        for (const key of ["video", "audio"] as const)
+          if (bg[key] !== undefined) this.loopingMedia(bg[key], `${path}/background/${key}`);
       }
     }
     if (value.autoNav !== undefined && typeof value.autoNav !== "boolean")
       this.error(`${path}/autoNav`, "Must be true or false.");
+    if (value.buttonsAt !== undefined && !(isFiniteNumber(value.buttonsAt) && value.buttonsAt >= 0))
+      this.error(`${path}/buttonsAt`, "Must be a non-negative number of seconds.");
 
     if (!Array.isArray(value.buttons) || value.buttons.length === 0) {
       this.error(`${path}/buttons`, "Required: at least one button.");
@@ -328,6 +333,17 @@ class Validator {
       this.error(`${path}/defaultButton`, `No button "${String(value.defaultButton)}" in this menu.`);
   }
 
+  private loopingMedia(value: unknown, path: string) {
+    if (!isObject(value)) {
+      this.error(path, "Must be {src, loopStart?}.");
+      return;
+    }
+    this.unknownKeys(value, KNOWN_KEYS.loopingMedia!, path);
+    if (!isNonEmptyString(value.src)) this.error(`${path}/src`, "Required: a path or URL.");
+    if (value.loopStart !== undefined && !(isFiniteNumber(value.loopStart) && value.loopStart >= 0))
+      this.error(`${path}/loopStart`, "Must be a non-negative number of seconds.");
+  }
+
   private rect(value: unknown, path: string, canvas?: { width: number; height: number }) {
     if (!Array.isArray(value) || value.length !== 4 || !value.every(isFiniteNumber)) {
       this.error(path, "Must be [x, y, width, height].");
@@ -383,6 +399,8 @@ class Validator {
         }
         if (value.button !== undefined && !(isNonEmptyString(value.button) && menus.get(value.menu)!.has(value.button)))
           this.error(`${path}/button`, `No button "${String(value.button)}" in menu "${value.menu}".`);
+        if (value.transition !== undefined && !isNonEmptyString(value.transition))
+          this.error(`${path}/transition`, "Must be a path or URL to a clip.");
         break;
       }
     }

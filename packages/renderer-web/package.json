@@ -11,13 +11,16 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./bundle": "./dist/menustream-player.js"
+    "./bundle": "./dist/menustream-player.js",
+    "./host.html": "./dist/host.html"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "@menustream/core": "0.1.0"
   },
   "scripts": {
-    "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=MenuStreamPlayer --target=es2020 --outfile=dist/menustream-player.js --sourcemap"
+    "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=MenuStreamPlayer --target=es2020 --outfile=dist/menustream-player.js --sourcemap && node -e \"require('fs').copyFileSync('src/host.html','dist/host.html')\""
   }
 }

@@ -17,7 +17,7 @@ import {
   type NavState,
   type PlayItem,
 } from "@menustream/core";
-import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter } from "./adapters.js";
+import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
 import { injectStyles } from "./styles.js";
 
 export interface PlayerOptions {
@@ -39,6 +39,8 @@ export interface PlayerOptions {
   onStateChange?: (state: NavState) => void;
   /** How long the activated state shows before the action runs (ms). */
   activatedFlashMs?: number;
+  /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
+  initialLastStop?: { media: string; position: number };
 }
 
 type VisualState = "normal" | "selected" | "activated";
@@ -63,6 +65,13 @@ export class MenuPlayer {
   private toastTimer?: ReturnType<typeof setTimeout>;
   private fallbackEl?: HTMLElement;
   private fallbackQueue?: { items: PlayItem[]; focusIndex: number };
+  private bgVideo?: HTMLVideoElement;
+  private bgAudio?: HTMLAudioElement;
+  private readonly transitionVideo: HTMLVideoElement;
+  private introTimer?: ReturnType<typeof setTimeout>;
+  private introFrame?: number;
+  /** Browsers block autoplay with sound until the first input; menus start muted and unmute then. */
+  private soundUnlocked = false;
 
   constructor(
     container: HTMLElement,
@@ -76,7 +85,17 @@ export class MenuPlayer {
     this.stage = document.createElement("div");
     this.stage.className = "ms-stage";
     this.root.appendChild(this.stage);
+    this.transitionVideo = document.createElement("video");
+    this.transitionVideo.className = "ms-transition";
+    this.transitionVideo.playsInline = true;
+    this.transitionVideo.hidden = true;
+    this.transitionVideo.addEventListener("ended", () => this.dispatch({ type: "transitionEnded" }));
+    this.transitionVideo.addEventListener("error", () => {
+      if (!this.transitionVideo.hidden) this.dispatch({ type: "transitionEnded" });
+    });
+    this.root.appendChild(this.transitionVideo);
     container.appendChild(this.root);
+    if (options.initialLastStop) this.state = { ...this.state, lastStop: options.initialLastStop };
 
     this.playback = (options.playback ?? ((el) => new Html5Playback(el)))(this.root);
     this.playback.onEnded = () => this.onPlaybackEnded();
@@ -102,6 +121,9 @@ export class MenuPlayer {
   destroy() {
     this.input.detach();
     this.resizeObserver.disconnect();
+    this.stopIntroWatch();
+    this.stopBackground();
+    this.transitionVideo.pause();
     this.playback.destroy();
     clearTimeout(this.toastTimer);
     this.root.remove();
@@ -117,8 +139,9 @@ export class MenuPlayer {
     const { state, effects } = step(this.options.manifest, this.state, event);
     const flash = effects.find((e): e is Extract<Effect, { type: "activated" }> => e.type === "activated");
     const apply = () => {
+      const prev = this.state;
       this.state = state;
-      this.render();
+      this.render(prev);
       for (const effect of effects) this.perform(effect);
       this.options.onStateChange?.(state);
     };
@@ -141,13 +164,14 @@ export class MenuPlayer {
   // --- input & playback -----------------------------------------------------------------------
 
   private onKey(key: Key): boolean {
+    this.unlockSound();
     if (this.fallbackQueue || this.state.mode === "playing") {
       if (key !== "back") return false; // leave other keys to the video element
       this.onPlaybackStopped(this.playback.stop());
       return true;
     }
     if (this.fallbackEl) return this.onFallbackKey(key);
-    if (this.state.mode !== "menu") return false;
+    if (this.state.mode !== "menu" && this.state.mode !== "transition") return false;
     this.dispatch({ type: "press", key });
     return true;
   }
@@ -176,6 +200,12 @@ export class MenuPlayer {
         if (this.options.onExit) this.options.onExit();
         else this.toast("Top menu");
         break;
+      case "transition":
+        this.playTransition(effect.src);
+        break;
+      case "skipIntro":
+        this.seekBackground(this.currentMenu()?.buttonsAt ?? 0);
+        break;
       case "activated":
         break;
     }
@@ -184,14 +214,14 @@ export class MenuPlayer {
   private playMedia(mediaId: string, start: number) {
     const { manifest, manifestUrl, resolvers } = this.options;
     const media = manifest.media[mediaId]!;
-    const url = resolveMedia(media.ref, manifestUrl, resolvers);
-    const label = media.label ?? manifest.title.name;
-    if (!url) {
-      this.toast(`Can't find "${label}".`);
-      queueMicrotask(() => this.onPlaybackStopped(0));
-      return;
-    }
-    this.playback.play(url, start, label);
+    const request: PlayRequest = {
+      mediaId,
+      ref: media.ref,
+      url: resolveMedia(media.ref, manifestUrl, resolvers),
+      start,
+      label: media.label ?? manifest.title.name,
+    };
+    this.playback.play(request);
   }
 
   // --- menu rendering --------------------------------------------------------------------------
@@ -200,15 +230,117 @@ export class MenuPlayer {
     return this.state.menu ? this.options.manifest.menus?.[this.state.menu] : undefined;
   }
 
-  private render() {
-    if (this.state.mode === "fallback") {
+  private render(prev: NavState) {
+    const s = this.state;
+    if (s.mode === "fallback") {
+      this.stopBackground();
       this.showFallback();
       return;
     }
     const menu = this.currentMenu();
-    if (menu && this.state.menu !== this.renderedMenu) this.buildMenu(this.state.menu!, menu);
-    this.stage.hidden = this.state.mode !== "menu";
+    const menuChanged = !!menu && s.menu !== this.renderedMenu;
+    if (menuChanged) this.buildMenu(s.menu!, menu!);
+    this.stage.hidden = s.mode !== "menu";
+    if (s.mode !== "transition") this.stopTransition();
+
+    // Background motion/audio runs only while the menu is on screen. A fresh entry plays the intro
+    // from 0; returning (back, end of playback) starts at the loop point: the intro is not replayed.
+    const entered = s.mode === "menu" && (prev.mode !== "menu" || menuChanged || prev.menu !== s.menu);
+    if (entered && menu) {
+      this.startBackground(menu, s.intro);
+      if (!s.buttonsReady) this.watchIntro(menu);
+    } else if (s.mode !== "menu") {
+      this.stopBackground();
+    }
+    if (s.buttonsReady) this.stopIntroWatch();
+    this.stage.classList.toggle("ms-intro", s.mode === "menu" && !s.buttonsReady);
     this.updateButtons();
+  }
+
+  // --- v0.2 motion: background loops, intro timing, transitions -----------------------------------
+
+  private startBackground(menu: Menu, fromIntro: boolean) {
+    const bg = menu.background;
+    const pairs: [HTMLMediaElement | undefined, { loopStart?: number } | undefined][] = [
+      [this.bgVideo, bg?.video],
+      [this.bgAudio, bg?.audio],
+    ];
+    for (const [el, spec] of pairs) {
+      if (!el || !spec) continue;
+      el.currentTime = fromIntro ? 0 : (spec.loopStart ?? 0);
+      this.playWithAutoplayFallback(el);
+    }
+  }
+
+  private stopBackground() {
+    this.bgVideo?.pause();
+    this.bgAudio?.pause();
+  }
+
+  private seekBackground(time: number) {
+    const menu = this.currentMenu();
+    if (this.bgVideo && menu?.background?.video) this.bgVideo.currentTime = time;
+    if (this.bgAudio && menu?.background?.audio) this.bgAudio.currentTime = time;
+  }
+
+  /** Play a background element; if autoplay with sound is blocked, play muted until the first input. */
+  private playWithAutoplayFallback(el: HTMLMediaElement) {
+    el.muted = !this.soundUnlocked;
+    void el.play().catch(() => {
+      el.muted = true;
+      void el.play().catch(() => {});
+    });
+  }
+
+  private unlockSound() {
+    if (this.soundUnlocked) return;
+    this.soundUnlocked = true;
+    for (const el of [this.bgVideo, this.bgAudio, this.transitionVideo]) if (el) el.muted = false;
+  }
+
+  /** Wait for the intro to reach buttonsAt: on the background video's clock, or a timer without one. */
+  private watchIntro(menu: Menu) {
+    this.stopIntroWatch();
+    const at = menu.buttonsAt ?? 0;
+    const video = menu.background?.video ? this.bgVideo : undefined;
+    if (video) {
+      const tick = () => {
+        this.introFrame = undefined;
+        const due = video.currentTime >= at || video.ended;
+        // dispatch() refuses while a button flash is running; keep polling until it is accepted.
+        if (!due || !this.dispatch({ type: "buttonsReady" })) this.introFrame = requestAnimationFrame(tick);
+      };
+      this.introFrame = requestAnimationFrame(tick);
+    } else {
+      const fire = () => {
+        if (!this.dispatch({ type: "buttonsReady" })) this.introTimer = setTimeout(fire, 50);
+      };
+      this.introTimer = setTimeout(fire, at * 1000);
+    }
+  }
+
+  private stopIntroWatch() {
+    clearTimeout(this.introTimer);
+    if (this.introFrame !== undefined) cancelAnimationFrame(this.introFrame);
+    this.introTimer = undefined;
+    this.introFrame = undefined;
+  }
+
+  private playTransition(src: string) {
+    const v = this.transitionVideo;
+    this.stopBackground();
+    v.hidden = false;
+    v.src = this.asset(src);
+    this.playWithAutoplayFallback(v);
+  }
+
+  private stopTransition() {
+    const v = this.transitionVideo;
+    if (v.hidden) return;
+    v.pause();
+    v.hidden = true;
+    v.removeAttribute("src");
+    v.load();
   }
 
   private asset(path: string): string {
@@ -222,12 +354,38 @@ export class MenuPlayer {
     this.stage.setAttribute("aria-label", menu.label ?? id);
     this.stage.style.background = menu.background?.color ?? "#000";
 
+    this.stopBackground();
+    this.bgVideo = undefined;
+    this.bgAudio = undefined;
     if (menu.background?.image) {
       const bg = document.createElement("img");
       bg.className = "ms-bg";
       bg.alt = "";
       bg.src = this.asset(menu.background.image);
       this.stage.appendChild(bg);
+    }
+    const looping = <T extends HTMLMediaElement>(el: T, spec: { src: string; loopStart?: number }): T => {
+      el.src = this.asset(spec.src);
+      el.preload = "auto";
+      el.muted = !this.soundUnlocked;
+      // Plays once from 0 (the intro), then loops from loopStart.
+      el.addEventListener("ended", () => {
+        el.currentTime = spec.loopStart ?? 0;
+        void el.play().catch(() => {});
+      });
+      return el;
+    };
+    if (menu.background?.video) {
+      const v = looping(document.createElement("video"), menu.background.video);
+      v.className = "ms-bg";
+      v.playsInline = true;
+      if (menu.background.image) v.poster = this.asset(menu.background.image);
+      this.stage.appendChild(v);
+      this.bgVideo = v;
+    }
+    if (menu.background?.audio) {
+      this.bgAudio = looping(document.createElement("audio"), menu.background.audio);
+      this.stage.appendChild(this.bgAudio);
     }
 
     const { width, height } = menu.canvas;

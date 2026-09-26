@@ -123,6 +123,7 @@ export function startPreview({ root, port, host }: PreviewOptions): Promise<stri
       }
       if (path === "/play") return void res.writeHead(200, { "Content-Type": CONTENT_TYPES[".html"]! }).end(playerPage());
       if (path === "/_player/menustream-player.js") return sendFile(req, res, bundle);
+      if (path === "/_player/host.html") return sendFile(req, res, bundle.replace(/menustream-player.js$/, "host.html"));
       if (path === "/_player/menustream-player.js.map" && existsSync(bundle + ".map")) return sendFile(req, res, bundle + ".map");
       if (path.startsWith("/media/")) {
         const file = resolve(rootDir, "." + path.slice("/media".length));

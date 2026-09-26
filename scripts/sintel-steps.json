@@ -1,5 +1,6 @@
 [
-  { "expect": { "mode": "menu", "menu": "main", "focus": "play" }, "shot": "01-main" },
+  { "wait": 300, "expect": { "mode": "menu", "menu": "main", "focus": "play", "intro": true, "buttonsReady": false }, "eval": "document.querySelector('.ms-stage').classList.contains('ms-intro')", "shot": "00-intro" },
+  { "wait": 2800, "expect": { "buttonsReady": true }, "eval": "Math.round(document.querySelector('video.ms-bg').currentTime * 10) / 10", "shot": "01-main" },
   { "key": "ArrowDown", "expect": { "focus": "scenes" }, "shot": "02-main-scenes" },
   { "key": "Enter", "expect": { "menu": "scenes", "focus": "ch1" }, "shot": "03-scenes" },
   { "key": "ArrowRight", "expect": { "focus": "ch2" } },
@@ -8,11 +9,17 @@
   { "key": "Enter", "wait": 1500, "expect": { "mode": "playing", "videoSrc": "Sintel (2010).mp4", "minTime": 735 }, "shot": "05-playing-ch6" },
   { "key": "Escape", "expect": { "mode": "menu", "menu": "scenes", "focus": "ch6" } },
   { "key": "ArrowDown", "expect": { "focus": "back" }, "shot": "06-scenes-back" },
-  { "key": "Enter", "expect": { "menu": "main", "focus": "scenes" } },
+  { "key": "Enter", "wait": 600, "expect": { "menu": "main", "focus": "scenes", "intro": false, "buttonsReady": true }, "eval": "Math.round(document.querySelector('video.ms-bg').currentTime * 10) / 10" },
   { "key": "ArrowDown", "expect": { "focus": "extras" } },
-  { "key": "Enter", "expect": { "menu": "extras", "focus": "trailer" }, "shot": "07-extras" },
-  { "key": "Enter", "wait": 2500, "expect": { "mode": "playing", "videoSrc": "Trailers/Sintel Trailer.mp4" }, "shot": "08-trailer" },
+  { "key": "Enter", "wait": 500, "expect": { "mode": "transition" }, "eval": "decodeURI(document.querySelector('video.ms-transition').src.split('/media/')[1])", "shot": "07-transition" },
+  { "wait": 1600, "expect": { "mode": "menu", "menu": "extras", "focus": "trailer" }, "shot": "08-extras" },
+  { "key": "Escape", "expect": { "menu": "main", "focus": "extras" } },
+  { "key": "Enter", "wait": 300, "expect": { "mode": "transition" } },
+  { "key": "ArrowUp", "expect": { "mode": "menu", "menu": "extras", "focus": "trailer" } },
+  { "key": "Enter", "wait": 2500, "expect": { "mode": "playing", "videoSrc": "Trailers/Sintel Trailer.mp4" }, "shot": "09-trailer" },
   { "key": "Escape", "expect": { "mode": "menu", "menu": "extras", "focus": "trailer" } },
   { "key": "Escape", "expect": { "mode": "menu", "menu": "main", "focus": "extras" } },
-  { "js": "document.querySelector('[data-button=play]').dispatchEvent(new MouseEvent('mouseenter'))", "expect": { "focus": "play" } }
+  { "js": "document.querySelector('[data-button=play]').dispatchEvent(new MouseEvent('mouseenter'))", "expect": { "focus": "play" } },
+  { "js": "location.reload()", "wait": 800, "expect": { "buttonsReady": false } },
+  { "key": "Enter", "wait": 200, "expect": { "buttonsReady": true, "mode": "menu", "focus": "play" }, "eval": "Math.round(document.querySelector('video.ms-bg').currentTime * 10) / 10" }
 ]

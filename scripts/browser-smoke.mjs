@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const [url, stepsFile, outDir = "smoke-out"] = process.argv.slice(2);
+const [url, stepsFile, outDir = "smoke-out", initScript] = process.argv.slice(2);
 if (!url || !stepsFile) {
   console.error("usage: browser-smoke.mjs <url> <steps.json> [outDir]");
   process.exit(2);
@@ -87,12 +87,13 @@ async function press(key) {
 await send("Runtime.enable");
 await send("Page.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+if (initScript) await send("Page.addScriptToEvaluateOnNewDocument", { source: readFileSync(initScript, "utf8") });
 await send("Page.navigate", { url });
 await sleep(1500);
 
 const stateExpr = `(async () => { const p = await window.menuPlayer; if (!p) return null;
-  const s = p.navState; const v = document.querySelector("video");
-  return { mode: s.mode, menu: s.menu, focus: s.focus, video: v && !v.hidden ? { src: decodeURI(v.src.split("/media/")[1] || ""), t: Math.round(v.currentTime * 10) / 10, paused: v.paused } : null }; })()`;
+  const s = p.navState; const v = document.querySelector("video.ms-video");
+  return { mode: s.mode, menu: s.menu, focus: s.focus, buttonsReady: s.buttonsReady, intro: s.intro, video: v && !v.hidden ? { src: decodeURI(v.src.split("/media/")[1] || ""), t: Math.round(v.currentTime * 10) / 10, paused: v.paused } : null }; })()`;
 
 let failures = 0;
 for (const [i, step] of steps.entries()) {

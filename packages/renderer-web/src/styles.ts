@@ -10,6 +10,8 @@ export const STYLES = `
 .ms-button.ms-labelled.ms-selected { color: #fff; }
 .ms-button.ms-ring.ms-selected { box-shadow: 0 0 0 3px #ffd54a, 0 0 18px 4px rgba(255,213,74,.6); }
 .ms-button.ms-ring.ms-activated { box-shadow: 0 0 0 3px #fff, 0 0 24px 8px rgba(255,255,255,.8); }
+.ms-stage.ms-intro .ms-button, .ms-stage.ms-intro .ms-overlay { visibility: hidden; }
+.ms-transition { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 5; }
 .ms-video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; z-index: 10; outline: none; }
 .ms-toast { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); z-index: 20; max-width: 80%;
   padding: .7em 1.2em; border-radius: .5em; background: rgba(20,20,20,.9); font-size: clamp(14px, 2.2vh, 28px);

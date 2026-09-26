@@ -1,12 +1,25 @@
-import type { Key } from "@menustream/core";
+import type { Key, MediaRef } from "@menustream/core";
+
+/** What the renderer asks a playback adapter to play. */
+export interface PlayRequest {
+  /** Manifest media id. */
+  mediaId: string;
+  /** The media's ref exactly as written in the manifest (hosts that match files themselves use this). */
+  ref: MediaRef;
+  /** Resolved URL for string refs and known schemes; undefined when only the host can resolve it. */
+  url?: string;
+  /** Seconds. */
+  start: number;
+  label: string;
+}
 
 /**
  * Plays media for the renderer. Hosts replace the default HTML5 adapter to route playback through
  * their own player (Jellyfin's, a native bridge, a DRM-capable player...).
  */
 export interface PlaybackAdapter {
-  /** Start playing `url` from `start` seconds. `label` is for on-screen/status text. */
-  play(url: string, start: number, label: string): void;
+  /** Start playing. The adapter reports the outcome through onEnded / onStopped / onError. */
+  play(request: PlayRequest): void;
   /** Stop early; returns the position in seconds that was reached. */
   stop(): number;
   /** Called by the adapter when the item finishes on its own. */
@@ -88,8 +101,12 @@ export class Html5Playback implements PlaybackAdapter {
     });
   }
 
-  play(url: string, start: number, label: string) {
+  play({ url, start, label }: PlayRequest) {
     const v = this.video;
+    if (!url) {
+      queueMicrotask(() => this.onError?.(`Can't find "${label}".`));
+      return;
+    }
     v.hidden = false;
     v.title = label;
     v.src = url;

@@ -1,7 +1,9 @@
-# MenuStream manifest format — v0.1 (draft)
+# MenuStream manifest format — v0.2 (draft)
 
 > **Status: draft.** Fields and names may change before v1.0. "MenuStream" is a working name.
 > After v1.0 the [compatibility charter](COMPATIBILITY.md) applies and nothing here is ever removed or redefined.
+
+**v0.2** adds motion menus (§5.1) and transitions (§6). Every v0.1 manifest is a valid v0.2 manifest and behaves the same.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -23,7 +25,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | Field | Required | Meaning |
 |---|---|---|
 | `format` | yes | Always `"menustream"`. |
-| `version` | yes | `"MAJOR.MINOR"`. This document is `0.1`. |
+| `version` | yes | `"MAJOR.MINOR"`. This document is `0.2`; `0.1` manifests remain valid. |
 | `title` | yes | `{ name, year?, ids? }`. `ids` holds strings such as `imdb`, `tmdb` or `tvdb`. |
 | `source` | no | `{ kind, generator? }`. `kind` is e.g. `"dvd"`, `"authored"` or `"generated"`. |
 | `media` | yes | Map of media id → [media](#4-media). At least one entry. |
@@ -67,6 +69,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
   - `aspect` is the display aspect ratio (`"16:9"`, `"4:3"`, `"2.39:1"` or a number). It defaults to `width/height`, meaning square pixels.
   - Players MUST display the canvas at `aspect`, scaled to fit the screen and letterboxed or pillarboxed as needed. This is how anamorphic DVD menus (720×480 shown at 16:9) keep correct geometry.
 - **`background.image`** is stretched to the whole canvas. `background.color` fills anything not covered.
+- **`buttonsAt`** *(v0.2)*: see §5.1.
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
 - **`autoNav: true`** means that pressing a direction with no `nav` entry moves to the nearest button that way. The reference algorithm uses button centres: a candidate must lie in the direction of travel, and the score is the distance along the axis plus twice the sideways offset. With `autoNav` false or absent, a missing direction does nothing, which matches DVD behaviour.
 
@@ -89,6 +92,25 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - Players show exactly one state per button: `activated` briefly when the button is activated, `selected` while it has focus, otherwise `normal`.
 - If a button has no `selected` image and no drawn label, players SHOULD draw their own focus indicator, so focus is never invisible.
 
+### 5.1 Motion menus (v0.2)
+
+```json
+"background": {
+  "image": "menus/main.jpg",
+  "video": { "src": "menus/main-loop.mp4", "loopStart": 2.5 },
+  "audio": { "src": "menus/menu-music.m4a" }
+},
+"buttonsAt": 2.5
+```
+
+- **`background.video`** is a motion background stretched to the canvas like `image`. It plays once from 0, which is the menu's *intro*, then loops from `loopStart` (default 0) for as long as the menu is shown. It MAY carry its own audio.
+- **`background.audio`** is menu music. It loops the same way and plays alongside the video.
+- **`image`** remains the poster: shown while the video loads, and by players without motion support. Those players still work, because they simply show the still.
+- **`buttonsAt`** is the number of seconds into the intro before buttons appear and respond. It's measured on the background video's clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.
+- **Intros play only on a fresh entry:** at start, or via `goto`. Returning to a menu with `back` or at the end of playback starts the background at `loopStart` with buttons ready, so the intro is not replayed.
+- **Any key or click during an intro skips it.** Players jump the background to `buttonsAt` and show the buttons. That input does nothing else. Pointer *hover* does not skip. Players MUST NOT make intros unskippable.
+- **Keep menu assets small** (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC or Opus for audio.
+
 ## 6. Actions
 
 Every action is an object with a `type`:
@@ -97,7 +119,7 @@ Every action is an object with a `type`:
 |---|---|---|
 | `play` | `media`, `chapter?`, `start?`, `after?` | Play one media item. `chapter` (1-based) wins over `start` (seconds). |
 | `playAll` | `items[]`, `after?` | Play `{ media, chapter?, start? }` items in order. |
-| `goto` | `menu`, `button?` | Open a menu, focusing `button` or its `defaultButton`. |
+| `goto` | `menu`, `button?`, `transition?` | Open a menu, focusing `button` or its `defaultButton`. *(v0.2)* `transition` is a clip (path) played first, full screen. |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
 | `resume` | — | Continue the last playback the viewer stopped early, from where they stopped. Otherwise it does nothing. |
 
@@ -108,6 +130,7 @@ Every action is an object with a `type`:
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the media and position for `resume`.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic.
 6. **`after`** MUST NOT be `play` or `playAll`. Use `playAll` for sequences.
+7. *(v0.2)* **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
 
 ## 7. Cross-reference rules
 
@@ -143,6 +166,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Disc** | *(Next draft)* Motion and audio loops, menu timeouts, variables and conditions, audio/subtitle selection, per-language menus. |
+| **2: Disc** | *(v0.2, partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping. *(Next drafts)* Menu timeouts, variables and conditions, audio/subtitle selection, per-language menus. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

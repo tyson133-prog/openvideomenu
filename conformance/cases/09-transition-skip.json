@@ -1,0 +1,43 @@
+{
+  "description": "Level 2 (v0.2 transitions): goto with a transition plays the clip first; its end, or any key/click, opens the target menu with its intro; hover during a transition is ignored; back returns without a transition or intro.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Transitions" },
+    "media": { "trailer": { "ref": "Trailers/trailer.mp4", "kind": "trailer" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "background": { "video": { "src": "menus/main.mp4" } },
+        "buttons": [
+          { "id": "extras", "rect": [100, 300, 200, 40], "action": { "type": "goto", "menu": "extras", "transition": "menus/to-extras.mp4" } }
+        ]
+      },
+      "extras": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "background": { "video": { "src": "menus/extras.mp4", "loopStart": 2 } },
+        "buttonsAt": 2,
+        "buttons": [
+          { "id": "trailer", "rect": [100, 200, 200, 40], "nav": { "down": "main" }, "action": { "type": "play", "media": "trailer" } },
+          { "id": "main", "rect": [100, 300, 200, 40], "nav": { "up": "trailer" }, "action": { "type": "back" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Extras", "items": [{ "label": "Trailer", "action": { "type": "play", "media": "trailer" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "buttonsReady": true } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "transition", "effects": [{ "type": "activated", "menu": "main", "button": "extras" }, { "type": "transition", "src": "menus/to-extras.mp4" }] } },
+    { "event": { "type": "select", "button": "extras" }, "expect": { "mode": "transition", "effects": [] } },
+    { "event": { "type": "transitionEnded" }, "expect": { "mode": "menu", "menu": "extras", "focus": "trailer", "intro": true, "buttonsReady": false } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "extras", "buttonsReady": true, "effects": [{ "type": "skipIntro", "menu": "extras" }] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "mode": "menu", "menu": "main", "focus": "extras", "intro": false, "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "transition" } },
+    { "event": { "type": "press", "key": "left" }, "expect": { "mode": "menu", "menu": "extras", "buttonsReady": false, "effects": [] } },
+    { "event": { "type": "activate", "button": "main" }, "expect": { "menu": "extras", "buttonsReady": true, "effects": [{ "type": "skipIntro", "menu": "extras" }] } },
+    { "event": { "type": "activate", "button": "main" }, "expect": { "menu": "main", "focus": "extras" } }
+  ]
+}
