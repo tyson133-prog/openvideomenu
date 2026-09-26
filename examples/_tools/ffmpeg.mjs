@@ -1,6 +1,7 @@
 // Helpers for example build scripts: run ffmpeg, find a font for drawtext, download files.
 import { spawnSync } from "node:child_process";
-import { createWriteStream, existsSync, renameSync } from "node:fs";
+import { createWriteStream, existsSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
@@ -72,4 +73,13 @@ export async function download(url, file) {
   renameSync(file + ".part", file);
   process.stdout.write("  done \n");
   return true;
+}
+
+/**
+ * Keep media servers from treating menu art (motion loops, transitions, music) as titles:
+ * Plex honours .plexignore (patterns, "*" = everything here), Jellyfin an .ignore file in the folder.
+ */
+export function writeIgnoreFiles(dir) {
+  writeFileSync(join(dir, ".plexignore"), "# Menu art for a disc menu, not titles to list.\n*\n");
+  writeFileSync(join(dir, ".ignore"), "");
 }

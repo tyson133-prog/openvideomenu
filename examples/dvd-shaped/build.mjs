@@ -10,13 +10,14 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { drawtext, ffmpeg, findFont } from "../_tools/ffmpeg.mjs";
+import { drawtext, ffmpeg, findFont, writeIgnoreFiles } from "../_tools/ffmpeg.mjs";
 import { flatFill, flatOutline, hex } from "../_tools/png.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const at = (...p) => join(here, ...p);
 const font = findFont();
 for (const d of ["Season 01", "Season 00", "menus"]) mkdirSync(at(d), { recursive: true });
+writeIgnoreFiles(at("menus"));
 
 // Storage is 720x480 but displayed at 16:9 (853x480). Art is drawn at display size and squeezed,
 // exactly as DVD menu video is.

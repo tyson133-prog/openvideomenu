@@ -16,6 +16,7 @@ A MenuStream manifest adds a disc-style menu to media that already exists: a fil
 - A manifest is a UTF-8 JSON file named `<Title>.menustream.json`, placed next to the main media file, for example `Sintel (2010)/Sintel (2010).menustream.json`.
 - **Relative paths resolve against the manifest's own URL or location.** They use forward slashes, and they MAY contain spaces and other characters (readers percent-encode as needed).
 - Absolute URLs are allowed anywhere a path is.
+- **Keep menu art away from media scanners.** Put menu assets in their own folder (e.g. `menus/`). If it holds video or audio, include a `.plexignore` containing `*` and an empty `.ignore` (Jellyfin), or media servers will list the clips as titles or as extra versions of the film. `menustream validate` warns when these are missing.
 - *(Reserved)* A bundle `<Title>.msz` is a zip archive containing `manifest.json` and its assets. Bundles are specified in a later draft.
 
 The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.schema.json). The schema checks structure only. Cross-references (§7) are checked by validators such as `menustream validate`.

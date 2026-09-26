@@ -292,6 +292,23 @@ describe("isFaststart / checkAssetFiles", () => {
   });
 });
 
+describe("checkIgnoreFiles", () => {
+  it("warns once per folder with menu motion/music but no ignore files", async () => {
+    const { checkIgnoreFiles } = await import("../src/index.js");
+    write("ig/bare/loop.mp4");
+    write("ig/bare/music.m4a");
+    write("ig/bare/still.png");
+    write("ig/done/loop.mp4");
+    write("ig/done/.plexignore", "*\n");
+    write("ig/done/.ignore", "");
+    write("ig/stills/only.png");
+    const a = (p: string) => ({ shown: p, file: join(root, ...p.split("/")) });
+    const problems = checkIgnoreFiles([a("ig/bare/loop.mp4"), a("ig/bare/music.m4a"), a("ig/bare/still.png"), a("ig/done/loop.mp4"), a("ig/stills/only.png")]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/^ig[\\/]bare holds menu video\/music but no \.plexignore or \.ignore/);
+  });
+});
+
 describe("NoAuth", () => {
   it("allows everything (testing only)", async () => expect(await new NoAuth().allows(undefined)).toBe(true));
 });

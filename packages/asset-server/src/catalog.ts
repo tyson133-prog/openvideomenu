@@ -3,7 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
 import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@menustream/core";
 import { findManifests } from "./files.js";
-import { checkAssetFiles } from "./media-check.js";
+import { checkAssetFiles, checkIgnoreFiles } from "./media-check.js";
 
 export interface CatalogMedia {
   id: string;
@@ -148,7 +148,8 @@ export class Catalog {
     };
     const isRelative = (ref: string) => !/^[a-z][a-z0-9+.-]*:/i.test(ref) && !ref.startsWith("/");
     const assets = menuAssets(m).map(inRoot).filter((p): p is string => p !== undefined);
-    const warnings = checkAssetFiles(assets.map((a) => ({ shown: a, file: join(this.roots[root]!, ...a.split("/")) })));
+    const onDisk = assets.map((a) => ({ shown: a, file: join(this.roots[root]!, ...a.split("/")) }));
+    const warnings = [...checkAssetFiles(onDisk), ...checkIgnoreFiles(onDisk)];
     if (m.version !== FORMAT_VERSION && Number(m.version.split(".")[1]) > Number(FORMAT_VERSION.split(".")[1]))
       warnings.unshift(`Written for ${m.version}; this server reads ${FORMAT_VERSION}. Newer fields are ignored.`);
     return {

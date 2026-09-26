@@ -24,7 +24,9 @@ import org.menustream.tv.plex.PlexIdentity
 import org.menustream.tv.plex.PlexItem
 import org.menustream.tv.plex.PlexLetter
 import org.menustream.tv.plex.PlexResource
+import org.menustream.tv.plex.PlayablePart
 import org.menustream.tv.plex.PlexServer
+import org.menustream.tv.plex.filesOf
 import org.menustream.tv.store.Settings
 
 /** Something on screen you can pick: a movie, show or episode, or a disc (a TV disc manifest). */
@@ -43,7 +45,7 @@ sealed interface Tile {
 data class TileRow(val title: String, val tiles: List<Tile>)
 
 /** A title opened into its disc menu: manifest media ids resolved to Plex items. */
-data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, PlexItem>, val lastStop: LastStop?)
+data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, PlayablePart>, val lastStop: LastStop?)
 
 data class ShowState(val show: PlexItem, val seasons: List<PlexItem>, val season: PlexItem?, val episodes: List<PlexItem>, val discs: List<Tile.Disc>)
 
@@ -202,7 +204,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun tile(item: PlexItem): Tile.Media =
-        Tile.Media(item, if (item.type == "movie") item.part?.file?.let { MenuMatcher.manifestFor(it, catalog) } else null)
+        Tile.Media(item, if (item.type == "movie") item.allParts.firstNotNullOfOrNull { p -> p.file?.let { MenuMatcher.manifestFor(it, catalog) } } else null)
 
     /** Rows for a library tab, loaded when the tab is first shown. */
     fun loadTab(tab: BrowseTab): Job = viewModelScope.launch {
@@ -258,8 +260,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return catalog.filter { it.valid && it.hasMenus }.mapNotNull { entry ->
             val name = entry.title?.name ?: return@mapNotNull null
             val movie = movieSections.firstNotNullOfOrNull { s ->
-                attempt { plex.moviesTitled(s.key, name) }.getOrDefault(emptyList()).firstOrNull { m ->
-                    m.part?.file?.let { f -> MenuMatcher.manifestFor(f, listOf(entry)) != null } == true
+                val candidates = attempt { plex.moviesTitled(s.key, name) }.getOrElse {
+                    if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "moviesTitled(${s.title}, $name) failed: $it")
+                    emptyList()
+                }
+                if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "catalog '$name' in ${s.title}: ${candidates.map { it.ratingKey + " " + it.media.flatMap { m -> m.parts.map { p -> p.file } } }}")
+                candidates.firstOrNull { m ->
+                    m.allParts.any { p -> p.file?.let { f -> MenuMatcher.manifestFor(f, listOf(entry)) != null } == true }
                 }
             }
             if (movie != null) return@mapNotNull Tile.Media(movie, entry)
@@ -317,9 +324,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val plex = server ?: return
         val full = plex.item(movie.ratingKey) ?: movie
         val extras = attempt { plex.extras(movie.ratingKey) }.getOrDefault(emptyList())
-        val files = (listOf(full) + extras).mapNotNull { item -> item.part?.file?.let { it to item } }
+        val files = filesOf(listOf(full) + extras)
         val media = MenuMatcher.resolveMedia(entry, files)
-        val featureId = media.entries.firstOrNull { it.value.ratingKey == full.ratingKey }?.key
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("MenuStream", "open ${movie.ratingKey} -> ${full.ratingKey}; plex files=${files.map { it.first }}")
+            android.util.Log.d("MenuStream", "manifest media=${entry.media.map { it.id + "=" + it.path }}; resolved=${media.mapValues { it.value.item.ratingKey + ":" + it.value.part.file }}")
+        }
+        val featureId = media.entries.firstOrNull { it.value.item.ratingKey == full.ratingKey }?.key
         val lastStop = full.viewOffset?.takeIf { it > 0 && featureId != null }?.let { LastStop(featureId!!, it / 1000.0) }
         go(Screen.Menu(OpenMenu(full.title, entry, media, lastStop)))
     }
@@ -331,7 +342,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val episodes = season?.let { attempt { plex.children(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
         go(Screen.Show(ShowState(show, seasons, season, episodes, emptyList())))
         // Discs: manifests whose media are this show's episode files.
-        val files = attempt { plex.allEpisodes(show.ratingKey) }.getOrDefault(emptyList()).mapNotNull { it.part?.file }
+        val files = attempt { plex.allEpisodes(show.ratingKey) }.getOrDefault(emptyList()).flatMap { e -> e.allParts.mapNotNull { it.file } }
         val discs = catalog
             .filter { e -> e.valid && e.hasMenus && e.media.any { m -> m.path != null && files.any { f -> MenuMatcher.matches(m.path, f) } } }
             .sortedBy { it.path.lowercase() }
@@ -353,7 +364,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val show = disc.show
         val episodes = show?.let { attempt { plex.allEpisodes(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
         val extras = show?.let { attempt { plex.extras(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
-        val files = (episodes + extras).mapNotNull { item -> item.part?.file?.let { it to item } }
+        val files = filesOf(episodes + extras)
         val media = MenuMatcher.resolveMedia(disc.entry, files)
         go(Screen.Menu(OpenMenu(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, null)))
     }
@@ -382,8 +393,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Resolve a menu button's media to something the native player can play. */
     fun requestFor(open: OpenMenu, mediaId: String, start: Double): PlayRequest? {
         val plex = server ?: return null
-        val item = open.media[mediaId] ?: return null
-        val part = item.part ?: return null
+        val (item, part) = open.media[mediaId] ?: return null
         return PlayRequest(plex.partUrl(part), plex.authHeaders(), start, item.title, reporterFor(item))
     }
 

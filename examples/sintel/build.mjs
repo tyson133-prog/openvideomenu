@@ -9,11 +9,14 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { download, drawtext, ffmpeg, findFont } from "../_tools/ffmpeg.mjs";
+import { download, drawtext, ffmpeg, findFont, writeIgnoreFiles } from "../_tools/ffmpeg.mjs";
 import { frameHighlight, hex, underlineHighlight } from "../_tools/png.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const at = (...p) => join(here, ...p);
+// Downloads and intermediates live outside the title folder, so copying the folder into a library
+// never brings source files along (Plex would scan them as extra versions or movies).
+const cache = (...p) => join(here, "..", "_cache", "sintel", ...p);
 const wantFilm = process.argv.includes("--film");
 
 const W = 1280;
@@ -24,22 +27,23 @@ const TRAILER = "Trailers/Sintel Trailer.mp4";
 const SCORE = "Other/Music and Effects Track.mp4";
 const CHAPTERS = [0, 130, 270, 420, 575, 735]; // seconds; "Chapter n" labels, no scene names claimed
 
-mkdirSync(at("media"), { recursive: true });
+mkdirSync(cache(), { recursive: true });
 mkdirSync(at("Trailers"), { recursive: true });
 mkdirSync(at("Other"), { recursive: true });
 mkdirSync(at("menus"), { recursive: true });
+writeIgnoreFiles(at("menus"));
 const font = findFont();
 
 // --- media ------------------------------------------------------------------------------------
-const trailerSrc = at("media", "sintel_trailer-480p.mp4");
+const trailerSrc = cache("sintel_trailer-480p.mp4");
 await download("https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4", trailerSrc);
 if (!existsSync(at(TRAILER))) ffmpeg(["-i", trailerSrc, "-c", "copy", "-movflags", "+faststart", at(TRAILER)]);
 
-const scoreSrc = at("media", "sintel-m+e-st.flac");
+const scoreSrc = cache("sintel-m+e-st.flac");
 await download("https://download.blender.org/durian/movies/sintel-m%2Be-st.flac", scoreSrc);
 
-const filmSrc = at("media", "Sintel.2010.1080p.mkv");
-const standInMarker = at("media", "feature-is-stand-in");
+const filmSrc = cache("Sintel.2010.1080p.mkv");
+const standInMarker = cache("feature-is-stand-in");
 if (wantFilm) {
   await download("https://download.blender.org/durian/movies/Sintel.2010.1080p.mkv", filmSrc);
   if (!existsSync(at(FEATURE)) || existsSync(standInMarker)) {
@@ -67,7 +71,7 @@ const menuFrame = (time, file, filters = "") =>
 // The isolated music & effects track as a video: a still frame over the audio.
 if (!existsSync(at(SCORE))) {
   console.log("Building the music & effects extra...");
-  const still = at("media", "score-still.jpg");
+  const still = cache("score-still.jpg");
   menuFrame(34, still, [
     "eq=brightness=-0.12:saturation=0.8",
     drawtext(font, "Music and Effects Track", { x: "(w-text_w)/2", y: "h*0.78", size: 44 }),

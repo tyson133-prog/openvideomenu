@@ -87,7 +87,21 @@ data class PlexItem(
 ) {
     /** The first playable file (direct play uses a single part). */
     val part: PlexPart? get() = media.firstOrNull()?.parts?.firstOrNull()
+
+    /**
+     * Every file of every version. A title can have several versions (e.g. a 4K and an HD file, or a
+     * stray copy Plex grouped with it); menus must match against all of them, not just the first.
+     */
+    val allParts: List<PlexPart> get() = media.flatMap { it.parts }
 }
+
+/** A specific file of a Plex item: what a menu button actually plays. */
+data class PlayablePart(val item: PlexItem, val part: PlexPart)
+
+/** Every file of [items], keyed by its path, for matching against manifest media paths. */
+fun filesOf(items: List<PlexItem>): List<Pair<String, PlayablePart>> =
+    items.flatMap { item -> item.allParts.mapNotNull { p -> p.file?.let { it to PlayablePart(item, p) } } }
+
 
 @Serializable
 data class PlexMedia(

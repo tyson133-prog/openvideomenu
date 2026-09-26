@@ -1,5 +1,5 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
-import { extname } from "node:path";
+import { dirname, extname, join } from "node:path";
 
 const MP4_FAMILY = new Set([".mp4", ".m4a", ".m4v", ".mov"]);
 
@@ -50,3 +50,27 @@ export function checkAssetFiles(assets: { shown: string; file: string }[]): stri
   }
   return problems;
 }
+
+const MOTION = new Set([".mp4", ".m4v", ".mov", ".webm", ".mkv", ".m4a", ".mp3", ".aac", ".ogg", ".opus", ".flac", ".wav"]);
+
+/**
+ * Folders holding menu videos or music should tell media servers to skip them, or Plex/Jellyfin list
+ * the clips as titles (or as extra versions of the film). Returns one warning per folder missing the
+ * ignore files. [dirs] maps the folder as shown to its path on disk, for folders with menu assets.
+ */
+export function checkIgnoreFiles(assets: { shown: string; file: string }[]): string[] {
+  const folders = new Map<string, string>(); // shown → disk
+  for (const { shown, file } of assets)
+    if (MOTION.has(extname(file).toLowerCase())) folders.set(dirname(shown), dirname(file));
+  const problems: string[] = [];
+  for (const [shown, disk] of folders) {
+    const missing = [".plexignore", ".ignore"].filter((f) => !existsSync(join(disk, f)));
+    if (missing.length)
+      problems.push(
+        `${shown || "."} holds menu video/music but no ${missing.join(" or ")}; Plex/Jellyfin may list those clips as titles. ` +
+          `Add a .plexignore containing "*" and an empty .ignore to that folder.`,
+      );
+  }
+  return problems;
+}
+

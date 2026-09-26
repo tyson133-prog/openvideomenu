@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { FORMAT_NAME, FORMAT_VERSION, menuAssets, parseManifest } from "@menustream/core";
-import { checkAssetFiles, findManifests } from "@menustream/asset-server";
+import { checkAssetFiles, checkIgnoreFiles, findManifests } from "@menustream/asset-server";
 import { startPreview } from "./serve.js";
 
 const USAGE = `${FORMAT_NAME} ${FORMAT_VERSION} (draft)
@@ -37,7 +37,7 @@ function validate(target: string): number {
     if (result.ok) {
       // Menu art: present, and MP4/M4A files streamable from the start (TV players stall otherwise).
       const assets = menuAssets(result.manifest!).map((a) => ({ shown: join(dirname(file), a), file: join(dirname(file), ...a.split("/")) }));
-      for (const problem of checkAssetFiles(assets)) console.log(`    warning  ${problem}`);
+      for (const problem of [...checkAssetFiles(assets), ...checkIgnoreFiles(assets)]) console.log(`    warning  ${problem}`);
     }
     if (!result.ok) failed++;
   }

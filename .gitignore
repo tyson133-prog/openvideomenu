@@ -3,6 +3,7 @@ dist/
 *.tsbuildinfo
 # Example media is downloaded or generated locally, never committed.
 examples/*/media/
+examples/_cache/
 examples/sintel/Sintel (2010).mp4
 examples/sintel/Trailers/
 examples/dvd-shaped/Season */
