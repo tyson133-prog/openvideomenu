@@ -103,8 +103,13 @@ class PlexServer(
     suspend fun onDeck(sectionKey: String? = null, size: Int = 30): List<PlexItem> =
         page(if (sectionKey == null) "/library/onDeck" else "/library/sections/$sectionKey/onDeck", size)
 
-    suspend fun recentlyAdded(sectionKey: String? = null, size: Int = 30): List<PlexItem> =
-        page(if (sectionKey == null) "/library/recentlyAdded" else "/library/sections/$sectionKey/recentlyAdded", size)
+    /** Recently added titles; [type] narrows a section to e.g. episodes ("4") instead of shows. */
+    suspend fun recentlyAdded(sectionKey: String? = null, size: Int = 30, type: String? = null): List<PlexItem> =
+        page(
+            if (sectionKey == null) "/library/recentlyAdded" else "/library/sections/$sectionKey/recentlyAdded",
+            size,
+            *(if (type != null) arrayOf("type" to type) else emptyArray()),
+        )
 
     /** The first letters that titles in a section start with, with counts ("#" for digits/symbols). */
     suspend fun letters(sectionKey: String): List<PlexLetter> =

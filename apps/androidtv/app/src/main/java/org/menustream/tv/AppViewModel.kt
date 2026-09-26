@@ -276,9 +276,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             if (movie != null) return@mapNotNull Tile.Media(movie, entry)
-            val show = showSections.firstNotNullOfOrNull { s -> attempt { plex.showsTitled(s.key, name) }.getOrDefault(emptyList()).firstOrNull() }
-            Tile.Disc(entry, show)
+            Tile.Disc(entry, findShowForDisc(entry, name, showSections))
         }
+    }
+
+    /**
+     * The Plex show a TV disc manifest belongs to. Titles are unreliable (Plex's metadata agents rename
+     * shows), so candidates come from the exact title, a search, and recently added episodes, and a
+     * candidate only counts if one of its episode files matches a file the disc references.
+     */
+    private suspend fun findShowForDisc(entry: CatalogEntry, name: String, showSections: List<PlexDirectory>): PlexItem? {
+        val plex = server ?: return null
+        val discFiles = entry.media.mapNotNull { it.path }
+        if (discFiles.isEmpty()) return null
+        fun episodeMatches(ep: PlexItem) = ep.allParts.any { p -> p.file?.let { f -> discFiles.any { MenuMatcher.matches(it, f) } } == true }
+        suspend fun confirmed(show: PlexItem): Boolean =
+            attempt { plex.allEpisodes(show.ratingKey) }.getOrDefault(emptyList()).any(::episodeMatches)
+
+        // 1. Exact title.
+        for (s in showSections) for (show in attempt { plex.showsTitled(s.key, name) }.getOrDefault(emptyList())) {
+            if (confirmed(show)) return show
+        }
+        // 2. Search (catches small title differences).
+        val searched = attempt { plex.search(name) }.getOrDefault(emptyList())
+        for (show in searched.filter { it.type == "show" }) if (confirmed(show)) return show
+        // 3. Recently added episodes, matched by file; their show is the one.
+        for (s in showSections) {
+            val recent = attempt { plex.recentlyAdded(s.key, size = 100, type = "4") }.getOrDefault(emptyList())
+            recent.firstOrNull(::episodeMatches)?.grandparentRatingKey?.let { key ->
+                attempt { plex.item(key) }.getOrNull()?.let { return it }
+            }
+        }
+        if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "no Plex show found for disc '$name' (${entry.path})")
+        return null
     }
 
     // --- the menu server ---------------------------------------------------------------------------

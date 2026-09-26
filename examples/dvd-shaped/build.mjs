@@ -48,7 +48,7 @@ for (const [i, ep] of [...EPISODES, EGG].entries()) {
       drawtext(font, ep.title, { x: "(w-text_w)/2", y: "h*0.36", size: 44 }),
       drawtext(font, ep.format, { x: "(w-text_w)/2", y: "h*0.36+60", size: 26, color: "yellow" }),
     ].join(","),
-    "-ac", "2", ...ep.codecs, at(ep.file)]);
+    "-pix_fmt", "yuv420p", "-ac", "2", ...ep.codecs, at(ep.file)]);
 }
 
 // --- menu art (drawn at 853x480, squeezed to 720x480) ---------------------------------------------

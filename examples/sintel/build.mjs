@@ -58,7 +58,7 @@ if (wantFilm) {
     `anullsrc=r=48000:cl=stereo`, "-t", String(FILM_DURATION), "-vf",
     [drawtext(font, "Sintel - stand-in for the film", { x: "(w-text_w)/2", y: "h/2-60", size: 30 }),
      drawtext(font, "run  node examples/sintel/build.mjs --film  for the real one", { x: "(w-text_w)/2", y: "h/2-10", size: 18 })].join(","),
-    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "35", "-c:a", "aac", "-b:a", "32k", "-shortest", "-movflags", "+faststart", at(FEATURE)]);
+    "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "35", "-c:a", "aac", "-b:a", "32k", "-shortest", "-movflags", "+faststart", at(FEATURE)]);
   writeFileSync(standInMarker, "");
 }
 
