@@ -1,0 +1,28 @@
+{
+  "description": "Level 1: firstPlay runs before the root menu; arrows are ignored during playback; when it finishes the root menu opens.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Intro" },
+    "media": {
+      "intro": { "ref": "intro.mp4", "kind": "other" },
+      "feature": { "ref": "Intro.mp4", "kind": "feature" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [{ "id": "play", "rect": [100, 100, 300, 60], "action": { "type": "play", "media": "feature" } }]
+      }
+    },
+    "rootMenu": "main",
+    "firstPlay": { "type": "play", "media": "intro" },
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "intro", "start": 0 }] } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } }
+  ]
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# Example media is downloaded or generated locally, never committed.
+examples/*/media/
+examples/sintel/Sintel (2010).mp4
+examples/sintel/Trailers/
+examples/dvd-shaped/Season */
+examples/sintel/Other/
+examples/sintel/menus/
+examples/dvd-shaped/menus/

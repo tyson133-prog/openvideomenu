@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { canvasAspect, parseAspect, parseManifest, resolveMedia, resolvePath } from "../src/index.js";
+
+describe("parseAspect", () => {
+  it.each([
+    ["16:9", 16 / 9],
+    ["4:3", 4 / 3],
+    ["1.85", 1.85],
+    [" 2.39 : 1 ", 2.39],
+    [1.5, 1.5],
+  ])("%s", (input, expected) => expect(parseAspect(input)).toBeCloseTo(expected));
+
+  it.each(["", "wide", "0:9", -1, "16:0"])("rejects %s", (input) => expect(parseAspect(input)).toBeUndefined());
+
+  it("defaults to square pixels", () => {
+    expect(canvasAspect({ canvas: { width: 1280, height: 720 } })).toBeCloseTo(16 / 9);
+    expect(canvasAspect({ canvas: { width: 720, height: 480, aspect: "4:3" } })).toBeCloseTo(4 / 3);
+  });
+});
+
+describe("resolve", () => {
+  const manifestUrl = "http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).menustream.json";
+
+  it("resolves relative paths with spaces against the manifest", () => {
+    expect(resolvePath("Trailers/Sintel (2010)-trailer.mp4", manifestUrl)).toBe(
+      "http://localhost:8080/library/Sintel%20(2010)/Trailers/Sintel%20(2010)-trailer.mp4",
+    );
+  });
+
+  it("keeps absolute URLs", () => {
+    expect(resolvePath("https://cdn.example/a.m3u8", manifestUrl)).toBe("https://cdn.example/a.m3u8");
+  });
+
+  it("hands scheme refs to the host resolver", () => {
+    const resolvers = { jellyfin: (r: { id: string }) => `/Videos/${r.id}/stream` };
+    expect(resolveMedia({ scheme: "jellyfin", id: "abc" }, manifestUrl, resolvers)).toBe("/Videos/abc/stream");
+    expect(resolveMedia({ scheme: "unknown", id: "abc" }, manifestUrl, resolvers)).toBeUndefined();
+  });
+});
+
+describe("parseManifest", () => {
+  it("reports bad JSON instead of throwing", () => {
+    const result = parseManifest("{ not json");
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]!.message).toMatch(/Not valid JSON/);
+  });
+});

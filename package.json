@@ -1,0 +1,26 @@
+{
+  "name": "menustream-monorepo",
+  "private": true,
+  "description": "MenuStream (working name): an open, royalty-free format for disc-style menus over existing media files.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/renderer-web",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npm run build -w @menustream/core && npm run build -w @menustream/renderer-web && npm run build -w @menustream/cli",
+    "test": "vitest run",
+    "typecheck": "tsc -b packages/core packages/renderer-web packages/cli",
+    "preview:sintel": "node packages/cli/dist/main.js preview examples/sintel",
+    "preview:dvd": "node packages/cli/dist/main.js preview examples/dvd-shaped"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "ajv": "^8.17.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

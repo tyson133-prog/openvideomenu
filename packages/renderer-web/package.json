@@ -1,0 +1,23 @@
+{
+  "name": "@menustream/renderer-web",
+  "version": "0.1.0",
+  "description": "Reference 10-foot web renderer for MenuStream menus. Plugs into any host through playback, input and media-resolver adapters.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./bundle": "./dist/menustream-player.js"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@menustream/core": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=MenuStreamPlayer --target=es2020 --outfile=dist/menustream-player.js --sourcemap"
+  }
+}

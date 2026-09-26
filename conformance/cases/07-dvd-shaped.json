@@ -1,0 +1,103 @@
+{
+  "description": "Level 1, DVD-shaped: 720x480 anamorphic 16:9 canvas, labels baked into the background, highlight overlays per state, an episode page with auto-action page arrows, a tiny easter-egg button kept in a hidden fallback group, and x-dvd provenance that readers must ignore.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Example Show", "year": 1999 },
+    "source": { "kind": "dvd", "generator": "hand-written conformance case" },
+    "media": {
+      "s01e01": { "ref": "Season 01/Example Show - s01e01 - Pilot.mkv", "kind": "episode", "label": "Pilot", "chapters": [{ "time": 0 }, { "time": 312.4 }, { "time": 790.1 }] },
+      "s01e02": { "ref": "Season 01/Example Show - s01e02 - Second.mkv", "kind": "episode", "label": "Second" },
+      "egg": { "ref": "Season 00/Example Show - s00e01 - Blooper.mkv", "kind": "other", "label": "Blooper" }
+    },
+    "menus": {
+      "vts1-pgc2": {
+        "label": "Episodes",
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "background": { "image": "menus/vts1-pgc2.png", "color": "#000" },
+        "defaultButton": "b1",
+        "buttons": [
+          {
+            "id": "b1",
+            "rect": [73, 46, 278, 180],
+            "label": "Pilot",
+            "states": {
+              "selected": { "image": "menus/vts1-pgc2-b1-selected.png" },
+              "activated": { "image": "menus/vts1-pgc2-b1-activated.png" }
+            },
+            "nav": { "right": "b2", "down": "egg" },
+            "action": { "type": "play", "media": "s01e01" },
+            "x-dvd": { "button": 1, "colorTable": 0, "commands": ["JumpVTS_PTT 1:1"] }
+          },
+          {
+            "id": "b2",
+            "rect": [370, 45, 278, 181],
+            "label": "Second",
+            "states": {
+              "selected": { "image": "menus/vts1-pgc2-b2-selected.png" },
+              "activated": { "image": "menus/vts1-pgc2-b2-activated.png" }
+            },
+            "nav": { "left": "b1", "down": "next" },
+            "action": { "type": "play", "media": "s01e02" },
+            "x-dvd": { "button": 2, "colorTable": 0 }
+          },
+          {
+            "id": "next",
+            "rect": [375, 402, 35, 42],
+            "label": "Next page",
+            "autoAction": true,
+            "nav": { "up": "b2" },
+            "action": { "type": "goto", "menu": "vts1-pgc3" },
+            "x-dvd": { "button": 6 }
+          },
+          {
+            "id": "egg",
+            "rect": [4, 5, 11, 13],
+            "a11yLabel": "Hidden feature",
+            "action": { "type": "play", "media": "egg" },
+            "x-dvd": { "button": 7, "hidden": true }
+          }
+        ],
+        "x-dvd": { "domain": "VTSM", "vtsn": 1, "pgcn": 2, "cell": 1 }
+      },
+      "vts1-pgc3": {
+        "label": "Episodes (page 2)",
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "background": { "image": "menus/vts1-pgc3.png" },
+        "buttons": [
+          {
+            "id": "prev",
+            "rect": [341, 402, 34, 42],
+            "label": "Previous page",
+            "autoAction": true,
+            "action": { "type": "goto", "menu": "vts1-pgc2", "button": "b2" }
+          }
+        ]
+      }
+    },
+    "rootMenu": "vts1-pgc2",
+    "fallback": [
+      {
+        "label": "Episodes",
+        "items": [
+          { "label": "Pilot", "action": { "type": "play", "media": "s01e01" } },
+          { "label": "Second", "action": { "type": "play", "media": "s01e02" } }
+        ]
+      },
+      { "label": "Hidden features", "hidden": true, "items": [{ "label": "Blooper", "action": { "type": "play", "media": "egg" } }] }
+    ],
+    "x-dvd": { "discTitle": "EXAMPLE_SHOW_D1", "videoStandard": "NTSC" }
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "menu": "vts1-pgc2", "focus": "b1" } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "focus": "b2" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "menu": "vts1-pgc3", "focus": "prev" } },
+    { "event": { "type": "select", "button": "prev" }, "expect": { "menu": "vts1-pgc3", "focus": "prev" } },
+    { "event": { "type": "activate", "button": "prev" }, "expect": { "menu": "vts1-pgc2", "focus": "b2" } },
+    { "event": { "type": "press", "key": "left" }, "expect": { "focus": "b1" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "egg" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "vts1-pgc2", "button": "egg" }, { "type": "play", "media": "egg", "start": 0 }] } }
+  ]
+}

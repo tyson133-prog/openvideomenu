@@ -1,0 +1,35 @@
+{
+  "description": "Level 1: selecting an autoAction button activates it immediately (DVD auto-action), by remote or pointer.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Auto" },
+    "media": { "a": { "ref": "a.mp4" } },
+    "menus": {
+      "page1": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "ep", "rect": [100, 100, 200, 100], "nav": { "right": "next" }, "action": { "type": "play", "media": "a" } },
+          { "id": "next", "rect": [600, 400, 40, 40], "autoAction": true, "nav": { "left": "ep" }, "action": { "type": "goto", "menu": "page2" } }
+        ]
+      },
+      "page2": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "prev", "rect": [80, 400, 40, 40], "autoAction": true, "action": { "type": "goto", "menu": "page1", "button": "ep" } }
+        ]
+      }
+    },
+    "rootMenu": "page1",
+    "fallback": [{ "label": "Episodes", "items": [{ "label": "A", "action": { "type": "play", "media": "a" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "menu": "page1", "focus": "ep" } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "menu": "page2", "focus": "prev" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "page1", "focus": "next" } },
+    { "event": { "type": "select", "button": "ep" }, "expect": { "menu": "page1", "focus": "ep" } },
+    { "event": { "type": "select", "button": "next" }, "expect": { "menu": "page2", "focus": "prev" } }
+  ]
+}

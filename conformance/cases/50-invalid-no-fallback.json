@@ -1,0 +1,13 @@
+{
+  "description": "Invalid: every manifest must carry a fallback list (the permanent basic-compatibility floor).",
+  "level": 0,
+  "valid": false,
+  "errors": ["/fallback"],
+  "schemaValid": false,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "No Fallback" },
+    "media": { "feature": { "ref": "a.mp4" } }
+  }
+}

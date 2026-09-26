@@ -1,0 +1,10 @@
+[
+  { "expect": { "mode": "menu", "menu": "vts1-pgc2", "focus": "b1" }, "shot": "dvd-01" },
+  { "key": "ArrowDown", "expect": { "focus": "b2" }, "shot": "dvd-02" },
+  { "key": "ArrowRight", "wait": 600, "expect": { "menu": "vts1-pgc3", "focus": "b3" }, "shot": "dvd-03-page2" },
+  { "key": "ArrowDown", "wait": 600, "expect": { "menu": "vts1-pgc2", "focus": "b2" } },
+  { "key": "ArrowUp", "expect": { "focus": "b1" } },
+  { "key": "ArrowUp", "expect": { "focus": "egg" }, "shot": "dvd-04-egg" },
+  { "key": "Enter", "wait": 1200, "expect": { "mode": "playing", "videoSrc": "Season 00/Example Show - s00e01 - Blooper Reel.mp4" }, "shot": "dvd-05-egg-playing" },
+  { "key": "Escape", "expect": { "mode": "menu", "focus": "egg" } }
+]

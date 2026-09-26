@@ -1,0 +1,32 @@
+{
+  "description": "Level 1: scene selection plays from the chapter's start time; chapter numbers start at 1.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Chapters" },
+    "media": {
+      "feature": {
+        "ref": "Chapters.mp4",
+        "chapters": [{ "time": 0, "label": "Opening" }, { "time": 95.5, "label": "Middle" }, { "time": 300, "label": "End" }]
+      }
+    },
+    "menus": {
+      "scenes": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "c1", "rect": [100, 300, 300, 200], "nav": { "right": "c3" }, "action": { "type": "play", "media": "feature", "chapter": 1 } },
+          { "id": "c3", "rect": [500, 300, 300, 200], "nav": { "left": "c1" }, "action": { "type": "play", "media": "feature", "chapter": 3 } }
+        ]
+      }
+    },
+    "rootMenu": "scenes",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "focus": "c1" } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "focus": "c3" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "scenes", "button": "c3" }, { "type": "play", "media": "feature", "start": 300 }] } }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "description": "Level 1: playAll runs items in order then its after-action; stopping remembers the position and resume continues from it; resume with nothing stopped does nothing.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Play All" },
+    "media": {
+      "e1": { "ref": "S01E01.mp4", "kind": "episode" },
+      "e2": { "ref": "S01E02.mp4", "kind": "episode" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "all", "rect": [100, 100, 300, 60], "nav": { "down": "resume" }, "action": { "type": "playAll", "items": [{ "media": "e1" }, { "media": "e2", "start": 10 }], "after": { "type": "goto", "menu": "done" } } },
+          { "id": "resume", "rect": [100, 200, 300, 60], "nav": { "up": "all" }, "action": { "type": "resume" } }
+        ]
+      },
+      "done": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [{ "id": "ok", "rect": [100, 100, 300, 60], "action": { "type": "back" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Episodes", "items": [{ "label": "Play all", "action": { "type": "playAll", "items": [{ "media": "e1" }, { "media": "e2" }] } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "focus": "all" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "all" }, { "type": "play", "media": "e1", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "e2", "start": 10 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "done", "focus": "ok" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "all" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "effects": [{ "type": "activated", "menu": "main", "button": "resume" }] } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "all" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "stopped", "position": 42.5 }, "expect": { "mode": "menu", "menu": "main", "focus": "all" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "resume" }, { "type": "play", "media": "e1", "start": 42.5 }] } }
+  ]
+}

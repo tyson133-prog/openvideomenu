@@ -1,0 +1,353 @@
+{
+  "format": "menustream",
+  "version": "0.1",
+  "title": {
+    "name": "Example Show",
+    "year": 1999
+  },
+  "source": {
+    "kind": "dvd",
+    "generator": "examples/dvd-shaped/build.mjs (synthetic)"
+  },
+  "media": {
+    "s01e01": {
+      "ref": "Season 01/Example Show - s01e01 - Pilot.mp4",
+      "kind": "episode",
+      "label": "Pilot",
+      "duration": 60,
+      "chapters": [
+        {
+          "time": 0
+        },
+        {
+          "time": 20
+        },
+        {
+          "time": 40
+        }
+      ]
+    },
+    "s01e02": {
+      "ref": "Season 01/Example Show - s01e02 - The Second One.mp4",
+      "kind": "episode",
+      "label": "The Second One",
+      "duration": 60,
+      "chapters": [
+        {
+          "time": 0
+        },
+        {
+          "time": 20
+        },
+        {
+          "time": 40
+        }
+      ]
+    },
+    "s01e03": {
+      "ref": "Season 01/Example Show - s01e03 - Finale.mp4",
+      "kind": "episode",
+      "label": "Finale",
+      "duration": 60,
+      "chapters": [
+        {
+          "time": 0
+        },
+        {
+          "time": 20
+        },
+        {
+          "time": 40
+        }
+      ]
+    },
+    "egg": {
+      "ref": "Season 00/Example Show - s00e01 - Blooper Reel.mp4",
+      "kind": "other",
+      "label": "Blooper Reel",
+      "duration": 60
+    }
+  },
+  "menus": {
+    "vts1-pgc2": {
+      "label": "Episodes",
+      "canvas": {
+        "width": 720,
+        "height": 480,
+        "aspect": "16:9"
+      },
+      "background": {
+        "image": "menus/episodes-1.png",
+        "color": "#02050f"
+      },
+      "defaultButton": "b1",
+      "buttons": [
+        {
+          "id": "b1",
+          "rect": [
+            76,
+            140,
+            397,
+            50
+          ],
+          "label": "Pilot",
+          "states": {
+            "selected": {
+              "image": "menus/p1-b1-selected.png"
+            },
+            "activated": {
+              "image": "menus/p1-b1-activated.png"
+            }
+          },
+          "nav": {
+            "down": "b2",
+            "up": "egg"
+          },
+          "action": {
+            "type": "play",
+            "media": "s01e01"
+          },
+          "x-dvd": {
+            "button": 1
+          }
+        },
+        {
+          "id": "b2",
+          "rect": [
+            76,
+            210,
+            397,
+            50
+          ],
+          "label": "The Second One",
+          "states": {
+            "selected": {
+              "image": "menus/p1-b2-selected.png"
+            },
+            "activated": {
+              "image": "menus/p1-b2-activated.png"
+            }
+          },
+          "nav": {
+            "up": "b1",
+            "down": "next",
+            "right": "next"
+          },
+          "action": {
+            "type": "play",
+            "media": "s01e02"
+          },
+          "x-dvd": {
+            "button": 2
+          }
+        },
+        {
+          "id": "next",
+          "rect": [
+            591,
+            400,
+            51,
+            40
+          ],
+          "label": "Next page",
+          "states": {
+            "selected": {
+              "image": "menus/next-selected.png"
+            },
+            "activated": {
+              "image": "menus/next-activated.png"
+            }
+          },
+          "autoAction": true,
+          "nav": {
+            "up": "b2",
+            "left": "b2"
+          },
+          "action": {
+            "type": "goto",
+            "menu": "vts1-pgc3"
+          },
+          "x-dvd": {
+            "button": 3
+          }
+        },
+        {
+          "id": "egg",
+          "rect": [
+            685,
+            12,
+            12,
+            14
+          ],
+          "a11yLabel": "Hidden feature",
+          "states": {
+            "selected": {
+              "image": "menus/egg-selected.png"
+            },
+            "activated": {
+              "image": "menus/egg-activated.png"
+            }
+          },
+          "nav": {
+            "down": "b1"
+          },
+          "action": {
+            "type": "play",
+            "media": "egg"
+          },
+          "x-dvd": {
+            "button": 4,
+            "hidden": true
+          }
+        }
+      ],
+      "x-dvd": {
+        "domain": "VTSM",
+        "vtsn": 1,
+        "pgcn": 2
+      }
+    },
+    "vts1-pgc3": {
+      "label": "Episodes (page 2)",
+      "canvas": {
+        "width": 720,
+        "height": 480,
+        "aspect": "16:9"
+      },
+      "background": {
+        "image": "menus/episodes-2.png",
+        "color": "#02050f"
+      },
+      "defaultButton": "b3",
+      "buttons": [
+        {
+          "id": "b3",
+          "rect": [
+            76,
+            140,
+            397,
+            50
+          ],
+          "label": "Finale",
+          "states": {
+            "selected": {
+              "image": "menus/p2-b3-selected.png"
+            },
+            "activated": {
+              "image": "menus/p2-b3-activated.png"
+            }
+          },
+          "nav": {
+            "down": "prev",
+            "left": "prev"
+          },
+          "action": {
+            "type": "play",
+            "media": "s01e03"
+          },
+          "x-dvd": {
+            "button": 1
+          }
+        },
+        {
+          "id": "prev",
+          "rect": [
+            76,
+            400,
+            51,
+            40
+          ],
+          "label": "Previous page",
+          "states": {
+            "selected": {
+              "image": "menus/prev-selected.png"
+            },
+            "activated": {
+              "image": "menus/prev-activated.png"
+            }
+          },
+          "autoAction": true,
+          "nav": {
+            "up": "b3",
+            "right": "b3"
+          },
+          "action": {
+            "type": "goto",
+            "menu": "vts1-pgc2",
+            "button": "b2"
+          },
+          "x-dvd": {
+            "button": 2
+          }
+        }
+      ],
+      "x-dvd": {
+        "domain": "VTSM",
+        "vtsn": 1,
+        "pgcn": 3
+      }
+    }
+  },
+  "rootMenu": "vts1-pgc2",
+  "fallback": [
+    {
+      "label": "Episodes",
+      "items": [
+        {
+          "label": "Play all",
+          "action": {
+            "type": "playAll",
+            "items": [
+              {
+                "media": "s01e01"
+              },
+              {
+                "media": "s01e02"
+              },
+              {
+                "media": "s01e03"
+              }
+            ]
+          }
+        },
+        {
+          "label": "Pilot",
+          "action": {
+            "type": "play",
+            "media": "s01e01"
+          }
+        },
+        {
+          "label": "The Second One",
+          "action": {
+            "type": "play",
+            "media": "s01e02"
+          }
+        },
+        {
+          "label": "Finale",
+          "action": {
+            "type": "play",
+            "media": "s01e03"
+          }
+        }
+      ]
+    },
+    {
+      "label": "Hidden features",
+      "hidden": true,
+      "items": [
+        {
+          "label": "Blooper Reel",
+          "action": {
+            "type": "play",
+            "media": "egg"
+          }
+        }
+      ]
+    }
+  ],
+  "x-dvd": {
+    "note": "Synthetic example of what a disc importer writes; not taken from any real disc."
+  }
+}

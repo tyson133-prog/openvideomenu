@@ -1,0 +1,47 @@
+{
+  "description": "Level 1: explicit nav, submenus, back history, playback returns to the launching button, exit at the root.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Two Menus" },
+    "media": {
+      "feature": { "ref": "Two Menus.mp4", "kind": "feature" },
+      "trailer": { "ref": "Trailers/trailer.mp4", "kind": "trailer" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "defaultButton": "play",
+        "buttons": [
+          { "id": "play", "rect": [100, 500, 300, 60], "nav": { "down": "extras" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "extras", "rect": [100, 580, 300, 60], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "extras" } }
+        ]
+      },
+      "extras": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "trailer", "rect": [100, 300, 300, 60], "nav": { "down": "return" }, "action": { "type": "play", "media": "trailer" } },
+          { "id": "return", "rect": [100, 600, 300, 60], "nav": { "up": "trailer" }, "action": { "type": "back" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      { "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] },
+      { "label": "Extras", "items": [{ "label": "Trailer", "action": { "type": "play", "media": "trailer" } }] }
+    ]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "mode": "menu", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "extras" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "extras", "focus": "trailer" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "extras", "button": "trailer" }, { "type": "play", "media": "trailer", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "extras", "focus": "trailer" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "return" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "extras" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "effects": [{ "type": "exit" }] } }
+  ]
+}

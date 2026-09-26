@@ -1,0 +1,15 @@
+{
+  "description": "Level 0: a manifest with no menus is still valid; players show the fallback list.",
+  "level": 0,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Minimal" },
+    "media": { "feature": { "ref": "Minimal.mp4", "kind": "feature" } },
+    "fallback": [
+      { "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }
+    ]
+  },
+  "steps": [{ "event": { "type": "start" }, "expect": { "mode": "fallback" } }]
+}

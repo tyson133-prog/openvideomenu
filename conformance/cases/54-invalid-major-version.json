@@ -1,0 +1,14 @@
+{
+  "description": "Invalid for this reader: a different major version is rejected rather than guessed at.",
+  "level": 0,
+  "valid": false,
+  "schemaValid": false,
+  "errors": ["/version"],
+  "manifest": {
+    "format": "menustream",
+    "version": "1.0",
+    "title": { "name": "Next Major" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

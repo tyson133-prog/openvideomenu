@@ -1,0 +1,124 @@
+import type { Key } from "@menustream/core";
+
+/**
+ * Plays media for the renderer. Hosts replace the default HTML5 adapter to route playback through
+ * their own player (Jellyfin's, a native bridge, a DRM-capable player...).
+ */
+export interface PlaybackAdapter {
+  /** Start playing `url` from `start` seconds. `label` is for on-screen/status text. */
+  play(url: string, start: number, label: string): void;
+  /** Stop early; returns the position in seconds that was reached. */
+  stop(): number;
+  /** Called by the adapter when the item finishes on its own. */
+  onEnded?: () => void;
+  /** Called by the adapter when the viewer stops playback (e.g. with the player's own back button). */
+  onStopped?: (position: number) => void;
+  /** Called when the media can't be played. */
+  onError?: (message: string) => void;
+  destroy(): void;
+}
+
+/**
+ * Turns host input into navigator keys. The default keyboard adapter covers keyboards and
+ * most TV remotes in browsers (arrow keys, Enter/OK, Back/Escape/Backspace).
+ */
+export interface InputAdapter {
+  attach(onKey: (key: Key) => boolean): void;
+  detach(): void;
+}
+
+const KEY_MAP: Record<string, Key> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  Enter: "enter",
+  " ": "enter",
+  Escape: "back",
+  Backspace: "back",
+  GoBack: "back", // Android TV / some TV browsers
+  BrowserBack: "back",
+};
+
+export class KeyboardInput implements InputAdapter {
+  private handler?: (e: KeyboardEvent) => void;
+
+  constructor(private readonly target: EventTarget = window) {}
+
+  attach(onKey: (key: Key) => boolean) {
+    this.handler = (e: KeyboardEvent) => {
+      const key = KEY_MAP[e.key] ?? (e.keyCode === 461 ? "back" : undefined); // 461: LG webOS Back
+      if (key && onKey(key)) e.preventDefault();
+    };
+    this.target.addEventListener("keydown", this.handler as EventListener);
+  }
+
+  detach() {
+    if (this.handler) this.target.removeEventListener("keydown", this.handler as EventListener);
+  }
+}
+
+/** Default playback: an HTML5 <video> element layered over the menu. */
+export class Html5Playback implements PlaybackAdapter {
+  onEnded?: () => void;
+  onStopped?: (position: number) => void;
+  onError?: (message: string) => void;
+  private readonly video: HTMLVideoElement;
+
+  constructor(container: HTMLElement) {
+    this.video = document.createElement("video");
+    this.video.className = "ms-video";
+    this.video.controls = true;
+    this.video.playsInline = true;
+    this.video.hidden = true;
+    container.appendChild(this.video);
+    this.video.addEventListener("ended", () => {
+      this.hide();
+      this.onEnded?.();
+    });
+    this.video.addEventListener("error", () => {
+      if (this.video.hidden) return;
+      const code = this.video.error?.code;
+      this.hide();
+      this.onError?.(
+        code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+          ? "This file is missing or in a format this browser can't play."
+          : "Playback failed.",
+      );
+    });
+  }
+
+  play(url: string, start: number, label: string) {
+    const v = this.video;
+    v.hidden = false;
+    v.title = label;
+    v.src = url;
+    const seek = () => {
+      if (start > 0) v.currentTime = start;
+      void v.play().catch(() => {
+        /* autoplay may need a gesture; controls are visible */
+      });
+    };
+    if (v.readyState >= HTMLMediaElement.HAVE_METADATA) seek();
+    else v.addEventListener("loadedmetadata", seek, { once: true });
+    v.focus({ preventScroll: true });
+  }
+
+  stop(): number {
+    const position = this.video.currentTime || 0;
+    this.hide();
+    return position;
+  }
+
+  private hide() {
+    this.video.pause();
+    this.video.hidden = true;
+    this.video.removeAttribute("src");
+    this.video.load();
+  }
+
+  destroy() {
+    this.hide();
+    this.video.remove();
+  }
+}

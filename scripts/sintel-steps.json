@@ -1,0 +1,18 @@
+[
+  { "expect": { "mode": "menu", "menu": "main", "focus": "play" }, "shot": "01-main" },
+  { "key": "ArrowDown", "expect": { "focus": "scenes" }, "shot": "02-main-scenes" },
+  { "key": "Enter", "expect": { "menu": "scenes", "focus": "ch1" }, "shot": "03-scenes" },
+  { "key": "ArrowRight", "expect": { "focus": "ch2" } },
+  { "key": "ArrowRight", "expect": { "focus": "ch3" } },
+  { "key": "ArrowDown", "expect": { "focus": "ch6" }, "shot": "04-scenes-ch6" },
+  { "key": "Enter", "wait": 1500, "expect": { "mode": "playing", "videoSrc": "Sintel (2010).mp4", "minTime": 735 }, "shot": "05-playing-ch6" },
+  { "key": "Escape", "expect": { "mode": "menu", "menu": "scenes", "focus": "ch6" } },
+  { "key": "ArrowDown", "expect": { "focus": "back" }, "shot": "06-scenes-back" },
+  { "key": "Enter", "expect": { "menu": "main", "focus": "scenes" } },
+  { "key": "ArrowDown", "expect": { "focus": "extras" } },
+  { "key": "Enter", "expect": { "menu": "extras", "focus": "trailer" }, "shot": "07-extras" },
+  { "key": "Enter", "wait": 2500, "expect": { "mode": "playing", "videoSrc": "Trailers/Sintel Trailer.mp4" }, "shot": "08-trailer" },
+  { "key": "Escape", "expect": { "mode": "menu", "menu": "extras", "focus": "trailer" } },
+  { "key": "Escape", "expect": { "mode": "menu", "menu": "main", "focus": "extras" } },
+  { "js": "document.querySelector('[data-button=play]').dispatchEvent(new MouseEvent('mouseenter'))", "expect": { "focus": "play" } }
+]

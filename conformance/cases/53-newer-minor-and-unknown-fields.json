@@ -1,0 +1,26 @@
+{
+  "description": "Forward compatibility: a manifest from a newer minor version with fields this reader doesn't know is still valid. Unknown fields are ignored (warnings only) and the menu works.",
+  "level": 0,
+  "valid": true,
+  "schemaValid": true,
+  "warnings": ["/version", "/menus/main/buttons/0/sparkle", "/menus/main/loopVideo"],
+  "manifest": {
+    "format": "menustream",
+    "version": "0.9",
+    "title": { "name": "From The Future" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "loopVideo": "menus/loop.webm",
+        "buttons": [{ "id": "play", "rect": [0, 0, 10, 10], "sparkle": true, "action": { "type": "play", "media": "feature" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } }
+  ]
+}

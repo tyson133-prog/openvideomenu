@@ -1,0 +1,21 @@
+{
+  "description": "Invalid: fallback items must play something, because Level 0 players have no menus to go to.",
+  "level": 0,
+  "valid": false,
+  "schemaValid": false,
+  "errors": ["/fallback/0/items/0/action/type"],
+  "manifest": {
+    "format": "menustream",
+    "version": "0.1",
+    "title": { "name": "Bad Fallback" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [{ "id": "play", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Menus", "items": [{ "label": "Main menu", "action": { "type": "goto", "menu": "main" } }] }]
+  }
+}
