@@ -1,0 +1,258 @@
+package org.menustream.tv.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.tv.material3.Button
+import androidx.tv.material3.Card
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import org.menustream.tv.AppViewModel
+import org.menustream.tv.MenuSource
+import org.menustream.tv.MovieRow
+import org.menustream.tv.OpenMenu
+import org.menustream.tv.menu.MenuWebView
+import org.menustream.tv.menu.PageMessage
+import org.menustream.tv.player.PlayRequest
+import org.menustream.tv.player.PlayerHandle
+import org.menustream.tv.player.VideoPlayer
+import org.menustream.tv.plex.PlexResource
+
+private val Gold = Color(0xFFFFCF6A)
+
+@Composable
+fun Centered(content: @Composable () -> Unit) =
+    Column(Modifier.fillMaxSize().padding(64.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        content()
+    }
+
+@Composable
+fun BusyScreen(message: String) = Centered { Text(message, style = MaterialTheme.typography.headlineSmall) }
+
+@Composable
+fun FailedScreen(message: String, onRetry: () -> Unit, onSignOut: () -> Unit) = Centered {
+    Text(message, style = MaterialTheme.typography.headlineSmall)
+    Spacer(Modifier.height(24.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val focus = remember { FocusRequester() }
+        Button(onClick = onRetry, modifier = Modifier.focusRequester(focus)) { Text("Try again") }
+        Button(onClick = onSignOut) { Text("Sign out") }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+@Composable
+fun SignInScreen(code: String?, error: String?, onRetry: () -> Unit) = Centered {
+    Text("Sign in with Plex", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(32.dp))
+    if (code != null) {
+        Text("On your phone or computer, go to", style = MaterialTheme.typography.titleLarge)
+        Text("plex.tv/link", style = MaterialTheme.typography.displayMedium.copy(color = Gold))
+        Spacer(Modifier.height(16.dp))
+        Text("and enter", style = MaterialTheme.typography.titleLarge)
+        Text(code, style = TextStyle(fontSize = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = 12.sp, color = Color.White))
+    } else if (error != null) {
+        Text(error, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry) { Text("Try again") }
+    } else {
+        Text("Getting a code…", style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit) = Centered {
+    Text("Choose your Plex server", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(24.dp))
+    servers.forEachIndexed { i, s ->
+        val focus = remember { FocusRequester() }
+        Button(onClick = { onPick(s) }, modifier = Modifier.padding(6.dp).width(420.dp).focusRequester(focus)) { Text(s.name) }
+        if (i == 0) LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+@Composable
+fun LibraryScreen(
+    rows: List<MovieRow>,
+    source: MenuSource,
+    posterUrl: (MovieRow) -> String?,
+    imageHeaders: Map<String, String>,
+    onOpen: (MovieRow) -> Unit,
+    onSetServer: (String?) -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Movies", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.width(24.dp))
+            Text(source.status, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Button(onClick = { editing = !editing }) { Text(if (editing) "Close" else "Menu server…") }
+        }
+        if (editing) AssetServerEditor(source.url) { editing = false; onSetServer(it) }
+        Spacer(Modifier.height(16.dp))
+        val first = remember { FocusRequester() }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(6),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            items(rows, key = { it.item.ratingKey }) { row ->
+                val index = rows.indexOf(row)
+                Card(onClick = { onOpen(row) }, modifier = if (index == 0) Modifier.focusRequester(first) else Modifier) {
+                    Box(Modifier.aspectRatio(2f / 3f).fillMaxWidth().background(Color(0xFF222222))) {
+                        val url = posterUrl(row)
+                        if (url != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current).data(url)
+                                    .httpHeaders(NetworkHeaders.Builder().apply { imageHeaders.forEach { (k, v) -> set(k, v) } }.build())
+                                    .build(),
+                                contentDescription = row.item.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Text(row.item.title, modifier = Modifier.align(Alignment.Center).padding(8.dp))
+                        }
+                        if (row.menu != null) {
+                            Text(
+                                "DISC MENU",
+                                style = MaterialTheme.typography.labelSmall.copy(color = Color.Black, fontWeight = FontWeight.Bold),
+                                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                                    .background(Gold, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        LaunchedEffect(rows.isNotEmpty()) { if (rows.isNotEmpty()) runCatching { first.requestFocus() } }
+    }
+}
+
+@Composable
+private fun AssetServerEditor(current: String?, onDone: (String?) -> Unit) {
+    var text by remember { mutableStateOf(current ?: "") }
+    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Menu server address:")
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
+            modifier = Modifier.width(360.dp).background(Color(0xFF333333), RoundedCornerShape(6.dp)).padding(10.dp),
+        )
+        Button(onClick = { onDone(text.ifBlank { null }) }) { Text("Use") }
+        Button(onClick = { onDone(null) }) { Text("Find automatically") }
+    }
+}
+
+/** A title's disc menu, with native playback layered on top when a button plays something. */
+@Composable
+fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
+    val context = LocalContext.current
+    val assets = vm.assets ?: return onExit()
+    var playing by remember { mutableStateOf<PlayRequest?>(null) }
+    var handle by remember { mutableStateOf<PlayerHandle?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
+    lateinit var web: MenuWebView
+    web = remember {
+        MenuWebView(context, assets) { msg ->
+            when (msg) {
+                PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
+                is PageMessage.Play -> {
+                    val request = vm.requestFor(open, msg.mediaId, msg.start)
+                    if (request == null) web.playError("\"${msg.label}\" isn't in your Plex library.") else playing = request
+                }
+                PageMessage.Exit -> onExit()
+                is PageMessage.Error -> failure = msg.message
+            }
+        }
+    }
+    DisposableEffect(web) {
+        web.open()
+        onDispose { web.destroy() }
+    }
+    BackHandler {
+        val p = playing
+        if (p != null) {
+            val position = handle?.positionSeconds() ?: 0.0
+            playing = null
+            web.stopped(position)
+            web.requestFocus()
+        } else {
+            web.back()
+        }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(factory = { web.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+        playing?.let { request ->
+            VideoPlayer(
+                request = request,
+                onReady = { handle = it },
+                onEnded = {
+                    playing = null
+                    web.ended()
+                    web.requestFocus()
+                },
+                onError = { message ->
+                    playing = null
+                    web.playError(message)
+                    web.requestFocus()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        failure?.let { Centered { Text("Couldn't open this menu: $it") } }
+    }
+}
+
+/** Direct playback of a title without a menu. */
+@Composable
+fun PlayScreen(request: PlayRequest, onDone: () -> Unit) {
+    var error by remember { mutableStateOf<String?>(null) }
+    BackHandler { onDone() }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (error == null) VideoPlayer(request, onReady = {}, onEnded = onDone, onError = { error = it }, modifier = Modifier.fillMaxSize())
+        else Centered { Text(error!!, style = MaterialTheme.typography.headlineSmall) }
+    }
+}

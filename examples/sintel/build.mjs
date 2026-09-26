@@ -114,7 +114,7 @@ ffmpeg(["-ss", "36.3", "-t", "3.5", "-i", trailerSrc, "-an", "-vf", [
 ].join(","), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", at("menus", "main-loop.mp4")]);
 
 // Menu music: 40 s of the score from the end credits, faded so the loop point is soft.
-ffmpeg(["-ss", "800", "-t", "40", "-i", scoreSrc, "-af", "afade=t=in:d=1.5,afade=t=out:st=37:d=3", "-c:a", "aac", "-b:a", "128k", at("menus", "menu-music.m4a")]);
+ffmpeg(["-ss", "800", "-t", "40", "-i", scoreSrc, "-af", "afade=t=in:d=1.5,afade=t=out:st=37:d=3", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", at("menus", "menu-music.m4a")]);
 
 // Transition into Special Features: 1.4 s of the dragon's flight, with its sound.
 ffmpeg(["-ss", "26", "-t", "1.4", "-i", trailerSrc, "-vf", `${fill(W, H)},fps=25,fade=t=in:d=0.25,fade=t=out:st=1.1:d=0.3`,

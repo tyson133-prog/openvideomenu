@@ -9,3 +9,12 @@ examples/dvd-shaped/Season */
 examples/sintel/Other/
 examples/sintel/menus/
 examples/dvd-shaped/menus/
+# Android
+apps/androidtv/.gradle/
+apps/androidtv/.kotlin/
+apps/androidtv/build/
+apps/androidtv/app/build/
+apps/androidtv/local.properties
+*.keystore
+# Private showcase material (e.g. The Matrix): never committed
+private/

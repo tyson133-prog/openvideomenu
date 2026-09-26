@@ -283,9 +283,12 @@ export class MenuPlayer {
     if (this.bgAudio && menu?.background?.audio) this.bgAudio.currentTime = time;
   }
 
-  /** Play a background element; if autoplay with sound is blocked, play muted until the first input. */
+  /**
+   * Play a background element with sound. Browsers often refuse unmuted autoplay until the viewer
+   * interacts; then play muted and unmute on the first input. Native hosts (TV apps) allow sound at once.
+   */
   private playWithAutoplayFallback(el: HTMLMediaElement) {
-    el.muted = !this.soundUnlocked;
+    el.muted = false;
     void el.play().catch(() => {
       el.muted = true;
       void el.play().catch(() => {});
@@ -367,7 +370,6 @@ export class MenuPlayer {
     const looping = <T extends HTMLMediaElement>(el: T, spec: { src: string; loopStart?: number }): T => {
       el.src = this.asset(spec.src);
       el.preload = "auto";
-      el.muted = !this.soundUnlocked;
       // Plays once from 0 (the intro), then loops from loopStart.
       el.addEventListener("ended", () => {
         el.currentTime = spec.loopStart ?? 0;

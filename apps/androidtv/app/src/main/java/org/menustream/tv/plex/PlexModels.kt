@@ -1,0 +1,81 @@
+package org.menustream.tv.plex
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class PlexPin(val id: Long, val code: String, val authToken: String? = null, val expiresIn: Int? = null)
+
+@Serializable
+data class PlexResource(
+    val name: String,
+    val clientIdentifier: String,
+    val provides: String = "",
+    val owned: Boolean = false,
+    val accessToken: String? = null,
+    val connections: List<PlexConnection> = emptyList(),
+) {
+    val isServer get() = provides.split(',').contains("server")
+}
+
+@Serializable
+data class PlexConnection(
+    val uri: String,
+    val protocol: String = "",
+    val address: String = "",
+    val port: Int = 0,
+    val local: Boolean = false,
+    val relay: Boolean = false,
+    @SerialName("IPv6") val ipv6: Boolean = false,
+)
+
+@Serializable
+data class MediaContainerResponse(@SerialName("MediaContainer") val container: MediaContainer)
+
+@Serializable
+data class MediaContainer(
+    val size: Int = 0,
+    val totalSize: Int? = null,
+    val machineIdentifier: String? = null,
+    @SerialName("Directory") val directories: List<PlexDirectory> = emptyList(),
+    @SerialName("Metadata") val metadata: List<PlexItem> = emptyList(),
+)
+
+@Serializable
+data class PlexDirectory(val key: String, val title: String, val type: String)
+
+@Serializable
+data class PlexItem(
+    val ratingKey: String,
+    val key: String = "",
+    val type: String = "",
+    val title: String = "",
+    val year: Int? = null,
+    val thumb: String? = null,
+    val art: String? = null,
+    val duration: Long? = null,
+    val viewOffset: Long? = null,
+    val viewCount: Int? = null,
+    /** "Trailer", "Featurette", ... for extras. */
+    val subtype: String? = null,
+    val extraType: Int? = null,
+    @SerialName("Media") val media: List<PlexMedia> = emptyList(),
+    @SerialName("Chapter") val chapters: List<PlexChapter> = emptyList(),
+) {
+    /** The first playable file (direct play uses a single part). */
+    val part: PlexPart? get() = media.firstOrNull()?.parts?.firstOrNull()
+}
+
+@Serializable
+data class PlexMedia(
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val container: String? = null,
+    @SerialName("Part") val parts: List<PlexPart> = emptyList(),
+)
+
+@Serializable
+data class PlexPart(val id: Long, val key: String, val file: String? = null, val duration: Long? = null, val container: String? = null)
+
+@Serializable
+data class PlexChapter(val index: Int? = null, val startTimeOffset: Long = 0, val tag: String? = null)

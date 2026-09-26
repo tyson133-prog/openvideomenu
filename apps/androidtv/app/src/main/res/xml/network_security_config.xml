@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plex servers and the asset server are usually reached by plain http:// on a LAN IP address.
+  network-security-config can't allow cleartext for IP ranges only, so it is allowed in general;
+  the app itself only makes plain-http requests to private (home-network) addresses.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

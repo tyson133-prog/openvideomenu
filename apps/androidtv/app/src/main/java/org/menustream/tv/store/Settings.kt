@@ -1,0 +1,68 @@
+package org.menustream.tv.store
+
+import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import java.util.UUID
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/**
+ * App settings. The Plex token is encrypted with an AES key that lives in the Android Keystore and
+ * never leaves it; everything else is plain preferences.
+ */
+class Settings(context: Context) {
+    private val prefs = context.getSharedPreferences("menustream", Context.MODE_PRIVATE)
+
+    val clientId: String
+        get() = prefs.getString("clientId", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("clientId", it).apply() }
+
+    var plexToken: String?
+        get() = prefs.getString("plexToken", null)?.let { runCatching { Secrets.decrypt(it) }.getOrNull() }
+        set(value) = prefs.edit().putString("plexToken", value?.let(Secrets::encrypt)).apply()
+
+    var serverId: String?
+        get() = prefs.getString("serverId", null)
+        set(value) = prefs.edit().putString("serverId", value).apply()
+
+    /** Asset server base URL, e.g. http://192.168.4.101:8790 */
+    var assetServer: String?
+        get() = prefs.getString("assetServer", null)
+        set(value) = prefs.edit().putString("assetServer", value).apply()
+
+    fun signOut() = prefs.edit().remove("plexToken").remove("serverId").apply()
+}
+
+private object Secrets {
+    private const val ALIAS = "menustream-token-key"
+
+    private fun key(): SecretKey {
+        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        gen.init(
+            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build(),
+        )
+        return gen.generateKey()
+    }
+
+    fun encrypt(plain: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
+        val data = cipher.iv + cipher.doFinal(plain.toByteArray())
+        return Base64.encodeToString(data, Base64.NO_WRAP)
+    }
+
+    fun decrypt(stored: String): String {
+        val data = Base64.decode(stored, Base64.NO_WRAP)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, data, 0, 12))
+        return String(cipher.doFinal(data, 12, data.size - 12))
+    }
+}

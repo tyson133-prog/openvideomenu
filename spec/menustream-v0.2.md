@@ -109,7 +109,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - **`buttonsAt`** is the number of seconds into the intro before buttons appear and respond. It's measured on the background video's clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.
 - **Intros play only on a fresh entry:** at start, or via `goto`. Returning to a menu with `back` or at the end of playback starts the background at `loopStart` with buttons ready, so the intro is not replayed.
 - **Any key or click during an intro skips it.** Players jump the background to `buttonsAt` and show the buttons. That input does nothing else. Pointer *hover* does not skip. Players MUST NOT make intros unskippable.
-- **Keep menu assets small** (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC or Opus for audio.
+- **Keep menu assets small** (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC (in MP4/M4A) or Opus for audio. MP4/M4A files SHOULD be written with the index at the start ("faststart"), because some players, such as Android WebView, stall on files that must be read from the end first.
 
 ## 6. Actions
 
