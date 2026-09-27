@@ -29,6 +29,13 @@
       <Poster id="still" loadDisplayMode="noScale" />
       <Video id="motion" enableUI="false" loop="false" />
       <Poster id="highlight" loadDisplayMode="noScale" />
+      <!-- focus ring for buttons without highlight art (as the web renderer's ms-ring) -->
+      <Group id="ring" visible="false">
+        <Rectangle id="ringTop" color="0xFFD54AFF" />
+        <Rectangle id="ringBottom" color="0xFFD54AFF" />
+        <Rectangle id="ringLeft" color="0xFFD54AFF" />
+        <Rectangle id="ringRight" color="0xFFD54AFF" />
+      </Group>
     </Group>
     <Audio id="music" />
   </children>

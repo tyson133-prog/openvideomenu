@@ -19,6 +19,11 @@ sub init()
     m.rows = m.top.findNode("rows")
     m.rows.observeField("rowItemSelected", "onTileChosen")
 
+    ' While a title plays, tell the server where we are, as its own apps do (~every 10 s).
+    m.progressTimer = CreateObject("roSGNode", "Timer")
+    m.progressTimer.duration = 10
+    m.progressTimer.repeat = true
+    m.progressTimer.observeField("fire", "reportProgress")
     m.pollTimer = CreateObject("roSGNode", "Timer")
     m.pollTimer.duration = 3
     m.pollTimer.repeat = true
@@ -681,6 +686,9 @@ sub onPlayerState()
     if state = "playing" and not m.playing.started
         m.playing.started = true
         report("/Sessions/Playing")
+        m.progressTimer.control = "start"
+    else if (state = "paused" or state = "playing") and m.playing.started
+        reportProgress()
     else if state = "finished"
         report("/Sessions/Playing/Stopped")
         m.playing = invalid
@@ -695,13 +703,14 @@ sub onPlayerState()
 end sub
 
 sub stopTitle()
-    position = m.player.position
+    position = playerPosition()
     report("/Sessions/Playing/Stopped")
     closePlayer()
     m.menu.playbackStopped = position
 end sub
 
 sub closePlayer()
+    m.progressTimer.control = "stop"
     m.player.control = "stop"
     m.top.removeChild(m.player)
     m.player = invalid
@@ -710,14 +719,34 @@ end sub
 ' Tell Jellyfin, so resume points and "continue watching" match its other apps.
 sub report(path as string)
     if m.playing = invalid then return
+    paused = m.player <> invalid and m.player.state = "paused"
     if isPlex()
-        if path = "/Sessions/Playing" then plexReport("playing") else plexReport("stopped")
+        if path = "/Sessions/Playing/Stopped"
+            plexReport("stopped")
+        else if paused
+            plexReport("paused")
+        else
+            plexReport("playing")
+        end if
         return
     end if
-    position = 0
-    if m.player <> invalid then position = m.player.position
-    body = FormatJson({ "ItemId": m.playing.item["Id"], "MediaSourceId": m.playing.source, "PlaySessionId": m.playing.session, "PositionTicks": Int(position * 10000000), "PlayMethod": m.playing.method, "CanSeek": true })
+    position = playerPosition()
+    body = FormatJson({ "ItemId": m.playing.item["Id"], "MediaSourceId": m.playing.source, "PlaySessionId": m.playing.session, "PositionTicks": Int(position * 10000000), "PlayMethod": m.playing.method, "CanSeek": true, "IsPaused": paused })
     http(m.login.url + path, "POST", body, "onReported")
+end sub
+
+'  Where playback is in the file (seconds). Right after a chapter start the player still says 0
+' until its seek lands, so until then it's where playback was asked to start.
+function playerPosition() as float
+    if m.player = invalid or m.playing = invalid then return 0
+    offset = 0
+    if m.playing.offset <> invalid then offset = m.playing.offset
+    if m.player.position = 0 and offset = 0 then return m.playing.req.start
+    return offset + m.player.position
+end function
+
+sub reportProgress()
+    if m.playing <> invalid and m.player <> invalid then report("/Sessions/Playing/Progress")
 end sub
 
 sub onReported(res as object, ctx as dynamic)

@@ -105,6 +105,8 @@ underlineHighlight(420, 64, white, { glow: 1.6 }).save(at("menus", "item-activat
 
 // v0.2 motion: the dunes drift behind the menu (slowed 2x). The title and items fade in during a
 // 2.5 s intro (buttonsAt), then the clip loops from 2.5 s. The still main.jpg stays as the poster.
+// The music is in the clip, not a separate background.audio: some players (Roku) play one stream
+// at a time, so music that plays with a motion loop belongs in the loop (spec §5.1).
 const MAIN_BUTTONS_AT = 2.5;
 const fadeIn = (from, dur) => `alpha='min(max((t-${from})/${dur},0),1)'`;
 ffmpeg(["-ss", "36.3", "-t", "3.5", "-i", trailerSrc, "-an", "-vf", [
@@ -115,10 +117,21 @@ ffmpeg(["-ss", "36.3", "-t", "3.5", "-i", trailerSrc, "-an", "-vf", [
   "vignette=PI/4",
   drawtext(font, "SINTEL", { x: "(w-text_w)/2", y: 70, size: 120, color: "white@0.95", extra: `borderw=1:bordercolor=black@0.3:${fadeIn(0.2, 1.2)}` }),
   ...main.items.map((i) => drawtext(font, i.text, { x: main.x + 40, y: i.y + 12, size: 38, extra: fadeIn(1.3, 1.2) })),
-].join(","), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", at("menus", "main-loop.mp4")]);
+].join(","), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", cache("main-motion.mp4")]);
 
-// Menu music: 40 s of the score from the end credits, faded so the loop point is soft.
-ffmpeg(["-ss", "800", "-t", "40", "-i", scoreSrc, "-af", "afade=t=in:d=1.5,afade=t=out:st=37:d=3", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", at("menus", "menu-music.m4a")]);
+// The loop: the intro, then the 4.5 s of drifting dunes repeated to about 40 s, with 40 s of the
+// score from the end credits over it, faded so the loop point is soft.
+const LOOP_FRAMES = 112; // 4.48 s at 25 fps
+const LOOP_REPEATS = 8;
+const MAIN_LOOP_DURATION = MAIN_BUTTONS_AT + (LOOP_FRAMES * LOOP_REPEATS) / 25;
+ffmpeg(["-i", cache("main-motion.mp4"), "-ss", "800", "-t", String(MAIN_LOOP_DURATION), "-i", scoreSrc, "-filter_complex", [
+  `[0:v]split[a][b]`,
+  `[a]trim=end=${MAIN_BUTTONS_AT},setpts=PTS-STARTPTS[intro]`,
+  `[b]trim=start=${MAIN_BUTTONS_AT},setpts=PTS-STARTPTS,trim=end_frame=${LOOP_FRAMES},loop=loop=${LOOP_REPEATS - 1}:size=${LOOP_FRAMES}:start=0,setpts=N/25/TB[body]`,
+  `[intro][body]concat=n=2:v=1:a=0[v]`,
+  `[1:a]afade=t=in:d=1.5,afade=t=out:st=${MAIN_LOOP_DURATION - 3}:d=3[m]`,
+].join(";"), "-map", "[v]", "-map", "[m]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+  "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", at("menus", "main-loop.mp4")]);
 
 // Transition into Special Features: 1.4 s of the dragon's flight, with its sound.
 ffmpeg(["-ss", "26", "-t", "1.4", "-i", trailerSrc, "-vf", `${fill(W, H)},fps=25,fade=t=in:d=0.25,fade=t=out:st=1.1:d=0.3`,
@@ -207,7 +220,6 @@ const manifest = {
         image: "menus/main.jpg",
         color: "#000",
         video: { src: "menus/main-loop.mp4", loopStart: MAIN_BUTTONS_AT },
-        audio: { src: "menus/menu-music.m4a" },
       },
       buttonsAt: MAIN_BUTTONS_AT,
       defaultButton: "play",

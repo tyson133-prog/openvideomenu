@@ -100,14 +100,14 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 ```json
 "background": {
   "image": "menus/main.jpg",
-  "video": { "src": "menus/main-loop.mp4", "loopStart": 2.5 },
-  "audio": { "src": "menus/menu-music.m4a" }
+  "video": { "src": "menus/main-loop.mp4", "loopStart": 2.5 }
 },
 "buttonsAt": 2.5
 ```
 
 - **`background.video`** is a motion background stretched to the canvas like `image`. It plays once from 0, which is the menu's *intro*, then loops from `loopStart` (default 0) for as long as the menu is shown. It MAY carry its own audio.
 - **`background.audio`** is menu music. It loops the same way and plays alongside the video.
+- **Music that plays with a motion background SHOULD be in the video itself**, not in `background.audio`. Some players can play only one stream at a time (Roku is one), so they would drop a separate audio track. Use `background.audio` for menus with a still image, or for music that deliberately loops independently of the video. A player that can't play both plays the video.
 - **`image`** remains the poster: shown while the video loads, and by players without motion support. Those players still work, because they simply show the still.
 - **`buttonsAt`** is the number of seconds into the intro before buttons appear and respond. It's measured on the background video's clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.
 - **Intros play only on a fresh entry:** at start, or via `goto`. Returning to a menu with `back` or at the end of playback starts the background at `loopStart` with buttons ready, so the intro is not replayed.

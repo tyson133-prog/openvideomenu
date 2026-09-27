@@ -78,9 +78,6 @@
         "video": {
           "src": "menus/main-loop.mp4",
           "loopStart": 2.5
-        },
-        "audio": {
-          "src": "menus/menu-music.m4a"
         }
       },
       "buttonsAt": 2.5,

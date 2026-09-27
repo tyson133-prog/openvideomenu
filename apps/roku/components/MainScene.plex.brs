@@ -388,8 +388,7 @@ end sub
 sub plexReport(state as string)
     p = m.playing
     if p = invalid then return
-    position = p.offset
-    if m.player <> invalid then position = p.offset + m.player.position
+    position = playerPosition()
     duration = msOr(p.item["duration"], 0)
     url = m.login.url + "/:/timeline?ratingKey=" + p.item["ratingKey"] + "&key=" + percentEncodeQuery("/library/metadata/" + p.item["ratingKey"]) + "&state=" + state + "&time=" + Int(position * 1000).ToStr() + "&duration=" + duration.ToStr()
     extra = { headers: plexHeaders(m.login.token) }

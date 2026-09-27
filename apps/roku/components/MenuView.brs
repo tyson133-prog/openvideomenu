@@ -6,6 +6,8 @@ sub init()
     m.still = m.top.findNode("still")
     m.motion = m.top.findNode("motion")
     m.highlight = m.top.findNode("highlight")
+    m.ring = m.top.findNode("ring")
+    m.still.observeField("loadStatus", "drawHighlight")
     m.music = m.top.findNode("music")
     m.still.loadDisplayMode = "scaleToFill"
     m.highlight.loadDisplayMode = "scaleToFill"
@@ -108,9 +110,9 @@ sub render(fresh as boolean)
         if fresh or m.shownMenu <> m.nav.menu then showMenu(menu)
         drawHighlight()
     else if mode = "transition"
-        m.highlight.visible = false
+        hideCursor()
     else if mode = "playing"
-        m.highlight.visible = false
+        hideCursor()
     end if
 end sub
 
@@ -146,6 +148,7 @@ sub showMenu(menu as object)
     m.motion.width = dw
     m.motion.height = dh
     video = bg["video"]
+    m.motionShown = false
     if video <> invalid
         start = 0
         if not m.nav.intro then start = msOr(video["loopStart"], 0)
@@ -154,8 +157,10 @@ sub showMenu(menu as object)
         stopBackground()
     end if
 
+    ' Roku plays one stream at a time, so with a motion background the video wins; its own audio
+    ' is the menu's sound (spec §5.1: music that goes with a motion loop belongs in the clip).
     music = bg["audio"]
-    if music <> invalid
+    if music <> invalid and video = invalid
         m.musicLoop = msOr(music["loopStart"], 0)
         start = 0
         if not m.nav.intro then start = m.musicLoop
@@ -179,15 +184,22 @@ end sub
 
 sub drawHighlight()
     if m.nav.mode <> "menu" or not m.nav.buttonsReady
-        m.highlight.visible = false
+        hideCursor()
         return
     end if
     button = findButton(m.nav.menu, m.nav.focus)
-    image = stateImage(button, "selected")
-    if image = invalid
-        m.highlight.visible = false
+    if button = invalid or not menuShowing()
+        hideCursor()
         return
     end if
+    image = stateImage(button, "selected")
+    if image = invalid
+        ' Without highlight art the viewer couldn't see focus, so draw a ring around the button.
+        m.highlight.visible = false
+        showRing(button["rect"])
+        return
+    end if
+    m.ring.visible = false
     rect = button["rect"]
     s = button["states"]["selected"]
     if s["rect"] <> invalid then rect = s["rect"]
@@ -195,6 +207,37 @@ sub drawHighlight()
     m.highlight.width = rect[2] * m.sx
     m.highlight.height = rect[3] * m.sy
     showImage(m.highlight, image)
+end sub
+
+'  Whether the menu itself is on screen, so the cursor never floats over black while the still
+' loads or the video buffers.
+function menuShowing() as boolean
+    bg = msOr(m.manifest["menus"][m.nav.menu]["background"], {})
+    if bg["video"] <> invalid and m.motionShown = true then return true
+    if bg["image"] <> invalid then return m.still.visible and m.still.loadStatus = "ready"
+    return bg["video"] = invalid
+end function
+
+sub hideCursor()
+    m.highlight.visible = false
+    m.ring.visible = false
+end sub
+
+' A 4-pixel yellow frame just outside the button's rect (canvas units scaled to the screen).
+sub showRing(rect as object)
+    t = 4
+    x = rect[0] * m.sx - t
+    y = rect[1] * m.sy - t
+    w = rect[2] * m.sx + 2 * t
+    h = rect[3] * m.sy + 2 * t
+    sides = [["ringTop", x, y, w, t], ["ringBottom", x, y + h - t, w, t], ["ringLeft", x, y, t, h], ["ringRight", x + w - t, y, t, h]]
+    for each side in sides
+        node = m.ring.findNode(side[0])
+        node.translation = [side[1], side[2]]
+        node.width = side[3]
+        node.height = side[4]
+    end for
+    m.ring.visible = true
 end sub
 
 function findButton(menuId as string, id as dynamic) as dynamic
@@ -226,7 +269,9 @@ sub playVideo(src as string, start as float, role as string, loopFrom = invalid 
     content.StreamFormat = "mp4"
     content.PlayStart = start
     m.motion.content = content
-    m.motion.visible = true
+    ' While it buffers, a Video node draws black over everything below it, so a background clip
+    ' stays hidden until it plays and the still (the poster) shows meanwhile.
+    m.motion.visible = not (role = "background" and m.still.visible)
     m.motion.control = "play"
 end sub
 
@@ -242,7 +287,14 @@ sub onMotionState()
     state = m.motion.state
     ' The still is the poster shown while the video loads (spec §5.1). On Roku an opaque poster
     ' covers the video even from below it in the scene, so hide it once the video is showing.
-    if state = "playing" then m.still.visible = false
+    if state = "playing"
+        m.motion.visible = true
+        m.still.visible = false
+    end if
+    if state = "playing" and m.videoRole = "background" and m.motionShown <> true
+        m.motionShown = true ' stays true through loop seeks, so the cursor doesn't blink
+        drawHighlight()
+    end if
     if state = "finished"
         if m.videoRole = "transition"
             stepWith({ type: "transitionEnded" })
