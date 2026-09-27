@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { access, open } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 
 const MP4_FAMILY = new Set([".mp4", ".m4a", ".m4v", ".mov"]);
@@ -9,15 +9,15 @@ const MP4_FAMILY = new Set([".mp4", ".m4a", ".m4v", ".mov"]);
  * first. Walks only the top-level box headers, so it reads a few bytes even for large files.
  * Returns undefined for non-MP4 files or when neither box is found.
  */
-export function isFaststart(file: string): boolean | undefined {
+export async function isFaststart(file: string): Promise<boolean | undefined> {
   if (!MP4_FAMILY.has(extname(file).toLowerCase())) return undefined;
-  const size = statSync(file).size;
-  const fd = openSync(file, "r");
+  const fd = await open(file, "r");
   try {
+    const size = (await fd.stat()).size;
     const header = Buffer.alloc(16);
     let offset = 0;
     for (let i = 0; i < 64 && offset + 8 <= size; i++) {
-      readSync(fd, header, 0, 16, offset);
+      await fd.read(header, 0, 16, offset);
       let boxSize = header.readUInt32BE(0);
       const type = header.toString("latin1", 4, 8);
       if (type === "moov") return true;
@@ -29,26 +29,42 @@ export function isFaststart(file: string): boolean | undefined {
     }
     return undefined;
   } finally {
-    closeSync(fd);
+    await fd.close();
   }
 }
 
-/** Human-readable problems with a manifest's menu assets (paths are as the caller wants them shown). */
-export function checkAssetFiles(assets: { shown: string; file: string }[]): string[] {
-  const problems: string[] = [];
-  for (const { shown, file } of assets) {
-    if (!existsSync(file)) {
-      problems.push(`Menu asset not found: ${shown}`);
-      continue;
+const exists = (file: string) => access(file).then(
+  () => true,
+  () => false,
+);
+
+/** Run [fn] over [items] with at most [limit] at once (network shares answer many small requests slowly). */
+export async function eachLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!);
     }
-    if (isFaststart(file) === false) {
-      problems.push(
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Human-readable problems with a manifest's menu assets (paths are as the caller wants them shown). */
+export async function checkAssetFiles(assets: { shown: string; file: string }[]): Promise<string[]> {
+  const found = await eachLimited(assets, 16, async ({ shown, file }): Promise<string | undefined> => {
+    if (!(await exists(file))) return `Menu asset not found: ${shown}`;
+    if ((await isFaststart(file)) === false) {
+      return (
         `${shown} has its index at the end of the file, so some TV players stall on it. ` +
-          `Fix: ffmpeg -i "${shown}" -c copy -movflags +faststart fixed${extname(file)}  (then replace the original)`,
+        `Fix: ffmpeg -i "${shown}" -c copy -movflags +faststart fixed${extname(file)}  (then replace the original)`
       );
     }
-  }
-  return problems;
+    return undefined;
+  });
+  return found.filter((p): p is string => p !== undefined);
 }
 
 const MOTION = new Set([".mp4", ".m4v", ".mov", ".webm", ".mkv", ".m4a", ".mp3", ".aac", ".ogg", ".opus", ".flac", ".wav"]);
@@ -58,13 +74,14 @@ const MOTION = new Set([".mp4", ".m4v", ".mov", ".webm", ".mkv", ".m4a", ".mp3",
  * the clips as titles (or as extra versions of the film). Returns one warning per folder missing the
  * ignore files. [dirs] maps the folder as shown to its path on disk, for folders with menu assets.
  */
-export function checkIgnoreFiles(assets: { shown: string; file: string }[]): string[] {
+export async function checkIgnoreFiles(assets: { shown: string; file: string }[]): Promise<string[]> {
   const folders = new Map<string, string>(); // shown → disk
   for (const { shown, file } of assets)
     if (MOTION.has(extname(file).toLowerCase())) folders.set(dirname(shown), dirname(file));
   const problems: string[] = [];
   for (const [shown, disk] of folders) {
-    const missing = [".plexignore", ".ignore"].filter((f) => !existsSync(join(disk, f)));
+    const missing: string[] = [];
+    for (const f of [".plexignore", ".ignore"]) if (!(await exists(join(disk, f)))) missing.push(f);
     if (missing.length)
       problems.push(
         `${shown || "."} holds menu video/music but no ${missing.join(" or ")}; Plex/Jellyfin may list those clips as titles. ` +

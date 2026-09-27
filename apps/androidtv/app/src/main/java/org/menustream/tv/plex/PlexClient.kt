@@ -99,6 +99,18 @@ class PlexServer(
     suspend fun movies(sectionKey: String): List<PlexItem> =
         container("/library/sections/$sectionKey/all", "type" to "1").metadata
 
+    /**
+     * One page of a section's movies, with their file paths. Paging the whole library is how the
+     * Disc Menus row finds titles for hundreds of manifests in a few requests instead of one each.
+     */
+    suspend fun moviesPage(sectionKey: String, start: Int, size: Int): MediaContainer =
+        container(
+            "/library/sections/$sectionKey/all",
+            "type" to "1",
+            "X-Plex-Container-Start" to "$start",
+            "X-Plex-Container-Size" to "$size",
+        )
+
     /** A limited page of a list (Plex accepts the container range as query parameters too). */
     private suspend fun page(path: String, size: Int, vararg params: Pair<String, String>): List<PlexItem> =
         container(path, "X-Plex-Container-Start" to "0", "X-Plex-Container-Size" to "$size", *params).metadata

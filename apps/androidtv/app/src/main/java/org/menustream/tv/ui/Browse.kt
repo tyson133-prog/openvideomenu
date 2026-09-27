@@ -162,7 +162,12 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
                 tile.menu != null,
             )
         }
-        is Tile.Disc -> Quad(tile.entry.title?.name ?: "Disc", discLabel(tile), tile.show?.thumb, true)
+        is Tile.Disc -> Quad(
+            tile.entry.title?.name ?: "Disc",
+            if (tile.pending) tile.entry.title?.year?.toString() ?: "" else discLabel(tile),
+            tile.show?.thumb,
+            true,
+        )
     }
     Column(Modifier.width(PosterWidth)) {
         Card(onClick = { vm.open(tile) }, modifier = modifier) {

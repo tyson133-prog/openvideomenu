@@ -37,6 +37,9 @@ object MenuMatcher {
             .maxByOrNull { it.second }
             ?.first
 
+    /** The last [MIN_SEGMENTS] segments, the part every match must share; null if the path is shorter. */
+    fun tailKey(path: String): String? = segments(path).takeLast(MIN_SEGMENTS).takeIf { it.size == MIN_SEGMENTS }?.joinToString("/")
+
     /** For each manifest media id, the candidate file (from [files]) it refers to, if any. */
     fun <T> resolveMedia(entry: CatalogEntry, files: List<Pair<String, T>>): Map<String, T> =
         entry.media.mapNotNull { m ->

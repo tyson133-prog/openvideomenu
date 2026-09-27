@@ -21,7 +21,7 @@ function arg(args: string[], name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-function validate(target: string): number {
+async function validate(target: string): Promise<number> {
   const isFile = statSync(target).isFile();
   const files = isFile ? [target] : findManifests(target).map((f) => join(target, f));
   if (files.length === 0) {
@@ -37,7 +37,7 @@ function validate(target: string): number {
     if (result.ok) {
       // Menu art: present, and MP4/M4A files streamable from the start (TV players stall otherwise).
       const assets = menuAssets(result.manifest!).map((a) => ({ shown: join(dirname(file), a), file: join(dirname(file), ...a.split("/")) }));
-      for (const problem of [...checkAssetFiles(assets), ...checkIgnoreFiles(assets)]) console.log(`    warning  ${problem}`);
+      for (const problem of [...(await checkAssetFiles(assets)), ...(await checkIgnoreFiles(assets))]) console.log(`    warning  ${problem}`);
     }
     if (!result.ok) failed++;
   }

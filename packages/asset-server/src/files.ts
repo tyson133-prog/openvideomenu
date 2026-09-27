@@ -1,4 +1,5 @@
 import { createReadStream, readdirSync, statSync } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, relative, sep } from "node:path";
 import { MANIFEST_SUFFIX } from "@menustream/core";
@@ -46,13 +47,42 @@ export function findManifests(root: string, maxDepth = 6): string[] {
       return; // unreadable folder (permissions, vanished share): skip it
     }
     for (const entry of entries) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "@eaDir") continue;
+      if (skipped(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth < maxDepth) walk(full, depth + 1);
       else if (entry.isFile() && entry.name.toLowerCase().endsWith(MANIFEST_SUFFIX)) found.push(full);
     }
   };
   walk(root, 0);
+  return found.sort().map((f) => relative(root, f).split(sep).join("/"));
+}
+
+const skipped = (name: string) => name.startsWith(".") || name === "node_modules" || name === "@eaDir";
+
+/**
+ * [findManifests] without blocking: folders are listed concurrently, so a network share's latency
+ * overlaps instead of adding up, and the server keeps answering while it scans.
+ */
+export async function scanManifests(root: string, maxDepth = 6): Promise<string[]> {
+  if ((await stat(root)).isFile()) return [root];
+  const found: string[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // unreadable folder (permissions, vanished share): skip it
+    }
+    const subdirs: Promise<void>[] = [];
+    for (const entry of entries) {
+      if (skipped(entry.name)) continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory() && depth < maxDepth) subdirs.push(walk(full, depth + 1));
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith(MANIFEST_SUFFIX)) found.push(full);
+    }
+    await Promise.all(subdirs);
+  };
+  await walk(root, 0);
   return found.sort().map((f) => relative(root, f).split(sep).join("/"));
 }
 

@@ -38,4 +38,18 @@ class MenuMatcherTest {
         )
         assertEquals(mapOf("feature" to "part-1", "trailer" to "part-2"), MenuMatcher.resolveMedia(sintel, files))
     }
+
+    @Test fun indexAgreesWithTheMatcher() {
+        val entries = listOf(other, sintel)
+        val index = MenuIndex(entries)
+        listOf(
+            "/data/movies/sintel/Sintel (2010).mp4",
+            """D:\Movies\Sintel\Sintel (2010).mp4""",
+            "/data/movies/Somewhere Else/Sintel (2010).mp4",
+            "/x/Unrelated/Trailers/Trailer.mp4",
+            "/x/Other Film (2001)/Trailers/Trailer.mp4",
+            "Trailer.mp4",
+        ).forEach { f -> assertEquals(f, MenuMatcher.manifestFor(f, entries), index.manifestFor(f)) }
+        assertEquals(listOf(sintel), index.manifestsFor("/m/sintel/Trailers/Sintel Trailer.mp4"))
+    }
 }

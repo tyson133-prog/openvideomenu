@@ -59,4 +59,17 @@ object Http {
         .connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(3, TimeUnit.SECONDS)
         .build()
+
+    @Volatile private var assetClient: OkHttpClient? = null
+
+    /**
+     * For the asset server: a disk cache for the index and menu art. The index is revalidated with its
+     * ETag on every launch, so an unchanged catalog costs one small 304.
+     */
+    fun assets(context: android.content.Context): OkHttpClient = assetClient ?: synchronized(this) {
+        assetClient ?: client.newBuilder()
+            .cache(okhttp3.Cache(java.io.File(context.cacheDir, "asset-server"), 64L * 1024 * 1024))
+            .build()
+            .also { assetClient = it }
+    }
 }

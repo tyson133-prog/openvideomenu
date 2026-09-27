@@ -55,8 +55,10 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("Catalog", () => {
-  it("indexes manifests with root-relative media paths and menu assets", () => {
-    const entries = new Catalog([root]).entries();
+  it("indexes manifests with root-relative media paths and menu assets", async () => {
+    const catalog = new Catalog([root]);
+    await catalog.scan();
+    const entries = catalog.entries();
     expect(entries.map((e) => [e.path, e.valid])).toEqual([
       ["Broken/Broken.menustream.json", false],
       ["Movie (2020)/Movie (2020).menustream.json", true],
@@ -81,23 +83,19 @@ describe("Catalog", () => {
 });
 
 describe("Catalog roots", () => {
-  it("serves files under roots given with a trailing separator (UNC shares and drive roots resolve that way)", () => {
+  it("serves files under roots given with a trailing separator (UNC shares and drive roots resolve that way)", async () => {
     const withSlash = new Catalog([root + "/"]);
-    withSlash.entries();
+    await withSlash.scan();
     expect(withSlash.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
     expect(withSlash.resolveFile(0, "Movie (2020)/Movie (2020).mp4")).toBeUndefined();
     expect(withSlash.resolveFile(0, "../secrets.txt")).toBeUndefined();
   });
 
-  it.runIf(process.platform === "win32")("serves files under a UNC-style root", () => {
+  it.runIf(process.platform === "win32")("serves files under a UNC-style root", async () => {
     // \\localhost\X$\... is a UNC path to the same folder; it resolves with a trailing separator.
     const drive = root.slice(0, 1);
     const unc = new Catalog([`\\\\localhost\\${drive}$${root.slice(2)}`]);
-    try {
-      unc.entries(true);
-    } catch {
-      return; // admin shares disabled on this machine: nothing to test
-    }
+    await unc.scan(); // an unreachable root (admin shares disabled) just yields no manifests
     if (unc.entries().length === 0) return;
     expect(unc.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
   });
@@ -118,10 +116,35 @@ describe("server", () => {
 
   const get = (path: string, headers: Record<string, string> = { "X-Plex-Token": "good" }) => fetch(base + path, { headers });
 
-  it("answers health without a token", async () => {
+  it("answers health without a token, without waiting for the first scan", async () => {
     const res = await get("/v1/health", {});
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { manifests: number }).manifests).toBe(2);
+    const health = (await res.json()) as { manifests: number; scanning: boolean };
+    // The first scan has at most just begun; the index waits for it.
+    expect(health.scanning).toBe(true);
+    await get("/v1/index");
+    const after = (await (await get("/v1/health", {})).json()) as { manifests: number; scanning: boolean };
+    expect(after).toMatchObject({ manifests: 2, scanning: false });
+  });
+
+  it("sends a slim index: no asset lists or warnings, gzipped on request, 304 when unchanged", async () => {
+    const res = await get("/v1/index");
+    const index = (await res.json()) as { manifests: Record<string, unknown>[] };
+    for (const m of index.manifests) {
+      expect(m).not.toHaveProperty("assets");
+      expect(m).not.toHaveProperty("warnings");
+    }
+    const etag = res.headers.get("etag");
+    expect(etag).toMatch(/^"[0-9a-f]+"$/);
+    expect(res.headers.get("cache-control")).toBe("private, no-cache");
+
+    const gz = await get("/v1/index", { "X-Plex-Token": "good", "Accept-Encoding": "gzip" });
+    expect(gz.headers.get("content-encoding")).toBe("gzip");
+    expect(((await gz.json()) as { manifests: unknown[] }).manifests).toHaveLength(2); // fetch un-gzips
+
+    const same = await get("/v1/index", { "X-Plex-Token": "good", "If-None-Match": etag! });
+    expect(same.status).toBe(304);
+    expect(await same.text()).toBe("");
   });
 
   it("requires a valid token for the index and files", async () => {
@@ -275,13 +298,13 @@ describe("isFaststart / checkAssetFiles", () => {
     write("mp4/slow64.mp4", Buffer.concat([box("ftyp"), largeMdat(), box("moov")]));
     write("mp4/skip.mp4", Buffer.concat([box("ftyp"), box("free", 40), box("moov"), box("mdat")]));
     const f = (n: string) => join(root, "mp4", n);
-    expect(isFaststart(f("fast.m4a"))).toBe(true);
-    expect(isFaststart(f("slow.m4a"))).toBe(false);
-    expect(isFaststart(f("slow64.mp4"))).toBe(false);
-    expect(isFaststart(f("skip.mp4"))).toBe(true);
-    expect(isFaststart(join(root, "Movie (2020)/menus/bg.jpg"))).toBeUndefined();
+    expect(await isFaststart(f("fast.m4a"))).toBe(true);
+    expect(await isFaststart(f("slow.m4a"))).toBe(false);
+    expect(await isFaststart(f("slow64.mp4"))).toBe(false);
+    expect(await isFaststart(f("skip.mp4"))).toBe(true);
+    expect(await isFaststart(join(root, "Movie (2020)/menus/bg.jpg"))).toBeUndefined();
 
-    const problems = checkAssetFiles([
+    const problems = await checkAssetFiles([
       { shown: "fast.m4a", file: f("fast.m4a") },
       { shown: "slow.m4a", file: f("slow.m4a") },
       { shown: "missing.png", file: f("missing.png") },
@@ -303,7 +326,7 @@ describe("checkIgnoreFiles", () => {
     write("ig/done/.ignore", "");
     write("ig/stills/only.png");
     const a = (p: string) => ({ shown: p, file: join(root, ...p.split("/")) });
-    const problems = checkIgnoreFiles([a("ig/bare/loop.mp4"), a("ig/bare/music.m4a"), a("ig/bare/still.png"), a("ig/done/loop.mp4"), a("ig/stills/only.png")]);
+    const problems = await checkIgnoreFiles([a("ig/bare/loop.mp4"), a("ig/bare/music.m4a"), a("ig/bare/still.png"), a("ig/done/loop.mp4"), a("ig/stills/only.png")]);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/^ig[\\/]bare holds menu video\/music but no \.plexignore or \.ignore/);
   });
