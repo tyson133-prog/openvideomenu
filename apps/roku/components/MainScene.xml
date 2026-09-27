@@ -5,10 +5,19 @@
 -->
 <component name="MainScene" extends="Scene">
   <script type="text/brightscript" uri="MainScene.brs" />
+  <script type="text/brightscript" uri="MainScene.plex.brs" />
   <script type="text/brightscript" uri="pkg:/source/matcher.brs" />
   <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
   <children>
     <Rectangle id="bg" width="1920" height="1080" color="0x131418FF" />
+
+    <Group id="choose" visible="false">
+      <Label text="Where are your movies?" translation="[0, 330]" width="1920" horizAlign="center" color="0xE8E6E1FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="52" />
+      </Label>
+      <Label text="MenuStream plays titles from your media server and adds their disc menus." translation="[0, 420]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+      <LabelList id="chooseList" translation="[760, 520]" itemSize="[400, 72]" color="0xE8E6E1FF" focusedColor="0x131418FF" focusBitmapBlendColor="0xFFD27AFF" />
+    </Group>
 
     <Group id="servers" visible="false">
       <Label text="Choose your Jellyfin server" translation="[0, 250]" width="1920" horizAlign="center" color="0xE8E6E1FF">

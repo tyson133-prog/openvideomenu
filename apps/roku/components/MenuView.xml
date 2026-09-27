@@ -9,7 +9,7 @@
     <!-- in: the parsed manifest, where its URL lives, and the sign-in header for its files -->
     <field id="manifest" type="assocarray" />
     <field id="manifestUrl" type="string" />
-    <field id="authHeader" type="string" />
+    <field id="authHeaders" type="assocarray" />
     <!-- in: set to start (after the fields above) -->
     <field id="control" type="string" onChange="onControl" />
     <!-- out: { media, start, audio?, subtitle? } -->

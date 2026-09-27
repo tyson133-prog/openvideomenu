@@ -1,6 +1,7 @@
-' MenuStream for Roku: the app flow. Jellyfin first (see the plan, M6b): find the server, sign in
-' with Quick Connect, list titles with disc menus (served by the Jellyfin MenuStream plugin), and
-' open one in MenuView.
+' MenuStream for Roku: the app flow. Choose Plex or Jellyfin, sign in (plex.tv PIN, or Jellyfin
+' Quick Connect), list titles with disc menus, and open one in MenuView. Menus come from the
+' Jellyfin MenuStream plugin, or for Plex from a MenuStream asset server. Plex specifics are in
+' MainScene.plex.brs; m.login.kind says which server this is ("plex", else Jellyfin).
 
 sub init()
     m.tasks = {}          ' running HTTP tasks by id, so they aren't garbage-collected
@@ -11,6 +12,8 @@ sub init()
     m.catalog = []
     m.servers = []
 
+    m.chooseList = m.top.findNode("chooseList")
+    m.chooseList.observeField("itemSelected", "onKindChosen")
     m.serverList = m.top.findNode("serverList")
     m.serverList.observeField("itemSelected", "onServerChosen")
     m.rows = m.top.findNode("rows")
@@ -28,14 +31,39 @@ sub init()
         m.login = login
         loadBrowse()
     else
-        findServers()
+        chooseKind()
     end if
 end sub
+
+' First run (or after switching server): Plex or Jellyfin?
+sub chooseKind()
+    show("choose")
+    content = CreateObject("roSGNode", "ContentNode")
+    content.createChild("ContentNode").title = "Plex"
+    content.createChild("ContentNode").title = "Jellyfin"
+    m.chooseList.content = content
+    m.chooseList.setFocus(true)
+end sub
+
+sub onKindChosen()
+    m.plexServers = invalid
+    if m.chooseList.itemSelected = 0 then plexSignIn() else findServers()
+end sub
+
+function isPlex() as boolean
+    return m.login <> invalid and m.login.kind = "plex"
+end function
+
+' Headers proving to the menu server that this viewer may use it.
+function assetHeaders() as object
+    if isPlex() then return { "X-Plex-Token": m.login.token }
+    return { "Authorization": authHeader(m.login.token) }
+end function
 
 ' --- screens ------------------------------------------------------------------------------
 
 sub show(name as string)
-    for each id in ["servers", "code", "browse"]
+    for each id in ["choose", "servers", "code", "browse"]
         m.top.findNode(id).visible = (id = name)
     end for
     setStatus("")
@@ -75,16 +103,23 @@ end function
 function headers() as object
     token = invalid
     if m.login <> invalid then token = m.login.token
+    if isPlex() then return plexHeaders(token)
     return { "Authorization": authHeader(token), "Accept": "application/json", "Content-Type": "application/json" }
 end function
 
 ' Run one request on an HttpTask and call `handler(response, context)` when it answers.
-sub http(url as string, method as string, body as dynamic, handler as string, context = invalid as dynamic)
+' extra (optional): { headers (instead of the signed-in server's), timeoutMs }.
+sub http(url as string, method as string, body as dynamic, handler as string, context = invalid as dynamic, extra = invalid as dynamic)
     m.taskSeq = m.taskSeq + 1
     id = "t" + m.taskSeq.ToStr()
     task = CreateObject("roSGNode", "HttpTask")
     task.addFields({ taskId: id })
-    task.request = { url: url, method: method, headers: headers(), body: body }
+    req = { url: url, method: method, headers: headers(), body: body }
+    if extra <> invalid
+        if extra.headers <> invalid then req.headers = extra.headers
+        if extra.timeoutMs <> invalid then req.timeoutMs = extra.timeoutMs
+    end if
+    task.request = req
     task.observeField("response", "onHttp")
     m.tasks[id] = { task: task, handler: handler, context: context }
     task.control = "RUN"
@@ -113,6 +148,14 @@ sub onHttp(event as object)
     if pending.handler = "onManifest" then onManifest(res, pending.context)
     if pending.handler = "onTitleFiles" then onTitleFiles(res, pending.context)
     if pending.handler = "onReported" then onReported(res, pending.context)
+    if pending.handler = "onPlexPin" then onPlexPin(res, pending.context)
+    if pending.handler = "onPlexPinCheck" then onPlexPinCheck(res, pending.context)
+    if pending.handler = "onPlexResources" then onPlexResources(res, pending.context)
+    if pending.handler = "onPlexIdentity" then onPlexIdentity(res, pending.context)
+    if pending.handler = "onPlexSections" then onPlexSections(res, pending.context)
+    if pending.handler = "onPlexAudioSet" then onPlexAudioSet(res, pending.context)
+    if pending.handler = "onPlexDecision" then onPlexDecision(res, pending.context)
+    if pending.handler = "onPlexTranscodeDecision" then onPlexTranscodeDecision(res, pending.context)
 end sub
 
 ' --- finding a server -----------------------------------------------------------------------
@@ -144,6 +187,10 @@ end sub
 
 sub onServerChosen()
     i = m.serverList.itemSelected
+    if m.plexServers <> invalid and m.connecting = invalid and m.login = invalid
+        plexConnect(m.plexServers[i])
+        return
+    end if
     if i < m.servers.Count()
         useServer(m.servers[i].url)
         return
@@ -200,6 +247,10 @@ sub onInitiate(res as object, ctx as dynamic)
 end sub
 
 sub onPollQuickConnect()
+    if m.pin <> invalid
+        pollPlexPin()
+        return
+    end if
     if m.pending = invalid or m.pending.secret = invalid then return
     http(m.pending.url + "/QuickConnect/Connect?secret=" + m.pending.secret, "GET", invalid, "onCheck")
 end sub
@@ -228,6 +279,10 @@ end sub
 sub loadBrowse()
     show("browse")
     m.top.findNode("browseStatus").text = "Loading from " + m.login.name + "…"
+    if isPlex()
+        plexLoadMenus()
+        return
+    end if
     http(m.login.url + "/MenuStream/v1/health", "GET", invalid, "onHealth")
 end sub
 
@@ -246,14 +301,24 @@ end sub
 
 sub onIndex(res as object, ctx as dynamic)
     if res.code = 401
-        signOut()
+        if isPlex() then setStatus("The menu server didn't accept this Plex sign-in.") else signOut()
         return
     end if
-    if res.json = invalid then return
+    if res.json = invalid
+        if isPlex()
+            setStatus("No menu server answered at " + m.menuBase + ".")
+            askAssetServer()
+        end if
+        return
+    end if
     m.catalog = []
     for each e in res.json["manifests"]
         if e["valid"] = true and e["hasMenus"] = true then m.catalog.push(e)
     end for
+    if isPlex()
+        plexLibraries()
+        return
+    end if
     m.found = {}
     m.shows = {}
     m.episodeFiles = []
@@ -282,11 +347,11 @@ end sub
 sub onEpisodes(res as object, ctx as dynamic)
     m.moviesPending = m.moviesPending - 1
     if res.json <> invalid
-        for each ep in res.json["Items"]
+        for each ep in itemsOf(res.json)
             for each f in filesOf(ep)
                 m.episodeFiles.push(f)
                 for each entry in msManifestsFor(f.path, m.catalog)
-                    if not m.shows.DoesExist(entry["id"]) and ep["SeriesId"] <> invalid then m.shows[entry["id"]] = ep
+                    if not m.shows.DoesExist(entry["id"]) then m.shows[entry["id"]] = ep
                 end for
             end for
         end for
@@ -297,7 +362,7 @@ end sub
 sub onMovies(res as object, ctx as dynamic)
     m.moviesPending = m.moviesPending - 1
     if res.json <> invalid
-        for each movie in res.json["Items"]
+        for each movie in itemsOf(res.json)
             for each f in filesOf(movie)
                 for each entry in msManifestsFor(f.path, m.catalog)
                     if not m.found.DoesExist(entry["id"]) then m.found[entry["id"]] = movie
@@ -308,8 +373,21 @@ sub onMovies(res as object, ctx as dynamic)
     if m.moviesPending <= 0 then showRows()
 end sub
 
-' Every file of a Jellyfin item: [{ path, item, source }] (each version is a media source).
+' The items of a list response: Jellyfin's Items, or Plex's MediaContainer.Metadata.
+function itemsOf(json as dynamic) as object
+    if json = invalid then return []
+    if isPlex()
+        if json["MediaContainer"] = invalid then return []
+        return msOr(json["MediaContainer"]["Metadata"], [])
+    end if
+    if GetInterface(json, "ifArray") <> invalid then return json
+    if json["Items"] <> invalid then return json["Items"]
+    return [json]
+end function
+
+' Every file of an item: [{ path, item, source }] (each version is a media source).
 function filesOf(item as object) as object
+    if isPlex() then return plexFilesOf(item)
     files = []
     if item["MediaSources"] <> invalid
         for each src in item["MediaSources"]
@@ -330,10 +408,17 @@ sub showRows()
         title = entry["title"]
         tile.title = title["name"]
         movie = m.found[entry["id"]]
-        if movie <> invalid
+        if movie <> invalid and isPlex()
+            tile.HDPosterUrl = plexImage(movie["thumb"])
+            if movie["year"] <> invalid then tile.shortDescriptionLine2 = movie["year"].ToStr()
+        else if m.shows[entry["id"]] <> invalid and isPlex()
+            ep = m.shows[entry["id"]]
+            tile.HDPosterUrl = plexImage(ep["grandparentThumb"])
+            tile.shortDescriptionLine2 = msOr(ep["grandparentTitle"], "")
+        else if movie <> invalid
             tile.HDPosterUrl = m.login.url + "/Items/" + movie["Id"] + "/Images/Primary?fillWidth=264&fillHeight=396&quality=90"
             if movie["ProductionYear"] <> invalid then tile.shortDescriptionLine2 = movie["ProductionYear"].ToStr()
-        else if m.shows[entry["id"]] <> invalid
+        else if m.shows[entry["id"]] <> invalid and m.shows[entry["id"]]["SeriesId"] <> invalid
             ep = m.shows[entry["id"]]
             tile.HDPosterUrl = m.login.url + "/Items/" + ep["SeriesId"] + "/Images/Primary?fillWidth=264&fillHeight=396&quality=90"
             tile.shortDescriptionLine2 = msOr(ep["SeriesName"], "")
@@ -342,7 +427,11 @@ sub showRows()
         end if
     end for
     m.rows.content = root
-    m.top.findNode("browseStatus").text = "Menus from " + m.login.name + " (built in) · " + m.catalog.Count().ToStr() + " available"
+    if isPlex()
+        m.top.findNode("browseStatus").text = "Menus from " + msOr(m.menuBase, "(no menu server)") + " · " + m.catalog.Count().ToStr() + " available · " + m.login.name
+    else
+        m.top.findNode("browseStatus").text = "Menus from " + m.login.name + " (built in) · " + m.catalog.Count().ToStr() + " available"
+    end if
     m.rows.setFocus(true)
 end sub
 
@@ -359,7 +448,12 @@ sub onTileChosen()
     m.opening = { entry: entry, movie: m.found[entry["id"]], files: [], waiting: 1 }
     http(m.menuBase + entry["url"], "GET", invalid, "onManifest")
     movie = m.opening.movie
-    if movie <> invalid
+    if movie <> invalid and isPlex()
+        m.opening.waiting = 3
+        base = m.login.url + "/library/metadata/" + movie["ratingKey"]
+        http(base, "GET", invalid, "onTitleFiles")
+        http(base + "/extras", "GET", invalid, "onTitleFiles")
+    else if movie <> invalid
         m.opening.waiting = 4
         base = m.login.url + "/Items/" + movie["Id"]
         http(base + "?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
@@ -380,13 +474,9 @@ end sub
 
 sub onTitleFiles(res as object, ctx as dynamic)
     if m.opening = invalid then return
-    if res.json <> invalid
-        items = res.json
-        if GetInterface(items, "ifArray") = invalid then items = [items]
-        for each item in items
-            m.opening.files.Append(filesOf(item))
-        end for
-    end if
+    for each item in itemsOf(res.json)
+        m.opening.files.Append(filesOf(item))
+    end for
     openWhenReady()
 end sub
 
@@ -399,7 +489,7 @@ sub openWhenReady()
     m.menu = CreateObject("roSGNode", "MenuView")
     m.menu.manifest = m.opening.manifest
     m.menu.manifestUrl = m.menuBase + m.opening.entry["url"]
-    m.menu.authHeader = authHeader(m.login.token)
+    m.menu.authHeaders = assetHeaders()
     m.menu.observeField("playRequest", "onPlayRequest")
     m.menu.observeField("exit", "onMenuExit")
     m.top.findNode("browse").visible = false
@@ -433,6 +523,14 @@ function deviceProfile() as object
         if di.CanDecodeAudio({ Codec: c[0] }).Result = true then audio.push(c[1])
     end for
     if audio.Count() = 0 then audio.push("aac")
+    ' The same lists decide direct play for Plex files (MainScene.plex.brs).
+    m.decodable = { video: {}, audio: {} }
+    for each c in video
+        m.decodable.video[c] = true
+    end for
+    for each c in audio
+        m.decodable.audio[c] = true
+    end for
     v = video.Join(",")
     a = audio.Join(",")
     print "MenuStream: this Roku plays video "; v; "; audio "; a
@@ -492,8 +590,12 @@ sub onPlayRequest()
     req = m.menu.playRequest
     target = m.menuMedia[req.media]
     if target = invalid
-        setStatus("That title isn't in your Jellyfin library.")
+        setStatus("That title isn't in your library.")
         m.menu.playbackStopped = req.start
+        return
+    end if
+    if isPlex()
+        plexPlay(req, target)
         return
     end if
     m.playing = { req: req, item: target.item, source: target.source, path: target.path, session: invalid, method: "DirectPlay", started: false }
@@ -535,6 +637,11 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
     content.HttpHeaders = ["Authorization:" + authHeader(m.login.token)]
     content.PlayStart = req.start
     content.title = m.playing.item["Name"]
+    openPlayer(content)
+end sub
+
+' Full-screen playback of a title, over the menu.
+sub openPlayer(content as object)
     m.player = CreateObject("roSGNode", "Video")
     m.player.width = 1920
     m.player.height = 1080
@@ -571,6 +678,7 @@ sub onPlayerState()
         report("/Sessions/Playing")
     else if state = "finished"
         report("/Sessions/Playing/Stopped")
+        m.playing = invalid
         closePlayer()
         m.menu.playbackEnded = true
     else if state = "error"
@@ -597,6 +705,10 @@ end sub
 ' Tell Jellyfin, so resume points and "continue watching" match its other apps.
 sub report(path as string)
     if m.playing = invalid then return
+    if isPlex()
+        if path = "/Sessions/Playing" then plexReport("playing") else plexReport("stopped")
+        return
+    end if
     position = 0
     if m.player <> invalid then position = m.player.position
     body = FormatJson({ "ItemId": m.playing.item["Id"], "MediaSourceId": m.playing.source, "PlaySessionId": m.playing.session, "PositionTicks": Int(position * 10000000), "PlayMethod": m.playing.method, "CanSeek": true })
@@ -610,7 +722,7 @@ sub signOut()
     m.registry.Delete("login")
     m.registry.Flush()
     m.login = invalid
-    findServers()
+    chooseKind()
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -621,7 +733,12 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     if key = "back" and m.top.findNode("code").visible
         m.pollTimer.control = "stop"
-        findServers()
+        m.pin = invalid
+        chooseKind()
+        return true
+    end if
+    if key = "back" and m.top.findNode("servers").visible
+        chooseKind()
         return true
     end if
     if key = "options" and m.top.findNode("browse").visible

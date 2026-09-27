@@ -161,7 +161,7 @@ sub showMenu(menu as object)
         if not m.nav.intro then start = m.musicLoop
         content = CreateObject("roSGNode", "ContentNode")
         content.url = assetUrl(music["src"])
-        content.HttpHeaders = ["Authorization:" + m.top.authHeader]
+        content.HttpHeaders = headerList(m.top.authHeaders)
         content.PlayStart = start
         m.music.content = content
         m.music.control = "play"
@@ -222,7 +222,7 @@ sub playVideo(src as string, start as float, role as string, loopFrom = invalid 
     ' Matrix main-menu clip into tmp:, which is RAM on Roku, crashed the onn Roku TV.)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = assetUrl(src)
-    content.HttpHeaders = ["Authorization:" + m.top.authHeader]
+    content.HttpHeaders = headerList(m.top.authHeaders)
     content.StreamFormat = "mp4"
     content.PlayStart = start
     m.motion.content = content
@@ -341,7 +341,7 @@ sub fetchImage(url as string)
     if m.images.DoesExist(url) or m.downloads.DoesExist(file) then return
     task = CreateObject("roSGNode", "HttpTask")
     task.addFields({ url: url, file: file })
-    task.request = { url: url, headers: { "Authorization": m.top.authHeader }, saveTo: file }
+    task.request = { url: url, headers: m.top.authHeaders, saveTo: file }
     task.observeField("response", "onDownloaded")
     m.downloads[file] = { task: task, url: url }
     task.control = "RUN"
@@ -384,6 +384,15 @@ function urlKey(url as string) as string
     key = url
     if i > 0 then key = Mid(url, i + 7)
     return key.Replace("%", "=").Replace("/", ",")
+end function
+
+' ["Name:Value", ...] for a ContentNode's HttpHeaders.
+function headerList(h as object) as object
+    list = []
+    for each k in h
+        list.push(k + ":" + h[k])
+    end for
+    return list
 end function
 
 function fileExtension(path as string) as string
