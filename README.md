@@ -53,6 +53,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 |---|---|
 | [`spec/menustream-v0.2.md`](spec/menustream-v0.2.md) | The format (draft) |
 | [`spec/schema/manifest.schema.json`](spec/schema/manifest.schema.json) | JSON Schema |
+| [`spec/server-api.md`](spec/server-api.md) | The API servers use to hand manifests and menu art to apps (draft) |
 | [`spec/COMPATIBILITY.md`](spec/COMPATIBILITY.md) | The backward-compatibility charter |
 | [`spec/profiles/dvd.md`](spec/profiles/dvd.md) | How disc importers map DVD menus into the format |
 | [`conformance/`](conformance) | Language-neutral test cases: manifests, input events, expected results |

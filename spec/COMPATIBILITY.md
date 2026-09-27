@@ -8,7 +8,8 @@ MenuStream is meant to outlive any one player, tool or maintainer. These rules a
 2. **Nothing is removed or redefined.** Fields are never removed or renamed, and never change meaning. Minor versions only add optional fields.
 3. **Unknown fields are ignored.** Readers MUST ignore fields and extensions they don't understand, so newer manifests still work in older players.
 4. **The basic floor never moves.** Every manifest MUST include the `fallback` list. A player that can show that list and play media works with every manifest ever written.
-5. **Extensions first, core later.** New features start as namespaced `x-<vendor>-*` extensions. They join the core only through a public proposal, with conformance tests.
+5. **The server API is covered too.** Endpoints and fields of a released API version (e.g. `/v1/`, see [server-api.md](server-api.md)) are never removed or redefined; breaking changes get a new version served alongside the old one.
+6. **Extensions first, core later.** New features start as namespaced `x-<vendor>-*` extensions. They join the core only through a public proposal, with conformance tests.
 
 ## What "compatible" means
 
