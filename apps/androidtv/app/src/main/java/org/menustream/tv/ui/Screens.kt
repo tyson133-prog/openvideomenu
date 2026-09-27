@@ -69,16 +69,24 @@ fun Centered(content: @Composable () -> Unit) =
 fun BusyScreen(message: String) = Centered { Text(message, style = MaterialTheme.typography.headlineSmall) }
 
 @Composable
-fun ResumeScreen(title: String, seconds: Double, onChoose: (resume: Boolean) -> Unit) = Centered {
-    val at = clock(seconds)
+fun ResumeScreen(
+    title: String,
+    resumes: List<org.menustream.tv.Resume>,
+    justTheFilm: Boolean,
+    onChoose: (org.menustream.tv.Resume?) -> Unit,
+) = Centered {
     Text(title, style = MaterialTheme.typography.displaySmall)
     Spacer(Modifier.height(12.dp))
-    Text("You stopped at $at.", style = MaterialTheme.typography.titleLarge)
+    val prompt = if (justTheFilm) "You stopped at ${clock(resumes[0].position)}." else "Pick up where you left off:"
+    Text(prompt, style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(32.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val focus = remember { FocusRequester() }
-        Button(onClick = { onChoose(true) }, modifier = Modifier.focusRequester(focus)) { Text("Resume from $at") }
-        Button(onClick = { onChoose(false) }) { Text("Disc menu") }
+        resumes.forEachIndexed { i, r ->
+            val label = if (justTheFilm) "Resume from ${clock(r.position)}" else "Resume ${r.label} from ${clock(r.position)}"
+            Button(onClick = { onChoose(r) }, modifier = if (i == 0) Modifier.focusRequester(focus) else Modifier) { Text(label) }
+        }
+        Button(onClick = { onChoose(null) }) { Text("Disc menu") }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     }
 }

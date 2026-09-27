@@ -64,6 +64,9 @@ sealed interface Tile {
 data class TileRow(val title: String, val tiles: List<Tile>)
 
 /** A title opened into its disc menu: manifest media ids resolved to the server's files. */
+/** A title a disc plays that the viewer stopped partway: [label] is the disc's own name for it. */
+data class Resume(val mediaId: String, val item: Item, val position: Double, val label: String)
+
 data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, Playable>, val lastStop: LastStop?)
 
 data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val discs: List<Tile.Disc>)
@@ -81,8 +84,8 @@ sealed interface Screen {
     data object Browse : Screen
     data class Show(val state: ShowState) : Screen
     data class Menu(val open: OpenMenu) : Screen
-    /** A disc stopped partway last time: resume the film, or open the disc menu? */
-    data class ResumeAsk(val open: OpenMenu, val item: Item) : Screen
+    /** A disc with titles stopped partway: resume one of them, or open the disc menu? */
+    data class ResumeAsk(val open: OpenMenu, val resumes: List<Resume>, val justTheFilm: Boolean) : Screen
     data class Play(val request: PlayRequest) : Screen
     data class Failed(val message: String) : Screen
 }
@@ -586,18 +589,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             android.util.Log.d("MenuStream", "open ${movie.id} -> ${full.id}; files=${files.map { it.first }}")
             android.util.Log.d("MenuStream", "manifest media=${entry.media.map { it.id + "=" + it.path }}; resolved=${media.mapValues { it.value.item.id + ":" + it.value.file.path }}")
         }
-        val featureId = media.entries.firstOrNull { it.value.item.id == full.id }?.key
-        val lastStop = full.resumeSeconds.takeIf { it > 0 && featureId != null }?.let { LastStop(featureId!!, it) }
-        val open = OpenMenu(full.title, entry, media, lastStop)
-        // Stopped partway last time: ask first, like a Blu-ray player. The menu's own Resume button
-        // gets the same point either way.
-        go(if (lastStop != null) Screen.ResumeAsk(open, full) else Screen.Menu(open))
+        openAsking(full.title, entry, media, film = full)
     }
 
-    /** The answer to [Screen.ResumeAsk]: the film from where it stopped, or the disc menu. */
-    fun resumeChosen(resume: Boolean) {
+    /**
+     * Open a disc's menu; if titles it plays were stopped partway (the film, an extra, an episode),
+     * ask first, like a Blu-ray player: the most recently played first, at most four. The menu's
+     * own Resume button gets the newest either way.
+     */
+    private fun openAsking(title: String, entry: CatalogEntry, media: Map<String, Playable>, film: Item?) {
+        val resumes = media.entries
+            .filter { it.value.item.resumeSeconds > 0 }
+            .distinctBy { it.value.item.id }
+            .sortedByDescending { it.value.item.lastPlayedMs ?: 0 }
+            .take(4)
+            .map { (id, p) -> Resume(id, p.item, p.item.resumeSeconds, entry.media.firstOrNull { it.id == id }?.label ?: p.item.title) }
+        val open = OpenMenu(title, entry, media, resumes.firstOrNull()?.let { LastStop(it.mediaId, it.position) })
+        val justTheFilm = resumes.size == 1 && film != null && resumes[0].item.id == film.id
+        go(if (resumes.isNotEmpty()) Screen.ResumeAsk(open, resumes, justTheFilm) else Screen.Menu(open))
+    }
+
+    /** The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the disc menu. */
+    fun resumeChosen(resume: Resume?) {
         val ask = _screen.value as? Screen.ResumeAsk ?: return
-        if (resume) play(ask.item, ask.open.lastStop?.position ?: 0.0) else _screen.value = Screen.Menu(ask.open)
+        if (resume != null) play(resume.item, resume.position) else _screen.value = Screen.Menu(ask.open)
     }
 
     private suspend fun openShow(show: Item) {
@@ -646,7 +661,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val extras = show?.let { attempt { src.extras(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val files = filesOf(episodes + extras)
         val media = MenuMatcher.resolveMedia(disc.entry, files)
-        go(Screen.Menu(OpenMenu(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, null)))
+        openAsking(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, film = null)
     }
 
     fun play(item: Item, startSeconds: Double): Job = viewModelScope.launch {

@@ -80,6 +80,8 @@ data class PlexItem(
     val duration: Long? = null,
     val viewOffset: Long? = null,
     val viewCount: Int? = null,
+    /** Seconds since 1970. */
+    val lastViewedAt: Long? = null,
     /** "Trailer", "Featurette", ... for extras. */
     val subtype: String? = null,
     val extraType: Int? = null,

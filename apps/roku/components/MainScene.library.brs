@@ -369,6 +369,16 @@ function resumeOf(item as object) as float
     return msOr(ud["PlaybackPositionTicks"], 0) / 10000000
 end function
 
+' When the item was last played, in seconds since 1970 (0 = never or unknown).
+function playedAtOf(item as object) as integer
+    if isPlex() then return msOr(item["lastViewedAt"], 0)
+    ud = item["UserData"]
+    if ud = invalid or ud["LastPlayedDate"] = invalid then return 0
+    t = CreateObject("roDateTime")
+    t.FromISO8601String(ud["LastPlayedDate"])
+    return t.AsSeconds()
+end function
+
 function watchedOf(item as object) as boolean
     if isPlex() then return msOr(item["viewCount"], 0) > 0
     ud = item["UserData"]
@@ -548,7 +558,9 @@ sub backFromTitle(position as float, watched as boolean)
         if watched then ud["Played"] = true
         d.item["UserData"] = ud
     end if
-    if d.tile.kind = "episode"
+    if d.tile = invalid
+        ' Resumed from a disc's question: no tile of its own.
+    else if d.tile.kind = "episode"
         d.tile.shortDescriptionLine2 = progressOf(d.item)
     else
         d.tile.shortDescriptionLine2 = joinDots([yearOf(d.item), progressOf(d.item)])

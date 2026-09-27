@@ -71,6 +71,7 @@ data class JfItems(@SerialName("Items") val items: List<JfItem> = emptyList(), @
 data class JfUserData(
     @SerialName("PlaybackPositionTicks") val positionTicks: Long = 0,
     @SerialName("Played") val played: Boolean = false,
+    @SerialName("LastPlayedDate") val lastPlayed: String? = null,
 )
 
 @Serializable
@@ -401,6 +402,7 @@ class JellyfinSource(
             durationSeconds = j.runTimeTicks?.let { it / TICKS_PER_SECOND },
             resumeSeconds = (j.userData?.positionTicks ?: 0) / TICKS_PER_SECOND,
             watched = j.userData?.played == true,
+            lastPlayedMs = j.userData?.lastPlayed?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() },
             files = files,
         )
     }

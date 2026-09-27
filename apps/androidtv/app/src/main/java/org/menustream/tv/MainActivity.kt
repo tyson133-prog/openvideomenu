@@ -122,7 +122,7 @@ fun App(vm: AppViewModel) {
                 is Screen.Menu -> MenuScreen(vm, s.open, onExit = vm::back)
                 is Screen.ResumeAsk -> {
                     androidx.activity.compose.BackHandler { vm.back() }
-                    org.menustream.tv.ui.ResumeScreen(s.open.title, s.open.lastStop?.position ?: 0.0, onChoose = vm::resumeChosen)
+                    org.menustream.tv.ui.ResumeScreen(s.open.title, s.resumes, s.justTheFilm, onChoose = vm::resumeChosen)
                 }
                 is Screen.Play -> PlayScreen(s.request, onDone = vm::back)
                 is Screen.Failed -> FailedScreen(s.message, onRetry = { vm.start() }, onSignOut = vm::signOut)

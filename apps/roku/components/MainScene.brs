@@ -159,6 +159,7 @@ sub onHttp(event as object)
     if pending.handler = "onPlaybackInfo" then onPlaybackInfo(res, pending.context)
     if pending.handler = "onManifest" then onManifest(res, pending.context)
     if pending.handler = "onTitleFiles" then onTitleFiles(res, pending.context)
+    if pending.handler = "onDiscRefresh" then onDiscRefresh(res, pending.context)
     if pending.handler = "onReported" then onReported(res, pending.context)
     if pending.handler = "onPlexPin" then onPlexPin(res, pending.context)
     if pending.handler = "onPlexPinCheck" then onPlexPinCheck(res, pending.context)
@@ -437,7 +438,17 @@ sub chooseTile(tile as object, screen as string, list as object)
         http(base + "?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
         http(base + "/SpecialFeatures?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
         http(base + "/LocalTrailers?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
+    else if m.discShow[entry["id"]] <> invalid
+        ' A TV disc: its show's episodes, fresh (resume points may have moved since they loaded).
+        m.opening.waiting = 2
+        series = m.discShow[entry["id"]]
+        http(episodesUrl(series), "GET", invalid, "onDiscRefresh", series)
     end if
+end sub
+
+sub onDiscRefresh(res as object, series as dynamic)
+    if res.json <> invalid then m.episodesByShow[itemKey(series)] = itemsOf(res.json)
+    if m.opening <> invalid then openWhenReady()
 end sub
 
 sub onManifest(res as object, ctx as dynamic)
@@ -464,32 +475,58 @@ sub openWhenReady()
     files = m.opening.files
     if m.opening.movie = invalid then files = discEpisodeFiles(m.opening.entry["id"]) ' a TV disc: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
-    ' Stopped partway last time (the server's resume point for the film): ask first, like a
-    ' Blu-ray player. The menu's own Resume button gets the same point either way.
-    lastStop = invalid
-    movie = m.opening.movie
-    if movie <> invalid
-        for each id in m.menuMedia
-            target = m.menuMedia[id]
-            if itemKey(target.item) = itemKey(movie) and resumeOf(target.item) > 0
-                lastStop = { media: id, position: resumeOf(target.item) }
-            end if
-        end for
-    end if
-    m.opening.lastStop = lastStop
-    if lastStop <> invalid
+    ' Stopped partway last time: ask first, like a Blu-ray player. Every title the disc plays that
+    ' has a resume point (the film, an extra, an episode), most recently played first. The menu's
+    ' own Resume button gets the newest either way.
+    m.opening.resumes = discResumes(m.opening.manifest, m.menuMedia)
+    m.opening.lastStop = invalid
+    if m.opening.resumes.Count() > 0
+        newest = m.opening.resumes[0]
+        m.opening.lastStop = { media: newest.media, position: newest.position }
         askResume()
     else
         startMenu()
     end if
 end sub
 
+' [{ media, item, position, label, playedAt }] newest first, at most four.
+function discResumes(manifest as object, media as object) as object
+    seen = {}
+    list = []
+    for each id in media
+        item = media[id].item
+        key = itemKey(item)
+        if resumeOf(item) > 0 and not seen.DoesExist(key)
+            seen[key] = true
+            label = invalid
+            if manifest["media"] <> invalid and manifest["media"][id] <> invalid then label = manifest["media"][id]["label"]
+            list.push({ media: id, item: item, position: resumeOf(item), label: msOr(label, titleOf(item)), playedAt: playedAtOf(item) })
+        end if
+    end for
+    list.SortBy("playedAt", "r")
+    while list.Count() > 4
+        list.Pop()
+    end while
+    return list
+end function
+
 sub askResume()
-    at = clockOf(m.opening.lastStop.position)
+    resumes = m.opening.resumes
     dialog = CreateObject("roSGNode", "StandardMessageDialog")
-    dialog.title = titleOf(m.opening.movie)
-    dialog.message = ["You stopped at " + at + "."]
-    dialog.buttons = ["Resume from " + at, "Disc menu"]
+    dialog.title = msOr(m.opening.entry["title"]["name"], "Disc")
+    buttons = []
+    if resumes.Count() = 1 and m.opening.movie <> invalid and itemKey(resumes[0].item) = itemKey(m.opening.movie)
+        ' Just the film: "Resume from 1:02:13".
+        dialog.message = ["You stopped at " + clockOf(resumes[0].position) + "."]
+        buttons.push("Resume from " + clockOf(resumes[0].position))
+    else
+        dialog.message = ["Pick up where you left off:"]
+        for each r in resumes
+            buttons.push("Resume " + r.label + " from " + clockOf(r.position))
+        end for
+    end if
+    buttons.push("Disc menu")
+    dialog.buttons = buttons
     dialog.observeField("buttonSelected", "onResumeChosen")
     dialog.observeField("wasClosed", "onResumeClosed")
     m.top.dialog = dialog
@@ -499,12 +536,14 @@ sub onResumeChosen()
     choice = m.top.dialog.buttonSelected
     m.top.dialog.close = true
     if m.opening = invalid then return
-    if choice = 0
+    if choice < m.opening.resumes.Count()
         ' Straight to where they stopped; afterwards back to the tile, as for any title.
-        stoppedAt = m.opening.lastStop
-        m.direct = { item: m.opening.movie, tile: m.menuFrom.tile, screen: m.menuFrom.screen, list: m.menuFrom.list }
+        r = m.opening.resumes[choice]
+        tile = invalid
+        if m.opening.movie <> invalid and itemKey(r.item) = itemKey(m.opening.movie) then tile = m.menuFrom.tile
+        m.direct = { item: r.item, tile: tile, screen: m.menuFrom.screen, list: m.menuFrom.list }
         m.opening = invalid
-        startTitle({ start: stoppedAt.position }, m.menuMedia[stoppedAt.media])
+        startTitle({ start: r.position }, m.menuMedia[r.media])
     else
         startMenu()
     end if

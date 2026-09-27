@@ -100,6 +100,8 @@ data class Item(
     val durationSeconds: Double? = null,
     val resumeSeconds: Double = 0.0,
     val watched: Boolean = false,
+    /** When the viewer last played it (epoch ms), for "most recent" orderings. */
+    val lastPlayedMs: Long? = null,
     /** Every file of every version: menus must match against all of them, not just the first. */
     val files: List<MediaFile> = emptyList(),
 )

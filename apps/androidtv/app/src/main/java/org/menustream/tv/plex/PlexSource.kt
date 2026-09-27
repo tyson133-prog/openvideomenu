@@ -123,6 +123,7 @@ class PlexSource(val server: PlexServer) : MediaSource {
         durationSeconds = p.duration?.let { it / 1000.0 },
         resumeSeconds = (p.viewOffset ?: 0) / 1000.0,
         watched = (p.viewCount ?: 0) > 0,
+        lastPlayedMs = p.lastViewedAt?.let { it * 1000 },
         files = p.media.flatMapIndexed { mi, m ->
             m.parts.mapIndexed { pi, part -> MediaFile(PartRef(mi, pi, part.key).toString(), part.file) }
         },
