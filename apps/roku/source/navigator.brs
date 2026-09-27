@@ -172,17 +172,26 @@ end sub
 
 ' v0.2: the remote's Back key on a menu. A menu's back action says where Back goes (like a disc's
 ' "Go Up"), run as a step up: no history is added, and a target already in history unwinds it.
-' Without back, Back returns through history. Back never traps: if back leaves the viewer on the
-' same menu, history is used instead.
+' Without back, Back returns through history, except on the root menu, where it leaves the disc
+' however the viewer got there. Back never traps: if back leaves the viewer on the same menu, they
+' step back (or leave, on the root menu).
 sub msNavRemoteBack(manifest as object, s as object, effects as object)
     menu = msNavMenu(manifest, s.menu)
     if menu["back"] = invalid
-        msNavGoBack(manifest, s, effects)
+        msNavBackWithoutTarget(manifest, s, effects)
         return
     end if
     from = s.menu
     msNavRunOpts(manifest, s, menu["back"], effects, false, true)
-    if s.mode = "menu" and s.menu = from then msNavGoBack(manifest, s, effects)
+    if s.mode = "menu" and s.menu = from then msNavBackWithoutTarget(manifest, s, effects)
+end sub
+
+sub msNavBackWithoutTarget(manifest as object, s as object, effects as object)
+    if s.menu = manifest["rootMenu"]
+        effects.push({ type: "exit" })
+    else
+        msNavGoBack(manifest, s, effects)
+    end if
 end sub
 
 sub msNavGoBack(manifest as object, s as object, effects as object)

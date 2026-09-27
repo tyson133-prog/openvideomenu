@@ -228,18 +228,25 @@ function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Ef
 /**
  * v0.2: the remote's Back key on a menu. A menu's `back` action says where Back goes (like a disc's
  * "Go Up"), run as a step up: no history is added, and a target already in history unwinds it, so
- * paging through ten bios never means ten presses. Without `back`, Back returns through history.
- * Back must never trap the viewer: if `back` leaves them on the same menu, history is used instead.
+ * paging through ten bios never means ten presses. Without `back`, Back returns through history,
+ * except on the root menu, where it leaves the disc however the viewer got there (a "return to the
+ * main menu" button adds history, but the main menu is still the top). Back must never trap the
+ * viewer: if `back` leaves them on the same menu, they step back (or leave, on the root menu).
  */
 function remoteBack(manifest: Manifest, s: NavState, effects: Effect[]) {
   const menu = menuOf(manifest, s.menu!);
   if (!menu.back) {
-    goBack(manifest, s, effects);
+    backWithoutTarget(manifest, s, effects);
     return;
   }
   const from = s.menu;
   run(manifest, s, menu.back, effects, { pushHistory: false, up: true });
-  if (s.mode === "menu" && s.menu === from) goBack(manifest, s, effects);
+  if (s.mode === "menu" && s.menu === from) backWithoutTarget(manifest, s, effects);
+}
+
+function backWithoutTarget(manifest: Manifest, s: NavState, effects: Effect[]) {
+  if (s.menu === manifest.rootMenu) effects.push({ type: "exit" });
+  else goBack(manifest, s, effects);
 }
 
 function goBack(manifest: Manifest, s: NavState, effects: Effect[]) {

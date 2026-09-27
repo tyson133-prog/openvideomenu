@@ -176,7 +176,8 @@ On a disc, the remote's Return key doesn't retrace every menu you visited: each 
 - **It is a step up, not a new visit.** A `goto` run by `back` doesn't add to history, and if its target is already in the history, the history is unwound to it (that entry and everything after it are dropped). So ten bio pages still take one press to leave.
 - **Page turns** (next/previous page of the same thing) SHOULD use `history: "replace"`, so they add no Back steps even in menus without `back`.
 - **Without `back`**, Back returns through history as in §6 (at the top, the player MAY exit).
-- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead. (A disc may leave Return inactive; a TV app must not.)
+- **Back on `rootMenu` leaves the disc** (the player exits), unless that menu has its own `back`. This holds however the viewer got there: a "return to the main menu" button is a `goto` and adds history, but the main menu is still the top, and retracing into a submenu from it surprises viewers.
+- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A disc may leave Return inactive; a TV app must not.)
 - **Importers choose per menu** to match the source as closely as possible: a disc's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
 - Players without v0.2 ignore `back` and `history`, and Back returns through history.
 

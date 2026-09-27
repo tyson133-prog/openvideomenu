@@ -1,0 +1,38 @@
+{
+  "description": "v0.2: remote Back on the root menu leaves the disc, however the viewer got there. Walk: main → languages → a language button that sets a variable and returns to main (a goto, so it adds history); Back on main exits rather than retracing to languages. Other menus still return through history.",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Root menu back" },
+    "media": { "feature": { "ref": "Film.mp4" } },
+    "vars": { "subs": 0 },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "languages" }, "action": { "type": "play", "media": "feature", "subtitle": { "var": "subs" } } },
+          { "id": "languages", "rect": [100, 160, 200, 40], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "languages" } }
+        ]
+      },
+      "languages": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "subs-on", "rect": [100, 100, 200, 40], "action": { "type": "set", "var": "subs", "value": 1, "then": { "type": "goto", "menu": "main", "button": "play" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "languages" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "subs-on" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "languages", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "subs-on" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "effects": [{ "type": "exit" }] } }
+  ]
+}
