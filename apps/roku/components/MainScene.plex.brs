@@ -217,24 +217,13 @@ sub onPlexSections(res as object, ctx as dynamic)
         signOut()
         return
     end if
-    m.moviesPending = 0
     dirs = invalid
     if res.json <> invalid then dirs = res.json["MediaContainer"]["Directory"]
     for each d in msOr(dirs, [])
-        page = "&X-Plex-Container-Start=0&X-Plex-Container-Size=2000"
-        section = m.login.url + "/library/sections/" + d["key"] + "/all?sort=titleSort"
-        if d["type"] = "movie"
-            lib = addLibrary(d["title"], "movie")
-            m.moviesPending = m.moviesPending + 1
-            http(section + "&type=1" + page, "GET", invalid, "onMovies", lib)
-        else if d["type"] = "show"
-            lib = addLibrary(d["title"], "show")
-            m.moviesPending = m.moviesPending + 2
-            http(section + "&type=2" + page, "GET", invalid, "onShowList", lib)
-            http(section + "&type=4" + page, "GET", invalid, "onEpisodes", lib)
-        end if
+        if d["type"] = "movie" then addLibrary(d["title"], "movie", d["key"])
+        if d["type"] = "show" then addLibrary(d["title"], "show", d["key"])
     end for
-    if m.moviesPending = 0 then showRows()
+    startLibraries()
 end sub
 
 ' Every file of a Plex item: [{ path, item, source ("mediaIndex:partIndex:partKey"), partId }].

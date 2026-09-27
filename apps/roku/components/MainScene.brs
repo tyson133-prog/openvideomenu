@@ -149,9 +149,12 @@ sub onHttp(event as object)
     if pending.handler = "onHealth" then onHealth(res, pending.context)
     if pending.handler = "onIndex" then onIndex(res, pending.context)
     if pending.handler = "onViews" then onViews(res, pending.context)
-    if pending.handler = "onMovies" then onMovies(res, pending.context)
-    if pending.handler = "onEpisodes" then onEpisodes(res, pending.context)
-    if pending.handler = "onShowList" then onShowList(res, pending.context)
+    if pending.handler = "onLibraryPage" then onLibraryPage(res, pending.context)
+    if pending.handler = "onShowSearch" then onShowSearch(res, pending.context)
+    if pending.handler = "onDiscEpisodes" then onDiscEpisodes(res, pending.context)
+    if pending.handler = "onRecentEpisodes" then onRecentEpisodes(res, pending.context)
+    if pending.handler = "onDiscShowFound" then onDiscShowFound(res, pending.context)
+    if pending.handler = "onShowEpisodes" then onShowEpisodes(res, pending.context)
     if pending.handler = "onPlaybackInfo" then onPlaybackInfo(res, pending.context)
     if pending.handler = "onManifest" then onManifest(res, pending.context)
     if pending.handler = "onTitleFiles" then onTitleFiles(res, pending.context)
@@ -340,57 +343,11 @@ end sub
 
 sub onViews(res as object, ctx as dynamic)
     if res.json = invalid then return
-    m.moviesPending = 0
     for each view in res.json["Items"]
-        items = m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + view["Id"] + "&recursive=true&sortBy=SortName"
-        if view["CollectionType"] = "movies"
-            lib = addLibrary(view["Name"], "movie")
-            m.moviesPending = m.moviesPending + 1
-            http(items + "&includeItemTypes=Movie&fields=Path,MediaSources&limit=2000", "GET", invalid, "onMovies", lib)
-        else if view["CollectionType"] = "tvshows"
-            lib = addLibrary(view["Name"], "show")
-            m.moviesPending = m.moviesPending + 2
-            http(items + "&includeItemTypes=Series&limit=2000", "GET", invalid, "onShowList", lib)
-            ' TV discs reference episode files: fetch episodes (with paths) once, match locally.
-            http(items + "&includeItemTypes=Episode&fields=Path,MediaSources&limit=5000", "GET", invalid, "onEpisodes", lib)
-        end if
+        if view["CollectionType"] = "movies" then addLibrary(view["Name"], "movie", view["Id"])
+        if view["CollectionType"] = "tvshows" then addLibrary(view["Name"], "show", view["Id"])
     end for
-    if m.moviesPending = 0 then showRows()
-end sub
-
-' Match every movie's files against the manifests locally (one request per library page).
-' Episodes of a TV library: their files let TV disc menus play episodes, and the first matching
-' episode's series gives the disc its poster.
-sub onEpisodes(res as object, ctx as dynamic)
-    m.moviesPending = m.moviesPending - 1
-    if res.json <> invalid
-        for each ep in itemsOf(res.json)
-            addEpisode(ep)
-            for each f in filesOf(ep)
-                m.episodeFiles.push(f)
-                for each entry in msManifestsFor(f.path, m.catalog)
-                    if not m.shows.DoesExist(entry["id"]) then m.shows[entry["id"]] = ep
-                end for
-            end for
-        end for
-    end if
-    if m.moviesPending <= 0 then showRows()
-end sub
-
-sub onMovies(res as object, ctx as dynamic)
-    m.moviesPending = m.moviesPending - 1
-    if res.json <> invalid
-        for each movie in itemsOf(res.json)
-            if ctx <> invalid then m.libraries[ctx].items.push(movie)
-            for each f in filesOf(movie)
-                for each entry in msManifestsFor(f.path, m.catalog)
-                    if not m.found.DoesExist(entry["id"]) then m.found[entry["id"]] = movie
-                    m.menuOf[itemKey(movie)] = entry["id"]
-                end for
-            end for
-        end for
-    end if
-    if m.moviesPending <= 0 then showRows()
+    startLibraries()
 end sub
 
 ' The items of a list response: Jellyfin's Items, or Plex's MediaContainer.Metadata.
@@ -418,50 +375,6 @@ function filesOf(item as object) as object
     return files
 end function
 
-sub showRows()
-    root = CreateObject("roSGNode", "ContentNode")
-    if m.catalog.Count() > 0
-        row = root.createChild("ContentNode")
-        row.title = "Disc Menus"
-    end if
-    for each entry in m.catalog
-        tile = row.createChild("ContentNode")
-        tile.addFields({ kind: "disc", entryId: entry["id"], badge: true })
-        title = entry["title"]
-        tile.title = title["name"]
-        movie = m.found[entry["id"]]
-        if movie <> invalid and isPlex()
-            tile.HDPosterUrl = plexImage(movie["thumb"])
-            if movie["year"] <> invalid then tile.shortDescriptionLine2 = movie["year"].ToStr()
-        else if m.shows[entry["id"]] <> invalid and isPlex()
-            ep = m.shows[entry["id"]]
-            tile.HDPosterUrl = plexImage(ep["grandparentThumb"])
-            tile.shortDescriptionLine2 = msOr(ep["grandparentTitle"], "")
-        else if movie <> invalid
-            tile.HDPosterUrl = m.login.url + "/Items/" + movie["Id"] + "/Images/Primary?fillWidth=264&fillHeight=396&quality=90"
-            if movie["ProductionYear"] <> invalid then tile.shortDescriptionLine2 = movie["ProductionYear"].ToStr()
-        else if m.shows[entry["id"]] <> invalid and m.shows[entry["id"]]["SeriesId"] <> invalid
-            ep = m.shows[entry["id"]]
-            tile.HDPosterUrl = m.login.url + "/Items/" + ep["SeriesId"] + "/Images/Primary?fillWidth=264&fillHeight=396&quality=90"
-            tile.shortDescriptionLine2 = msOr(ep["SeriesName"], "")
-        else if title["year"] <> invalid
-            tile.shortDescriptionLine2 = title["year"].ToStr()
-        end if
-    end for
-    addLibraryRows(root)
-    m.rows.content = root
-    if m.menuBase = invalid and isPlex()
-        m.top.findNode("browseStatus").text = m.login.name + " · no disc menus (no menu server)"
-    else if m.menuBase = invalid
-        m.top.findNode("browseStatus").text = m.login.name + " · no disc menus (the MenuStream plugin isn't installed)"
-    else if isPlex()
-        m.top.findNode("browseStatus").text = "Menus from " + m.menuBase + " · " + m.catalog.Count().ToStr() + " available · " + m.login.name
-    else
-        m.top.findNode("browseStatus").text = "Menus from " + m.login.name + " (built in) · " + m.catalog.Count().ToStr() + " available"
-    end if
-    m.rows.setFocus(true)
-end sub
-
 sub onTileChosen()
     sel = m.rows.rowItemSelected
     chooseTile(m.rows.content.getChild(sel[0]).getChild(sel[1]), "browse", m.rows)
@@ -469,8 +382,13 @@ end sub
 
 ' Open a disc menu, play a title that has none, or open a show.
 sub chooseTile(tile as object, screen as string, list as object)
+    if tile.kind = "loading" then return
     if tile.kind = "show"
         openShow(tile)
+        return
+    end if
+    if tile.kind = "disc" and not discReady(tile.entryId)
+        setStatus("Still finding " + tile.title + " in your library…")
         return
     end if
     if tile.kind = "episode" ' a TV disc's menu opens from the show's Discs row
@@ -532,7 +450,7 @@ sub openWhenReady()
     m.opening.waiting = m.opening.waiting - 1
     if m.opening.waiting > 0 or m.opening.manifest = invalid then return
     files = m.opening.files
-    if m.opening.movie = invalid then files = m.episodeFiles ' a TV disc: its media are episodes
+    if m.opening.movie = invalid then files = discEpisodeFiles(m.opening.entry["id"]) ' a TV disc: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
     m.menu = CreateObject("roSGNode", "MenuView")
     m.menu.manifest = m.opening.manifest
