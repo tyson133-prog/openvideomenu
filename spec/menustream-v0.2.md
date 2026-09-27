@@ -3,7 +3,7 @@
 > **Status: draft.** Fields and names may change before v1.0. "MenuStream" is a working name.
 > After v1.0 the [compatibility charter](COMPATIBILITY.md) applies and nothing here is ever removed or redefined.
 
-**v0.2** adds motion menus (§5.1) and transitions (§6). Every v0.1 manifest is a valid v0.2 manifest and behaves the same.
+**v0.2** adds motion menus (§5.1), transitions (§6), and variables with audio/subtitle selection (§6.1). Every v0.1 manifest is a valid v0.2 manifest and behaves the same.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -33,6 +33,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `menus` | no | Map of menu id → [menu](#5-menus). |
 | `rootMenu` | if `menus` | The menu opened at start and after top-level playback ends. |
 | `firstPlay` | no | [Action](#6-actions) run at start instead of opening `rootMenu`, e.g. an intro. |
+| `vars` | no | *(v0.2, Level 2)* Named integer variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
 
@@ -122,6 +123,7 @@ Every action is an object with a `type`:
 | `playAll` | `items[]`, `after?` | Play `{ media, chapter?, start? }` items in order. |
 | `goto` | `menu`, `button?`, `transition?` | Open a menu, focusing `button` or its `defaultButton`. *(v0.2)* `transition` is a clip (path) played first, full screen. |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
+| `set` | `var`, `value`, `then?` | *(v0.2, Level 2)* Set a variable, then optionally run another action (§6.1). |
 | `resume` | — | Continue the last playback the viewer stopped early, from where they stopped. Otherwise it does nothing. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -132,6 +134,27 @@ Every action is an object with a `type`:
 5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic.
 6. **`after`** MUST NOT be `play` or `playAll`. Use `playAll` for sequences.
 7. *(v0.2)* **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
+
+### 6.1 Variables and track selection (v0.2, Level 2)
+
+Discs remember choices, such as the soundtrack picked in a Languages menu, in registers. MenuStream keeps them as **variables**: data, not scripts.
+
+```json
+"vars": { "audio": 1, "subs": 0 },
+...
+{ "type": "set", "var": "audio", "value": 2, "then": { "type": "goto", "menu": "main" } }
+...
+{ "type": "play", "media": "feature", "audio": { "var": "audio" }, "subtitle": { "var": "subs" } }
+```
+
+- **Session scope.** Variables start at their `vars` values when the player starts, and keep their values across menus and playback until it starts again.
+- **`set`** assigns an integer to a declared variable, then runs `then` if present. `set` MUST NOT be used in the fallback list.
+- **Choosing tracks.** `play` and `playAll` items MAY have `audio` and `subtitle`, each either a number or `{"var": name}`:
+  - `audio: N` plays the Nth audio track of the media (1-based).
+  - `subtitle: N` shows the Nth subtitle track; `subtitle: 0` turns subtitles off.
+  - When absent, the player uses its default. A number outside the media's tracks is ignored.
+- **Players without Level 2** ignore these fields: the media plays with default tracks, and `set` actions still run their `then`.
+- Conditions on actions (`when`) are planned for a later draft.
 
 ## 7. Cross-reference rules
 
@@ -167,6 +190,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Disc** | *(v0.2, partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping. *(Next drafts)* Menu timeouts, variables and conditions, audio/subtitle selection, per-language menus. |
+| **2: Disc** | *(v0.2, partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.
