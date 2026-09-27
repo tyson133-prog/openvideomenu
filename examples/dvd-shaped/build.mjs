@@ -68,12 +68,12 @@ const next = { x: 700, y: 400, w: 60, h: 40 };
 const prev = { x: 90, y: 400, w: 60, h: 40 };
 const egg = { x: 812, y: 12, w: 14, h: 14 };
 
-background("menus/episodes-1.png", "EXAMPLE SHOW  -  Episodes", [
+background("menus/episodes-1.png", "EXAMPLE SHOW  -  Episodes 1-2", [
   ...page1.map((b, i) => ({ text: `${i + 1}.  ${EPISODES[i].title}`, x: b.textX, y: b.textY })),
   { text: ">>", x: next.x + 12, y: next.y + 4 },
   { text: "*", x: egg.x + 2, y: egg.y - 2, size: 16, color: "0x1a2a4a" }, // barely visible, like a real egg
 ]);
-background("menus/episodes-2.png", "EXAMPLE SHOW  -  Episodes (2)", [
+background("menus/episodes-2.png", "EXAMPLE SHOW  -  Episode 3", [
   ...page2.map((b, i) => ({ text: `${i + 3}.  ${EPISODES[i + 2].title}`, x: b.textX, y: b.textY })),
   { text: "<<", x: prev.x + 12, y: prev.y + 4 },
 ]);
@@ -106,7 +106,7 @@ const manifest = {
   },
   menus: {
     "vts1-pgc2": {
-      label: "Episodes",
+      label: "Episodes 1–2",
       canvas: { width: SW, height: SH, aspect: "16:9" },
       background: { image: "menus/episodes-1.png", color: "#02050f" },
       defaultButton: "b1",
@@ -123,7 +123,7 @@ const manifest = {
       "x-dvd": { domain: "VTSM", vtsn: 1, pgcn: 2 },
     },
     "vts1-pgc3": {
-      label: "Episodes (page 2)",
+      label: "Episode 3",
       canvas: { width: SW, height: SH, aspect: "16:9" },
       background: { image: "menus/episodes-2.png", color: "#02050f" },
       defaultButton: "b3",

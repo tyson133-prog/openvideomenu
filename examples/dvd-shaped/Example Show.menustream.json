@@ -70,7 +70,7 @@
   },
   "menus": {
     "vts1-pgc2": {
-      "label": "Episodes",
+      "label": "Episodes 1–2",
       "canvas": {
         "width": 720,
         "height": 480,
@@ -208,7 +208,7 @@
       }
     },
     "vts1-pgc3": {
-      "label": "Episodes (page 2)",
+      "label": "Episode 3",
       "canvas": {
         "width": 720,
         "height": 480,
