@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Jellyfin LAN discovery: broadcast "who is JellyfinServer?" to UDP 7359, collect answers. -->
+<component name="DiscoverTask" extends="Task">
+  <interface>
+    <!-- [{ name, url, id }] -->
+    <field id="servers" type="array" />
+  </interface>
+  <script type="text/brightscript" uri="DiscoverTask.brs" />
+</component>

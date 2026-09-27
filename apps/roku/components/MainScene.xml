@@ -1,10 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app: choose a Jellyfin server, sign in with Quick Connect, browse titles with disc menus, and
+  open a menu (MenuView). One screen group is visible at a time.
+-->
 <component name="MainScene" extends="Scene">
+  <script type="text/brightscript" uri="MainScene.brs" />
+  <script type="text/brightscript" uri="pkg:/source/matcher.brs" />
+  <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
   <children>
-    <Rectangle width="1920" height="1080" color="0x050505FF" />
-    <Label text="MenuStream" translation="[0, 480]" width="1920" horizAlign="center" color="0xFFD27AFF">
-      <Font role="font" uri="font:BoldSystemFontFile" size="64" />
-    </Label>
-    <Label text="Disc menus for your library" translation="[0, 580]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+    <Rectangle id="bg" width="1920" height="1080" color="0x131418FF" />
+
+    <Group id="servers" visible="false">
+      <Label text="Choose your Jellyfin server" translation="[0, 250]" width="1920" horizAlign="center" color="0xE8E6E1FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="52" />
+      </Label>
+      <Label id="serversHint" text="Looking on your network…" translation="[0, 340]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+      <LabelList id="serverList" translation="[560, 430]" itemSize="[800, 72]" color="0xE8E6E1FF" focusedColor="0x131418FF" focusBitmapBlendColor="0xFFD27AFF" />
+    </Group>
+
+    <Group id="code" visible="false">
+      <Label id="codeTitle" text="Sign in" translation="[0, 280]" width="1920" horizAlign="center" color="0xE8E6E1FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="52" />
+      </Label>
+      <Label id="codeHint" text="In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter" translation="[260, 400]" width="1400" horizAlign="center" wrap="true" color="0xE8E6E1FF" />
+      <Label id="codeValue" text="" translation="[0, 520]" width="1920" horizAlign="center" color="0xFFFFFFFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="120" />
+      </Label>
+    </Group>
+
+    <Group id="browse" visible="false">
+      <Label id="browseTitle" text="MenuStream" translation="[96, 70]" color="0xE8E6E1FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="44" />
+      </Label>
+      <Label id="browseStatus" text="" translation="[96, 130]" color="0x9BA0AAFF" />
+      <RowList id="rows" translation="[96, 190]" itemComponentName="TileItem" numRows="2" rowItemSize="[[264, 470]]" rowItemSpacing="[[28, 0]]" itemSize="[1760, 540]" rowLabelOffset="[[0, 16]]" showRowLabel="[true]" rowLabelColor="0xE8E6E1FF" rowFocusAnimationStyle="floatingFocus" />
+    </Group>
+
+    <Label id="status" text="" translation="[96, 1000]" width="1728" color="0xFFD27AFF" />
   </children>
 </component>

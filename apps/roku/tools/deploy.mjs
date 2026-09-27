@@ -80,8 +80,21 @@ const files = [
   { src: "../../conformance/cases/*.json", dest: "conformance" },
 ];
 
+// Compile first: BrightScript mistakes (reserved words, missing functions) otherwise only show up
+// as a crash on the TV.
+try {
+  execFileSync(process.execPath, [resolve(root, "node_modules/brighterscript/dist/cli.js"), "--create-package", "false"], { cwd: root, stdio: "pipe" });
+} catch (e) {
+  const out = String(e.stdout ?? "") + String(e.stderr ?? "");
+  const errors = out.split(/\r?\n/).filter((l) => / error | warning /.test(l));
+  console.error(errors.length ? errors.join("\n") : out);
+  console.error("Not deployed: fix the errors above.");
+  process.exit(1);
+}
+
 console.log(`Deploying to ${host}…`);
-await rokuDeploy.deploy({ host, password: devPassword(), rootDir: root, files, outDir: resolve(root, "out"), outFile: "menustream-roku" });
+// Replace in place (roku-deploy deletes the app first by default, which wipes its saved sign-in).
+await rokuDeploy.deploy({ host, password: devPassword(), rootDir: root, files, outDir: resolve(root, "out"), outFile: "menustream-roku", deleteInstalledChannel: false });
 console.log("Installed.");
 
 if (conformance) {

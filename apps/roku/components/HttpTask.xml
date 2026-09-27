@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One HTTP request, run off the render thread (SceneGraph only allows network calls in Tasks).
+  Set `request`, then control = "RUN"; `response` is set when done.
+    request:  { url, method ("GET"/"POST"), headers: {}, body (string), saveTo (optional file path) }
+    response: { code, body (string, unless saveTo), error }
+-->
+<component name="HttpTask" extends="Task">
+  <interface>
+    <field id="request" type="assocarray" />
+    <field id="response" type="assocarray" />
+  </interface>
+  <script type="text/brightscript" uri="HttpTask.brs" />
+</component>

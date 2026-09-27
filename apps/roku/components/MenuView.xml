@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shows one manifest's disc menus: a port of packages/renderer-web's MenuPlayer to SceneGraph.
+  Navigation logic is navigator.brs (conformance-tested); this component only draws the state and
+  carries out effects. Titles are played by the scene (playRequest out, playbackEnded/Stopped in).
+-->
+<component name="MenuView" extends="Group">
+  <interface>
+    <!-- in: the parsed manifest, where its URL lives, and the sign-in header for its files -->
+    <field id="manifest" type="assocarray" />
+    <field id="manifestUrl" type="string" />
+    <field id="authHeader" type="string" />
+    <!-- in: set to start (after the fields above) -->
+    <field id="control" type="string" onChange="onControl" />
+    <!-- out: { media, start, audio?, subtitle? } -->
+    <field id="playRequest" type="assocarray" />
+    <!-- out: the viewer left the top menu -->
+    <field id="exit" type="boolean" alwaysNotify="true" />
+    <!-- in: playback finished on its own / was stopped at a position (seconds) -->
+    <field id="playbackEnded" type="boolean" alwaysNotify="true" onChange="onPlaybackEnded" />
+    <field id="playbackStopped" type="float" alwaysNotify="true" onChange="onPlaybackStopped" />
+  </interface>
+  <script type="text/brightscript" uri="MenuView.brs" />
+  <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
+  <children>
+    <Rectangle id="black" width="1920" height="1080" color="0x000000FF" />
+    <Group id="canvas">
+      <Rectangle id="fill" color="0x000000FF" />
+      <Poster id="still" loadDisplayMode="noScale" />
+      <Video id="motion" enableUI="false" loop="false" />
+      <Poster id="highlight" loadDisplayMode="noScale" />
+    </Group>
+    <Audio id="music" />
+  </children>
+</component>
