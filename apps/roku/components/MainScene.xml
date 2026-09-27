@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="MainScene" extends="Scene">
+  <children>
+    <Rectangle width="1920" height="1080" color="0x050505FF" />
+    <Label text="MenuStream" translation="[0, 480]" width="1920" horizAlign="center" color="0xFFD27AFF">
+      <Font role="font" uri="font:BoldSystemFontFile" size="64" />
+    </Label>
+    <Label text="Disc menus for your library" translation="[0, 580]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+  </children>
+</component>

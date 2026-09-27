@@ -1,0 +1,16 @@
+{
+  "name": "@menustream/roku",
+  "private": true,
+  "description": "MenuStream for Roku (proof of concept): BrightScript/SceneGraph player",
+  "type": "module",
+  "scripts": {
+    "check": "bsc --create-package false",
+    "images": "node tools/images.mjs",
+    "deploy": "node tools/deploy.mjs",
+    "conformance": "node tools/deploy.mjs --conformance"
+  },
+  "devDependencies": {
+    "brighterscript": "0.73.5",
+    "roku-deploy": "3.18.4"
+  }
+}
