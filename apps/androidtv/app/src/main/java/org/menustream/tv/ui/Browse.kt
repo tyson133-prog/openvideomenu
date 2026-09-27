@@ -71,14 +71,18 @@ fun BrowseScreen(vm: AppViewModel) {
     var editingServer by remember { mutableStateOf(false) }
     val tab = tabs.getOrNull(selected)
     LaunchedEffect(tab) { tab?.let { vm.loadTab(it) } }
-    // Start with the first poster focused, so the first remote press already moves around.
+    // Start with the first poster focused, so the first remote press already moves around; coming
+    // back from a title or its menu, focus the tile it was opened from instead.
     val firstTile = remember { androidx.compose.ui.focus.FocusRequester() }
+    val returnTile = remember { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by rememberSaveable { mutableStateOf(false) }
     val firstRowReady = rows[BrowseTab.Discs.id]?.isNotEmpty() == true
     LaunchedEffect(firstRowReady) {
         if (firstRowReady && !focusedOnce && tab == BrowseTab.Discs) {
             kotlinx.coroutines.delay(100)
-            focusedOnce = runCatching { firstTile.requestFocus() }.isSuccess
+            val back = vm.returnFocusKey?.let { key -> rows[BrowseTab.Discs.id]?.any { r -> r.tiles.any { it.key == key } } } == true
+            focusedOnce = (back && runCatching { returnTile.requestFocus() }.isSuccess) ||
+                runCatching { firstTile.requestFocus() }.isSuccess
         }
     }
 
@@ -107,7 +111,7 @@ fun BrowseScreen(vm: AppViewModel) {
                 LazyColumn(contentPadding = PaddingValues(bottom = 48.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (tabRows == null) item { Text("Loading…", modifier = Modifier.padding(16.dp)) }
                     items(tabRows ?: emptyList(), key = { "row:" + it.title }) { row ->
-                        TileRowView(vm, row, if (row == tabRows?.firstOrNull()) firstTile else null)
+                        TileRowView(vm, row, if (row == tabRows?.firstOrNull()) firstTile else null, returnTile)
                     }
                     if (tab is BrowseTab.Discs && tabRows != null && tabRows.none { it.title == "Disc Menus" }) {
                         item { Text("No disc menus yet. Put a .menustream.json manifest next to a title.", modifier = Modifier.padding(16.dp)) }
@@ -139,12 +143,19 @@ fun BrowseScreen(vm: AppViewModel) {
 }
 
 @Composable
-fun TileRowView(vm: AppViewModel, row: TileRow, firstFocus: androidx.compose.ui.focus.FocusRequester? = null) {
+fun TileRowView(
+    vm: AppViewModel,
+    row: TileRow,
+    firstFocus: androidx.compose.ui.focus.FocusRequester? = null,
+    returnFocus: androidx.compose.ui.focus.FocusRequester? = null,
+) {
     Column {
         Text(row.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 32.dp)) {
             items(row.tiles, key = { it.key }) { tile ->
-                val m = if (firstFocus != null && tile == row.tiles.first()) Modifier.focusRequester(firstFocus) else Modifier
+                var m: Modifier = Modifier
+                if (firstFocus != null && tile == row.tiles.first()) m = m.focusRequester(firstFocus)
+                if (returnFocus != null && tile.key == vm.returnFocusKey) m = m.focusRequester(returnFocus)
                 TileCard(vm, tile, m)
             }
         }

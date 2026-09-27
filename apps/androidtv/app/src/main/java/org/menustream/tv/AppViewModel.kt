@@ -311,8 +311,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun startJellyfin(login: JellyfinLogin) {
-        source = JellyfinSource(login.url, settings.clientId, login.token, login.userId, login.name)
+    private fun startJellyfin(login: JellyfinLogin) = viewModelScope.launch {
+        // The server's name is a server setting and can change after sign-in: use the current one.
+        val current = withTimeoutOrNull(3_000) {
+            attempt { JellyfinAccount(login.url, settings.clientId).publicInfo() }.getOrNull()?.serverName
+        }
+        val fresh = if (!current.isNullOrBlank() && current != login.name) login.copy(name = current).also { settings.jellyfin = it } else login
+        source = JellyfinSource(fresh.url, settings.clientId, fresh.token, fresh.userId, fresh.name)
         loadBrowse()
     }
 
@@ -544,7 +549,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- opening things ----------------------------------------------------------------------------
 
+    /** The tile last opened, so the library focuses it again when the viewer comes back. */
+    var returnFocusKey: String? = null
+        private set
+
     fun open(tile: Tile): Job = viewModelScope.launch {
+        returnFocusKey = tile.key
         if (tile is Tile.Disc && tile.pending) {
             // Picked before its title was found: wait for it (it's being looked up now).
             val ready = withTimeoutOrNull(30_000) {
