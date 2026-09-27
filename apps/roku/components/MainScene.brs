@@ -433,10 +433,6 @@ function deviceProfile() as object
         if di.CanDecodeAudio({ Codec: c[0] }).Result = true then audio.push(c[1])
     end for
     if audio.Count() = 0 then audio.push("aac")
-    m.decodableAudio = {}
-    for each c in audio
-        m.decodableAudio[c] = true
-    end for
     v = video.Join(",")
     a = audio.Join(",")
     print "MenuStream: this Roku plays video "; v; "; audio "; a
@@ -473,20 +469,19 @@ function audioStreamIndex(item as object, sourceId as string, n as dynamic) as d
     return invalid
 end function
 
-' The codec (lower case) of the audio track that will play: the requested one, else the source's
-' default, else its first audio track.
-function chosenAudioCodec(source as object, index as dynamic) as dynamic
-    streams = source["MediaStreams"]
-    if streams = invalid then return invalid
-    if index = invalid then index = source["DefaultAudioStreamIndex"]
-    first = invalid
-    for each stream in streams
-        if stream["Type"] = "Audio"
-            if first = invalid then first = stream
-            if index <> invalid and stream["Index"] = index then return LCase(msOr(stream["Codec"], ""))
+' The media source's default audio track index, else its first audio track's.
+function defaultAudioIndex(item as object, sourceId as string) as dynamic
+    if item["MediaSources"] = invalid then return invalid
+    for each src in item["MediaSources"]
+        if src["Id"] = sourceId
+            if src["DefaultAudioStreamIndex"] <> invalid then return src["DefaultAudioStreamIndex"]
+            if src["MediaStreams"] <> invalid
+                for each stream in src["MediaStreams"]
+                    if stream["Type"] = "Audio" then return stream["Index"]
+                end for
+            end if
         end if
     end for
-    if first <> invalid then return LCase(msOr(first["Codec"], ""))
     return invalid
 end function
 
@@ -503,10 +498,15 @@ sub onPlayRequest()
     end if
     m.playing = { req: req, item: target.item, source: target.source, path: target.path, session: invalid, method: "DirectPlay", started: false }
     body = { "UserId": m.login.userId, "MediaSourceId": target.source, "DeviceProfile": m.profile, "EnableDirectPlay": true, "EnableDirectStream": true, "EnableTranscoding": true, "AutoOpenLiveStream": true, "IsPlayback": true }
+    ' Always name the audio track that will play (the menu's choice, else the file's default, else
+    ' its first). Jellyfin only checks an explicitly requested track against the device profile;
+    ' left to choose, it narrows candidates to "default"-flagged tracks, and with none (the example
+    ' Finale's DTS track has no default flag) it skips the audio check and approves direct play of
+    ' audio this TV can't decode (StreamBuilder.cs, Jellyfin 12.1, "Collect candidate audio streams").
     audio = audioStreamIndex(target.item, target.source, req.audio)
+    if audio = invalid then audio = defaultAudioIndex(target.item, target.source)
     if audio <> invalid then body["AudioStreamIndex"] = audio
     if req.subtitle = 0 then body["SubtitleStreamIndex"] = -1
-    m.playing.body = body
     http(m.login.url + "/Items/" + target.item["Id"] + "/PlaybackInfo?userId=" + m.login.userId, "POST", FormatJson(body), "onPlaybackInfo")
 end sub
 
@@ -521,20 +521,6 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
         return
     end if
     print "MenuStream: PlaybackInfo directPlay="; source["SupportsDirectPlay"]; " directStream="; source["SupportsDirectStream"]; " transcode="; source["SupportsTranscoding"]; " url="; source["TranscodingUrl"] <> invalid; " reasons="; FormatJson(msOr(source["TranscodeReasons"], [])); " container="; source["Container"]
-    ' Guard: Jellyfin 12.1 approved direct play of an MKV whose DTS audio isn't in our profile (the
-    ' video list is honoured, the audio list apparently not), which plays silently on a Roku without
-    ' DTS. We know the file's streams and what this TV decodes, so if the chosen audio track can't be
-    ' decoded, ask again with direct play off: Jellyfin then transcodes.
-    direct = not (source["TranscodingUrl"] <> invalid and source["SupportsDirectPlay"] <> true)
-    codec = chosenAudioCodec(source, m.playing.body["AudioStreamIndex"])
-    if direct and codec <> invalid and not m.decodableAudio.DoesExist(codec) and m.playing.retried <> true
-        print "MenuStream: this TV can't decode "; codec; " audio: asking Jellyfin to transcode"
-        m.playing.retried = true
-        body = m.playing.body
-        body["EnableDirectPlay"] = false
-        http(m.login.url + "/Items/" + m.playing.item["Id"] + "/PlaybackInfo?userId=" + m.login.userId, "POST", FormatJson(body), "onPlaybackInfo")
-        return
-    end if
     m.playing.session = msOr(res.json["PlaySessionId"], CreateObject("roDeviceInfo").GetRandomUUID().Replace("-", ""))
     content = CreateObject("roSGNode", "ContentNode")
     if source["TranscodingUrl"] <> invalid and source["SupportsDirectPlay"] <> true
