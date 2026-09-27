@@ -83,6 +83,12 @@ class MenuWebView(
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
+
+            /** The web engine crashed or was killed for memory: report it; the screen closes the menu. */
+            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                onMessage(PageMessage.Error("The menu stopped unexpectedly."))
+                return true
+            }
         }
         check(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) { "This device's WebView is too old." }
         WebViewCompat.addWebMessageListener(this, "menustreamHost", setOf(ORIGIN)) { _, message: WebMessageCompat, _, _, replyProxy ->

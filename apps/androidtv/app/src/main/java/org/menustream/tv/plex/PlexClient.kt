@@ -33,10 +33,13 @@ class PlexIdentity(val clientId: String) {
 
 private fun Request.Builder.headers(map: Map<String, String>) = apply { map.forEach { (k, v) -> header(k, v) } }
 
+/** An HTTP error from Plex; [code] 401 means the sign-in is no longer valid. */
+class HttpStatusException(val code: Int, url: String) : IOException("HTTP $code for ${url.substringBefore('?')}")
+
 private suspend inline fun <reified T> OkHttpClient.getJson(url: String, headers: Map<String, String>): T =
     withContext(Dispatchers.IO) {
         newCall(Request.Builder().url(url).headers(headers).build()).execute().use { res ->
-            if (!res.isSuccessful) throw IOException("HTTP ${res.code} for ${url.substringBefore('?')}")
+            if (!res.isSuccessful) throw HttpStatusException(res.code, url)
             json.decodeFromString<T>(res.body.string())
         }
     }
@@ -209,6 +212,16 @@ class PlexServer(
         url("/photo/:/transcode", "url" to path, "width" to "$width", "height" to "$height", "minSize" to "1", "upscale" to "1")
 
     companion object {
+        /**
+         * Reconnect straight to a server used before, without plex.tv (e.g. the internet is down but the
+         * home network isn't). Checks that the address still answers as the same server.
+         */
+        suspend fun reconnect(last: org.menustream.tv.store.LastServer, identity: PlexIdentity, http: OkHttpClient = Http.probe): PlexServer {
+            val id = http.getJson<MediaContainerResponse>("${last.url}/identity", identity.headers(last.token)).container.machineIdentifier
+            if (id != last.machineId) throw IOException("${last.url} is no longer ${last.name}")
+            return PlexServer(last.name, last.machineId, last.url, last.token, identity)
+        }
+
         /**
          * Try the server's addresses in the order python-plexapi uses (local before remote before relay,
          * https before http) and keep the first that answers /identity.

@@ -144,8 +144,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun start(): Job = viewModelScope.launch {
         val token = settings.plexToken ?: return@launch signIn()
         if (_screen.value !is Screen.Busy) _screen.value = Screen.Busy("Connecting to Plex…")
-        val servers = attempt { account.servers(token) }.getOrElse {
-            _screen.value = Screen.Failed("Couldn't reach plex.tv: ${it.message}")
+        val servers = attempt { account.servers(token) }.getOrElse { e ->
+            if (e is org.menustream.tv.plex.HttpStatusException && e.code == 401) {
+                // The sign-in was revoked or expired: ask for a new one instead of showing an error.
+                settings.signOut()
+                return@launch signIn()
+            }
+            // plex.tv unreachable (e.g. internet down): the home network may still work.
+            val last = settings.lastServer
+            val direct = last?.let { attempt { PlexServer.reconnect(it, identity) }.getOrNull() }
+            if (direct != null) {
+                server = direct
+                loadBrowse()
+            } else {
+                _screen.value = Screen.Failed("Couldn't reach plex.tv (${e.message}), and your Plex server didn't answer directly either.")
+            }
             return@launch
         }
         val chosen = servers.firstOrNull { it.clientIdentifier == settings.serverId } ?: servers.singleOrNull()
@@ -190,6 +203,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return@launch
         }
         settings.serverId = resource.clientIdentifier
+        server?.let { settings.lastServer = org.menustream.tv.store.LastServer(it.name, it.machineId, it.baseUrl, it.token) }
         loadBrowse()
     }
 
@@ -316,17 +330,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Find the asset server (saved, else discovered) and load its catalog of menus. */
     private suspend fun loadMenuServer() {
         val plex = server ?: return
-        val url = settings.assetServer ?: run {
+        suspend fun discover(): String? {
             _menuSource.value = MenuSource(null, "Looking for a menu server…")
-            withTimeoutOrNull(8_000) { discoverAssetServers(getApplication()).first { it.isNotEmpty() } }?.first()?.url
+            return withTimeoutOrNull(8_000) { discoverAssetServers(getApplication()).first { it.isNotEmpty() } }?.first()?.url
         }
+        var url = settings.assetServer ?: discover()
         if (url == null) {
             _menuSource.value = MenuSource(null, "No menu server found. Titles play without menus.")
             return
         }
-        val client = AssetServerClient(url, plex.token)
-        catalog = attempt { client.index().manifests }.getOrElse {
-            _menuSource.value = MenuSource(url, "Menu server at $url: ${it.message}")
+        var result = attempt { AssetServerClient(url!!, plex.token).index().manifests }
+        // The saved address stopped answering (server moved to a new IP, or is off): look for it again.
+        if (result.isFailure && result.exceptionOrNull()?.message?.contains("didn't accept") != true) {
+            val found = discover()
+            if (found != null && found != url) {
+                url = found
+                result = attempt { AssetServerClient(found, plex.token).index().manifests }
+            }
+        }
+        val client = AssetServerClient(url!!, plex.token)
+        catalog = result.getOrElse {
+            _menuSource.value = MenuSource(url, "Menu server at $url: ${it.message} Titles play without menus.")
             return
         }
         assets = client

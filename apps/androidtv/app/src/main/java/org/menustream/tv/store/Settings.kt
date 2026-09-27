@@ -34,8 +34,16 @@ class Settings(context: Context) {
         get() = prefs.getString("assetServer", null)
         set(value) = prefs.edit().putString("assetServer", value).apply()
 
-    fun signOut() = prefs.edit().remove("plexToken").remove("serverId").apply()
+    /** The last server that worked, for starting without plex.tv. Stored encrypted (it holds a token). */
+    var lastServer: LastServer?
+        get() = prefs.getString("lastServer", null)?.let { runCatching { org.menustream.tv.net.json.decodeFromString(LastServer.serializer(), Secrets.decrypt(it)) }.getOrNull() }
+        set(value) = prefs.edit().putString("lastServer", value?.let { Secrets.encrypt(org.menustream.tv.net.json.encodeToString(LastServer.serializer(), it)) }).apply()
+
+    fun signOut() = prefs.edit().remove("plexToken").remove("serverId").remove("lastServer").apply()
 }
+
+@kotlinx.serialization.Serializable
+data class LastServer(val name: String, val machineId: String, val url: String, val token: String)
 
 private object Secrets {
     private const val ALIAS = "menustream-token-key"

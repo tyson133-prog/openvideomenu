@@ -156,6 +156,8 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             playing = null
             web.stopped(position)
             web.requestFocus()
+        } else if (failure != null) {
+            onExit() // the page is gone or never loaded: Back leaves the menu
         } else {
             web.back()
         }
@@ -179,7 +181,35 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        failure?.let { Centered { Text("Couldn't open this menu: $it") } }
+        failure?.let { message ->
+            val main = open.entry.media.firstOrNull { it.kind == "feature" && open.media.containsKey(it.id) }
+                ?: open.entry.media.firstOrNull { open.media.containsKey(it.id) }
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                Centered {
+                    Text("This disc menu couldn't be shown", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(8.dp))
+                    // The page reports raw URLs; viewers get plain words (debug builds keep the detail).
+                    val loadFailed = message.startsWith("Couldn't load")
+                    val shown = if (loadFailed) "The menu file couldn't be loaded. The menu server may be off or unreachable." else message
+                    Text(shown, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+                    if (org.menustream.tv.BuildConfig.DEBUG && shown != message) Text(message, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        val focus = remember { FocusRequester() }
+                        if (main != null) {
+                            Button(onClick = {
+                                scope.launch {
+                                    failure = null
+                                    vm.requestFor(open, main.id, 0.0)?.let { playing = it }
+                                }
+                            }, modifier = Modifier.focusRequester(focus)) { Text("Play without menu") }
+                        }
+                        Button(onClick = onExit, modifier = if (main == null) Modifier.focusRequester(focus) else Modifier) { Text("Back") }
+                        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+                    }
+                }
+            }
+        }
     }
 }
 
