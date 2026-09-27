@@ -179,7 +179,24 @@ fun VideoPlayer(
                 useController = true
                 setShowSubtitleButton(true)
                 keepScreenOn = true
-                requestFocus()
+                // PlayerView isn't focusable by default: requestFocus() then only works if a control
+                // button happens to be showing, and remote keys go elsewhere. Make it focusable, and
+                // ask once it is attached (a request before that can be dropped).
+                isFocusable = true
+                isFocusableInTouchMode = true
+                // When the controls auto-hide, the focused button disappears and Android hands focus to
+                // the app's root view, so the next key press would show nothing. Take focus back.
+                setControllerVisibilityListener(
+                    PlayerView.ControllerVisibilityListener { visibility ->
+                        if (visibility != android.view.View.VISIBLE) post { requestFocus() }
+                    },
+                )
+                addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: android.view.View) {
+                        v.post { v.requestFocus() }
+                    }
+                    override fun onViewDetachedFromWindow(v: android.view.View) {}
+                })
             }
         },
     )

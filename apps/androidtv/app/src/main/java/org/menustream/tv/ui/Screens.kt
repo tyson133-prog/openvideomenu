@@ -237,6 +237,8 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             }
         }
     }
+    // Remote keys belong to the player while a title plays, never to the menu page behind it.
+    LaunchedEffect(playing) { web.setBehindPlayer(playing != null) }
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(web, lifecycle) {
         web.open()

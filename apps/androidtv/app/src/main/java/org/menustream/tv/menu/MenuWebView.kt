@@ -108,6 +108,18 @@ class MenuWebView(
 
     fun open() = loadUrl("$ORIGIN/assets/menu/host.html")
 
+    /**
+     * While a title plays on top of the menu, take the page out of the focus order. Otherwise remote
+     * keys can land on the hidden page: when the player's controls auto-hide, Android moves focus to
+     * the next focusable view, which would be this one.
+     */
+    fun setBehindPlayer(behind: Boolean) {
+        isFocusable = !behind
+        isFocusableInTouchMode = !behind
+        descendantFocusability = if (behind) android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS else android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+        if (behind) clearFocus() else requestFocus()
+    }
+
     /** Tell the page which manifest to show. [manifestPath] is the asset server path, e.g. /v1/files/0/... */
     fun init(manifestPath: String, lastStop: LastStop?) = send(buildJsonObject {
         put("type", "init")
