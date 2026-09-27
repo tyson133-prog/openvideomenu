@@ -28,7 +28,8 @@ private const val ORIGIN = "https://appassets.androidplatform.net"
 /** Messages from the menu page (see packages/renderer-web/src/host.ts). */
 sealed interface PageMessage {
     data object Ready : PageMessage
-    data class Play(val mediaId: String, val start: Double, val label: String) : PageMessage
+    /** [audio]: 1-based audio track; [subtitle]: 1-based, 0 = off; null = player default. */
+    data class Play(val mediaId: String, val start: Double, val label: String, val audio: Int? = null, val subtitle: Int? = null) : PageMessage
     data object Exit : PageMessage
     data class Error(val message: String) : PageMessage
 }
@@ -121,7 +122,13 @@ class MenuWebView(
         when (str("type")) {
             "ready" -> onMessage(PageMessage.Ready)
             "play" -> onMessage(
-                PageMessage.Play(str("mediaId") ?: return, str("start")?.toDoubleOrNull() ?: 0.0, str("label") ?: ""),
+                PageMessage.Play(
+                    str("mediaId") ?: return,
+                    str("start")?.toDoubleOrNull() ?: 0.0,
+                    str("label") ?: "",
+                    str("audio")?.toDoubleOrNull()?.toInt(),
+                    str("subtitle")?.toDoubleOrNull()?.toInt(),
+                ),
             )
             "exit" -> onMessage(PageMessage.Exit)
             "error" -> onMessage(PageMessage.Error(str("message") ?: "Menu error"))

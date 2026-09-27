@@ -6,7 +6,8 @@
  *
  * page → native
  *   {type:"ready"}                                       page loaded, send "init"
- *   {type:"play", mediaId, ref, url?, start, label}      play this in the native player
+ *   {type:"play", mediaId, ref, url?, start, label, audio?, subtitle?}   play this in the native player
+ *                                                        (audio: 1-based track; subtitle: 1-based, 0 = off)
  *   {type:"exit"}                                        Back pressed at the top menu
  *   {type:"error", message}                              manifest couldn't be loaded or is invalid
  * native → page
@@ -41,8 +42,8 @@ export class BridgePlayback implements PlaybackAdapter {
 
   constructor(private readonly send: (message: object) => void) {}
 
-  play({ mediaId, ref, url, start, label }: PlayRequest) {
-    this.send({ type: "play", mediaId, ref, url, start, label });
+  play({ mediaId, ref, url, start, label, audio, subtitle }: PlayRequest) {
+    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle });
   }
 
   /** The native player owns playback and reports the stop position itself. */

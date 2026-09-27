@@ -16,6 +16,11 @@ export interface Manifest {
   rootMenu?: string;
   firstPlay?: Action;
   fallback: FallbackGroup[];
+  /**
+   * Level 2: named integer variables for the viewing session (the data-only stand-in for DVD
+   * registers), with their starting values. Set by "set" actions, read by play's audio/subtitle.
+   */
+  vars?: Record<string, number>;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -138,12 +143,19 @@ export interface Menu {
   [extension: `x-${string}`]: unknown;
 }
 
+/** A number, or the current value of a variable. */
+export type VarOrNumber = number | { var: string };
+
 export interface PlayItem {
   media: string;
   /** 1-based chapter number within the media. */
   chapter?: number;
   /** Start offset in seconds (ignored when chapter is given). */
   start?: number;
+  /** Level 2: audio track to play, 1-based among the media's audio tracks. Default: the player's choice. */
+  audio?: VarOrNumber;
+  /** Level 2: subtitle track, 1-based among the media's subtitle tracks; 0 = off. Default: the player's choice. */
+  subtitle?: VarOrNumber;
 }
 
 export type Action =
@@ -151,7 +163,9 @@ export type Action =
   | { type: "playAll"; items: PlayItem[]; after?: Action }
   | { type: "goto"; menu: string; button?: string; /** v0.2: clip played before the menu opens (skippable). */ transition?: string }
   | { type: "back" }
-  | { type: "resume" };
+  | { type: "resume" }
+  /** Level 2: set a variable, then (optionally) run another action — e.g. choose a soundtrack and return to the menu. */
+  | { type: "set"; var: string; value: number; then?: Action };
 
 export type ActionType = Action["type"];
 

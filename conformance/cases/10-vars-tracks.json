@@ -1,0 +1,53 @@
+{
+  "description": "Level 2 (variables and track selection): a Languages-style menu sets variables and returns; later plays pick their audio/subtitle tracks from those variables, while literal track numbers stay fixed. Variables reset on start.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Tracks" },
+    "vars": { "audio": 1, "subs": 0 },
+    "media": { "feature": { "ref": "Tracks.mp4", "chapters": [{ "time": 0 }, { "time": 120 }] } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "play", "rect": [100, 300, 200, 40], "nav": { "down": "languages" },
+            "action": { "type": "play", "media": "feature", "audio": { "var": "audio" }, "subtitle": { "var": "subs" } } },
+          { "id": "languages", "rect": [100, 350, 200, 40], "nav": { "up": "play", "down": "commentary" }, "action": { "type": "goto", "menu": "languages" } },
+          { "id": "commentary", "rect": [100, 400, 200, 40], "nav": { "up": "languages" },
+            "action": { "type": "play", "media": "feature", "chapter": 2, "audio": 2 } }
+        ]
+      },
+      "languages": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "commentary", "rect": [100, 100, 200, 40], "nav": { "down": "subsOn" },
+            "action": { "type": "set", "var": "audio", "value": 2, "then": { "type": "goto", "menu": "main", "button": "play" } } },
+          { "id": "subsOn", "rect": [100, 150, 200, 40], "nav": { "up": "commentary" },
+            "action": { "type": "set", "var": "subs", "value": 1 } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "feature", "start": 0, "audio": 1, "subtitle": 0 }] } },
+    { "event": { "type": "stopped", "position": 10 }, "expect": { "mode": "menu", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "languages" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "commentary" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "subsOn" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "subsOn", "effects": [{ "type": "activated", "menu": "languages", "button": "subsOn" }] } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "commentary" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "feature", "start": 0, "audio": 2, "subtitle": 1 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu" } },
+    { "event": { "type": "press", "key": "down" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "commentary" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "commentary" }, { "type": "play", "media": "feature", "start": 120, "audio": 2 }] } },
+    { "event": { "type": "start" }, "expect": { "menu": "main" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "feature", "start": 0, "audio": 1, "subtitle": 0 }] } }
+  ]
+}

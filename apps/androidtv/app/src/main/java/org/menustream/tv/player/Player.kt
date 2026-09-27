@@ -30,6 +30,10 @@ data class PlayRequest(
     val startSeconds: Double,
     val title: String,
     val reporter: PlaybackReporter? = null,
+    /** 1-based audio track to select (menus' soundtrack/commentary choices); null = default. */
+    val audioTrack: Int? = null,
+    /** 1-based subtitle track to show, 0 = subtitles off; null = default. */
+    val subtitleTrack: Int? = null,
 )
 
 /**
@@ -41,6 +45,32 @@ fun buildPlayer(context: Context, headers: Map<String, String>): ExoPlayer {
     val renderers = DefaultRenderersFactory(context).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
     val http = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(false)
     return ExoPlayer.Builder(context, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(http)).build()
+}
+
+/**
+ * Track choices from a menu, as Media3 selection parameters: audio N = the Nth audio track of the file,
+ * subtitle N = the Nth subtitle track the player can show, 0 = subtitles off.
+ */
+@OptIn(UnstableApi::class)
+fun selectTracks(
+    params: androidx.media3.common.TrackSelectionParameters,
+    tracks: androidx.media3.common.Tracks,
+    audio: Int?,
+    subtitle: Int?,
+): androidx.media3.common.TrackSelectionParameters {
+    val b = params.buildUpon()
+    val audioGroups = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
+    if (audio != null && audio in 1..audioGroups.size) {
+        b.setOverrideForType(androidx.media3.common.TrackSelectionOverride(audioGroups[audio - 1].mediaTrackGroup, 0))
+    }
+    val textGroups = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT && it.isSupported }
+    when {
+        subtitle == 0 -> b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+        subtitle != null && subtitle in 1..textGroups.size ->
+            b.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(textGroups[subtitle - 1].mediaTrackGroup, 0))
+    }
+    return b.build()
 }
 
 class PlayerHandle(val player: ExoPlayer) {
@@ -85,6 +115,19 @@ fun VideoPlayer(
                     onEnded()
                 }
             }
+            private var tracksApplied = false
+
+            /** Apply the menu's track choices once the file's tracks are known. */
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                if (tracksApplied || tracks.groups.isEmpty()) return
+                tracksApplied = true
+                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack)
+                if (org.menustream.tv.BuildConfig.DEBUG) android.util.Log.d(
+                    "MenuStream",
+                    "tracks: audio=${request.audioTrack} subtitle=${request.subtitleTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
+                )
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) started = true
                 if (player.playbackState != Player.STATE_ENDED) report(if (isPlaying) "playing" else "paused")

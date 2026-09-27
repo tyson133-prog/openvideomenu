@@ -10,6 +10,10 @@ export interface PlayRequest {
   url?: string;
   /** Seconds. */
   start: number;
+  /** Level 2: 1-based audio track; undefined = player default. */
+  audio?: number;
+  /** Level 2: 1-based subtitle track, 0 = off; undefined = player default. */
+  subtitle?: number;
   label: string;
 }
 
@@ -101,8 +105,9 @@ export class Html5Playback implements PlaybackAdapter {
     });
   }
 
-  play({ url, start, label }: PlayRequest) {
+  play({ url, start, label, audio }: PlayRequest) {
     const v = this.video;
+    this.pendingAudio = audio;
     if (!url) {
       queueMicrotask(() => this.onError?.(`Can't find "${label}".`));
       return;
@@ -112,6 +117,7 @@ export class Html5Playback implements PlaybackAdapter {
     v.src = url;
     const seek = () => {
       if (start > 0) v.currentTime = start;
+      this.applyAudioTrack();
       void v.play().catch(() => {
         /* autoplay may need a gesture; controls are visible */
       });
@@ -119,6 +125,16 @@ export class Html5Playback implements PlaybackAdapter {
     if (v.readyState >= HTMLMediaElement.HAVE_METADATA) seek();
     else v.addEventListener("loadedmetadata", seek, { once: true });
     v.focus({ preventScroll: true });
+  }
+
+  private pendingAudio?: number;
+
+  /** Browsers expose audio tracks only in some engines (video.audioTracks); best effort elsewhere. */
+  private applyAudioTrack() {
+    const tracks = (this.video as HTMLVideoElement & { audioTracks?: { length: number; [i: number]: { enabled: boolean } } }).audioTracks;
+    const want = this.pendingAudio;
+    if (!tracks || want === undefined || want < 1 || want > tracks.length) return;
+    for (let i = 0; i < tracks.length; i++) tracks[i]!.enabled = i === want - 1;
   }
 
   stop(): number {

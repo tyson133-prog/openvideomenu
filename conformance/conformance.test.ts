@@ -26,7 +26,7 @@ interface Case {
   errors?: string[];
   warnings?: string[];
   manifest: unknown;
-  steps?: { event: NavEvent; expect: Partial<Pick<NavState, "mode" | "menu" | "focus" | "intro" | "buttonsReady">> & { effects?: Effect[] } }[];
+  steps?: { event: NavEvent; expect?: Partial<Pick<NavState, "mode" | "menu" | "focus" | "intro" | "buttonsReady">> & { effects?: Effect[] } }[];
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,7 +60,7 @@ describe.each(cases)("$file", ({ c }) => {
     it("navigation steps", () => {
       const manifest = validateManifest(c.manifest).manifest!;
       let state = initialState();
-      c.steps!.forEach(({ event, expect: want }, i) => {
+      c.steps!.forEach(({ event, expect: want = {} }, i) => {
         const result = step(manifest, state, event);
         state = result.state;
         const label = `step ${i} (${JSON.stringify(event)})`;

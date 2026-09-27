@@ -124,7 +124,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             when (msg) {
                 PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
                 is PageMessage.Play -> scope.launch {
-                    val request = vm.requestFor(open, msg.mediaId, msg.start)
+                    val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle)
                     if (request == null) web.playError("\"${msg.label}\" isn't in your Plex library.") else playing = request
                 }
                 PageMessage.Exit -> onExit()

@@ -1,0 +1,33 @@
+{
+  "description": "Invalid Level 2 variables: a non-integer starting value, set/audio referring to an undeclared variable, a subtitle below 0, audio below 1, and set in a fallback item.",
+  "level": 2,
+  "valid": false,
+  "schemaValid": false,
+  "errors": [
+    "/vars/half",
+    "/menus/main/buttons/0/action/var",
+    "/menus/main/buttons/1/action/audio/var",
+    "/menus/main/buttons/2/action/subtitle",
+    "/menus/main/buttons/2/action/audio",
+    "/fallback/0/items/0/action/type"
+  ],
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Bad Vars" },
+    "vars": { "audio": 1, "half": 0.5 },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "set", "var": "nope", "value": 1 } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "play", "media": "feature", "audio": { "var": "missing" } } },
+          { "id": "c", "rect": [0, 40, 10, 10], "action": { "type": "play", "media": "feature", "subtitle": -1, "audio": 0 } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Settings", "items": [{ "label": "Commentary", "action": { "type": "set", "var": "audio", "value": 2 } }] }]
+  }
+}

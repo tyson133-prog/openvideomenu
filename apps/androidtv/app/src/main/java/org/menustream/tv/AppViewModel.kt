@@ -457,7 +457,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * play, fall back to fetching the raw file as a download (lower priority; can be forbidden for
      * shared users). Transcoding comes later.
      */
-    private suspend fun playRequest(item: PlexItem, part: PlexPart, startSeconds: Double): PlayRequest? {
+    private suspend fun playRequest(item: PlexItem, part: PlexPart, startSeconds: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
         val plex = server ?: return null
         val session = java.util.UUID.randomUUID().toString()
         val mediaIndex = item.media.indexOfFirst { m -> m.parts.any { it.id == part.id } }.coerceAtLeast(0)
@@ -477,6 +477,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startSeconds = startSeconds,
             title = item.title,
             reporter = reporterFor(item, session),
+            audioTrack = audio,
+            subtitleTrack = subtitle,
         )
     }
 
@@ -495,9 +497,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Resolve a menu button's media to something the native player can play. */
-    suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double): PlayRequest? {
+    suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
         val (item, part) = open.media[mediaId] ?: return null
-        return playRequest(item, part, start)
+        return playRequest(item, part, start, audio, subtitle)
     }
 
     fun imageUrl(path: String?, width: Int, height: Int): String? = path?.let { server?.imageUrl(it, width, height) }

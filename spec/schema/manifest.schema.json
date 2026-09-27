@@ -53,6 +53,13 @@
       "items": {
         "$ref": "#/$defs/fallbackGroup"
       }
+    },
+    "vars": {
+      "description": "Level 2: session variables with starting values.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
     }
   },
   "dependentRequired": {
@@ -398,6 +405,48 @@
         },
         "start": {
           "$ref": "#/$defs/seconds"
+        },
+        "audio": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "object",
+              "required": [
+                "var"
+              ],
+              "properties": {
+                "var": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ],
+          "description": "Level 2: 1-based audio track, or {var}."
+        },
+        "subtitle": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "object",
+              "required": [
+                "var"
+              ],
+              "properties": {
+                "var": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ],
+          "description": "Level 2: 1-based subtitle track (0 = off), or {var}."
         }
       }
     },
@@ -413,7 +462,8 @@
               "enum": [
                 "goto",
                 "back",
-                "resume"
+                "resume",
+                "set"
               ]
             }
           }
@@ -432,7 +482,8 @@
             "playAll",
             "goto",
             "back",
-            "resume"
+            "resume",
+            "set"
           ]
         }
       },
@@ -506,6 +557,33 @@
               "transition": {
                 "$ref": "#/$defs/path",
                 "description": "v0.2: clip played before the menu opens."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "set"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "var",
+              "value"
+            ],
+            "properties": {
+              "var": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "integer"
+              },
+              "then": {
+                "$ref": "#/$defs/action"
               }
             }
           }

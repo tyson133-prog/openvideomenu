@@ -17,7 +17,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "label", "kind", "duration", "chapters"],
@@ -33,8 +33,9 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "after"],
+  play: ["type", "media", "chapter", "start", "after", "audio", "subtitle"],
   playAll: ["type", "items", "after"],
+  set: ["type", "var", "value", "then"],
   goto: ["type", "menu", "button", "transition"],
   back: ["type"],
   resume: ["type"],
@@ -98,6 +99,7 @@ class Validator {
     this.title(data.title);
     if (data.source !== undefined) this.source(data.source);
 
+    this.vars(data.vars);
     const mediaIds = this.media(data.media);
     const menus = this.menus(data.menus, mediaIds);
 
@@ -111,6 +113,28 @@ class Validator {
     if (data.firstPlay !== undefined) this.action(data.firstPlay, "/firstPlay", mediaIds, menus);
 
     this.fallback(data.fallback, mediaIds, menus);
+  }
+
+  private varNames = new Set<string>();
+
+  private vars(value: unknown) {
+    if (value === undefined) return;
+    if (!isObject(value)) {
+      this.error("/vars", "Must be an object of name → integer.");
+      return;
+    }
+    for (const [name, v] of Object.entries(value)) {
+      if (!Number.isInteger(v)) this.error(`/vars/${name}`, "Must be an integer.");
+      this.varNames.add(name);
+    }
+  }
+
+  private varOrNumber(value: unknown, path: string, min: number) {
+    if (isObject(value)) {
+      if (!isNonEmptyString(value.var) || !this.varNames.has(value.var)) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars.`);
+    } else if (!Number.isInteger(value) || (value as number) < min) {
+      this.error(path, `Must be an integer ≥ ${min}, or {"var": name}.`);
+    }
   }
 
   private version(value: unknown) {
@@ -367,6 +391,8 @@ class Validator {
     }
     if (value.start !== undefined && !(isFiniteNumber(value.start) && value.start >= 0))
       this.error(`${path}/start`, "Must be a non-negative number of seconds.");
+    if (value.audio !== undefined) this.varOrNumber(value.audio, `${path}/audio`, 1);
+    if (value.subtitle !== undefined) this.varOrNumber(value.subtitle, `${path}/subtitle`, 0);
   }
 
   action(value: unknown, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>) {
@@ -391,6 +417,11 @@ class Validator {
             if (!isObject(item)) this.error(`${path}/items/${i}`, "Must be {media, chapter?, start?}.");
             else this.playItem(item, `${path}/items/${i}`, mediaIds);
           });
+        break;
+      case "set":
+        if (!isNonEmptyString(value.var) || !this.varNames.has(value.var)) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars.`);
+        if (!Number.isInteger(value.value)) this.error(`${path}/value`, "Must be an integer.");
+        if (value.then !== undefined) this.action(value.then, `${path}/then`, mediaIds, menus);
         break;
       case "goto": {
         if (!isNonEmptyString(value.menu) || !menus.has(value.menu)) {
@@ -441,7 +472,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

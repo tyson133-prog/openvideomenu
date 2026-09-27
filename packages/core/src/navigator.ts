@@ -29,7 +29,7 @@ export type NavEvent =
 
 export type Effect =
   /** Start playing a media item from `start` seconds. */
-  | { type: "play"; media: string; start: number }
+  | { type: "play"; media: string; start: number; /** Level 2 */ audio?: number; subtitle?: number }
   /** Briefly show the button's activated state. */
   | { type: "activated"; menu: string; button: string }
   /** "back" was pressed at the top of the menu history; the host may close the player. */
@@ -63,6 +63,8 @@ export interface NavState {
   playing?: { item: PlayItem; queue: PlayItem[]; after?: Action; returnTo?: MenuPosition };
   /** Where the viewer stopped last, for "resume". */
   lastStop?: { media: string; position: number };
+  /** Level 2: variable values for this session (from manifest.vars, changed by "set"). */
+  vars: Record<string, number>;
 }
 
 export interface StepResult {
@@ -70,7 +72,7 @@ export interface StepResult {
   effects: Effect[];
 }
 
-export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true });
+export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true, vars: {} });
 
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
   const effects: Effect[] = [];
@@ -80,6 +82,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "start":
       s.history = [];
       s.playing = undefined;
+      s.vars = { ...(manifest.vars ?? {}) };
       if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
       else openRoot(manifest, s);
       break;
@@ -115,7 +118,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       if (s.playing.queue.length > 0) {
         const [next, ...rest] = s.playing.queue as [PlayItem, ...PlayItem[]];
         s.playing = { ...s.playing, item: next, queue: rest };
-        effects.push(playEffect(manifest, next));
+        effects.push(playEffect(manifest, next, s.vars));
       } else {
         finishPlayback(manifest, s, effects, { completed: true });
       }
@@ -261,6 +264,10 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
     case "resume":
       if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects);
       break;
+    case "set":
+      s.vars = { ...s.vars, [action.var]: action.value };
+      if (action.then) run(manifest, s, action.then, effects, opts);
+      break;
   }
 }
 
@@ -268,7 +275,7 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
   s.playing = { item: first, queue, after, returnTo: currentPosition(s) };
   s.mode = "playing";
-  effects.push(playEffect(manifest, first));
+  effects.push(playEffect(manifest, first, s.vars));
 }
 
 function finishPlayback(
@@ -294,8 +301,17 @@ function finishPlayback(
   if ("completed" in how && playing.after) run(manifest, s, playing.after, effects, { pushHistory: true });
 }
 
-function playEffect(manifest: Manifest, item: PlayItem): Effect {
-  return { type: "play", media: item.media, start: startTime(manifest, item) };
+function playEffect(manifest: Manifest, item: PlayItem, vars: Record<string, number>): Effect {
+  const value = (v: PlayItem["audio"]) => (v === undefined ? undefined : typeof v === "number" ? v : vars[v.var]);
+  const audio = value(item.audio);
+  const subtitle = value(item.subtitle);
+  return {
+    type: "play",
+    media: item.media,
+    start: startTime(manifest, item),
+    ...(audio !== undefined ? { audio } : {}),
+    ...(subtitle !== undefined ? { subtitle } : {}),
+  };
 }
 
 /** Start offset in seconds for a play item (chapter wins over start). */

@@ -199,7 +199,7 @@ export class MenuPlayer {
   private perform(effect: Effect) {
     switch (effect.type) {
       case "play":
-        this.playMedia(effect.media, effect.start);
+        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle);
         break;
       case "exit":
         if (this.options.onExit) this.options.onExit();
@@ -216,7 +216,7 @@ export class MenuPlayer {
     }
   }
 
-  private playMedia(mediaId: string, start: number) {
+  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number) {
     const { manifest, manifestUrl, resolvers } = this.options;
     const media = manifest.media[mediaId]!;
     const request: PlayRequest = {
@@ -225,6 +225,8 @@ export class MenuPlayer {
       url: resolveMedia(media.ref, manifestUrl, resolvers),
       start,
       label: media.label ?? manifest.title.name,
+      ...(audio !== undefined ? { audio } : {}),
+      ...(subtitle !== undefined ? { subtitle } : {}),
     };
     this.playback.play(request);
   }
