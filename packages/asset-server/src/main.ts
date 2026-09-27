@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { hostname } from "node:os";
 import { FORMAT_NAME } from "@menustream/core";
-import { NoAuth, PlexTokenCheck, type TokenCheck } from "./auth.js";
+import { AnyOf, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type TokenCheck } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { advertise } from "./discovery.js";
 import { createAssetServer } from "./server.js";
@@ -13,10 +13,13 @@ Read-only. Serves only manifests and the menu art they name, never your media.
 
 Usage:
   menustream-asset-server --media <folder> [--media <folder> ...] --plex-url <url> [options]
+  menustream-asset-server --media <folder> [--media <folder> ...] --jellyfin-url <url> [options]
 
 Options (or environment variables):
   --media <folder>     MEDIA_ROOTS  (comma-separated)   Media folders to scan (mount them read-only)
-  --plex-url <url>     PLEX_URL     e.g. http://192.168.1.20:32400   Tokens are checked against this server
+  --plex-url <url>     PLEX_URL     e.g. http://192.168.1.20:32400   Plex sign-ins are checked against this server
+  --jellyfin-url <url> JELLYFIN_URL e.g. http://192.168.1.20:8096    Jellyfin sign-ins are checked against this server
+                       (give one or both)
   --port <n>           PORT         default 8790
   --name <text>        SERVER_NAME  name shown in TV apps (default: this machine's name)
   --no-discovery       DISCOVERY=off   don't announce on the network (mDNS)
@@ -33,6 +36,7 @@ function options(argv: string[]) {
     help: flag("--help") || flag("-h"),
     media,
     plexUrl: values("--plex-url")[0] ?? env.PLEX_URL,
+    jellyfinUrl: values("--jellyfin-url")[0] ?? env.JELLYFIN_URL,
     port: Number(values("--port")[0] ?? env.PORT ?? 8790),
     name: values("--name")[0] ?? env.SERVER_NAME ?? `${FORMAT_NAME} on ${hostname()}`,
     discovery: !flag("--no-discovery") && env.DISCOVERY !== "off",
@@ -51,14 +55,27 @@ async function main() {
     auth = new NoAuth();
     console.warn("WARNING: token checks are off (--no-auth). Use this only for local testing.");
   } else {
-    if (!o.plexUrl) throw new Error(`--plex-url (or PLEX_URL) is required so tokens can be checked.\n\n${USAGE}`);
-    const plex = new PlexTokenCheck(o.plexUrl);
-    try {
-      console.log(`Plex server id: ${await plex.serverId()}`);
-    } catch (e) {
-      console.warn(`WARNING: couldn't reach Plex yet (${(e as Error).message}); will retry on each request.`);
+    if (!o.plexUrl && !o.jellyfinUrl) throw new Error(`--plex-url or --jellyfin-url is required so sign-ins can be checked.\n\n${USAGE}`);
+    const checks: TokenCheck[] = [];
+    if (o.plexUrl) {
+      const plex = new PlexTokenCheck(o.plexUrl);
+      try {
+        console.log(`Plex server id: ${await plex.serverId()}`);
+      } catch (e) {
+        console.warn(`WARNING: couldn't reach Plex yet (${(e as Error).message}); will retry on each request.`);
+      }
+      checks.push(plex);
     }
-    auth = plex;
+    if (o.jellyfinUrl) {
+      try {
+        const info = (await (await fetch(new URL("/System/Info/Public", o.jellyfinUrl))).json()) as { ServerName?: string; Version?: string };
+        console.log(`Jellyfin server: ${info.ServerName} (${info.Version})`);
+      } catch (e) {
+        console.warn(`WARNING: couldn't reach Jellyfin yet (${(e as Error).message}); will retry on each request.`);
+      }
+      checks.push(new JellyfinTokenCheck(o.jellyfinUrl));
+    }
+    auth = checks.length === 1 ? checks[0]! : new AnyOf(checks);
   }
 
   // The first scan runs in the background: the server answers health checks at once, and index

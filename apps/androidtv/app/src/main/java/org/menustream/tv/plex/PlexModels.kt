@@ -113,12 +113,6 @@ data class DecisionContainer(
     val explanation: String get() = listOfNotNull(mdeDecisionText, directPlayDecisionText, generalDecisionText).joinToString("; ")
 }
 
-/** A specific file of a Plex item: what a menu button actually plays. */
-data class PlayablePart(val item: PlexItem, val part: PlexPart)
-
-/** Every file of [items], keyed by its path, for matching against manifest media paths. */
-fun filesOf(items: List<PlexItem>): List<Pair<String, PlayablePart>> =
-    items.flatMap { item -> item.allParts.mapNotNull { p -> p.file?.let { it to PlayablePart(item, p) } } }
 
 
 @Serializable

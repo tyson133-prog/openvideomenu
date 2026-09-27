@@ -23,10 +23,36 @@ export function isLocalAddress(address: string | undefined): boolean {
   );
 }
 
+/** Who is asking: a sign-in from a Plex or Jellyfin server, as sent by a TV app. */
+export interface Credential {
+  kind: "plex" | "jellyfin";
+  token: string;
+}
+
 export interface TokenCheck {
-  /** Resolves true when the token may read this server's menus. */
-  allows(token: string | undefined): Promise<boolean>;
+  /** Resolves true when this sign-in may read this server's menus. */
+  allows(credential: Credential | undefined): Promise<boolean>;
   readonly description: string;
+}
+
+/** Remembers answers in memory by token hash (allowed: 10 min, refused: 30 s). Nothing is stored. */
+class Verdicts {
+  private readonly cache = new Map<string, { ok: boolean; until: number }>();
+  constructor(private readonly now: () => number) {}
+
+  async get(token: string, check: () => Promise<boolean>): Promise<boolean> {
+    const key = createHash("sha256").update(token).digest("hex");
+    const hit = this.cache.get(key);
+    if (hit && hit.until > this.now()) return hit.ok;
+    let ok = false;
+    try {
+      ok = await check();
+    } catch {
+      ok = false; // server unreachable: refuse, but only cache briefly
+    }
+    this.cache.set(key, { ok, until: this.now() + (ok ? 10 * 60_000 : 30_000) });
+    return ok;
+  }
 }
 
 /** For local testing only: no token needed. */
@@ -50,7 +76,7 @@ type Fetch = typeof fetch;
 export class PlexTokenCheck implements TokenCheck {
   readonly description: string;
   private machineId?: string;
-  private readonly cache = new Map<string, { ok: boolean; until: number }>();
+  private readonly verdicts: Verdicts;
   private readonly clientId = `menustream-asset-server-${randomUUID()}`;
 
   constructor(
@@ -59,6 +85,7 @@ export class PlexTokenCheck implements TokenCheck {
     private readonly now: () => number = Date.now,
   ) {
     this.description = `Plex token (server ${plexUrl})`;
+    this.verdicts = new Verdicts(now);
   }
 
   private headers(token?: string): Record<string, string> {
@@ -83,24 +110,60 @@ export class PlexTokenCheck implements TokenCheck {
     return id;
   }
 
-  async allows(token: string | undefined): Promise<boolean> {
-    if (!token) return false;
-    const key = createHash("sha256").update(token).digest("hex");
-    const hit = this.cache.get(key);
-    if (hit && hit.until > this.now()) return hit.ok;
-
-    let ok = false;
-    try {
+  async allows(credential: Credential | undefined): Promise<boolean> {
+    if (credential?.kind !== "plex" || !credential.token) return false;
+    const token = credential.token;
+    return this.verdicts.get(token, async () => {
       const machineId = await this.serverId();
       const res = await this.fetchImpl("https://plex.tv/api/v2/resources?includeHttps=1", { headers: this.headers(token) });
-      if (res.ok) {
-        const resources = (await res.json()) as { clientIdentifier?: string; provides?: string }[];
-        ok = Array.isArray(resources) && resources.some((r) => r.clientIdentifier === machineId);
-      }
-    } catch {
-      ok = false; // plex.tv or the server unreachable: refuse, but only cache briefly
-    }
-    this.cache.set(key, { ok, until: this.now() + (ok ? 10 * 60_000 : 30_000) });
-    return ok;
+      if (!res.ok) return false;
+      const resources = (await res.json()) as { clientIdentifier?: string; provides?: string }[];
+      return Array.isArray(resources) && resources.some((r) => r.clientIdentifier === machineId);
+    });
+  }
+}
+
+/**
+ * "If you can use this Jellyfin server, you can read its menus." Jellyfin tokens are issued by the
+ * server itself, so the check is simply whether the configured server accepts the token: it answers
+ * GET /Users/Me with the signed-in user (Jellyfin 12 needs the MediaBrowser Authorization header).
+ * Results are cached in memory by token hash; nothing is stored.
+ */
+export class JellyfinTokenCheck implements TokenCheck {
+  readonly description: string;
+  private readonly verdicts: Verdicts;
+  private readonly deviceId = `menustream-asset-server-${randomUUID()}`;
+
+  constructor(
+    private readonly jellyfinUrl: string,
+    private readonly fetchImpl: Fetch = fetch,
+    now: () => number = Date.now,
+  ) {
+    this.description = `Jellyfin token (server ${jellyfinUrl})`;
+    this.verdicts = new Verdicts(now);
+  }
+
+  async allows(credential: Credential | undefined): Promise<boolean> {
+    if (credential?.kind !== "jellyfin" || !credential.token) return false;
+    const token = credential.token.replace(/"/g, "");
+    return this.verdicts.get(token, async () => {
+      const auth = `MediaBrowser Client="MenuStream Asset Server", Device="asset-server", DeviceId="${this.deviceId}", Version="0.1", Token="${token}"`;
+      const res = await this.fetchImpl(new URL("/Users/Me", this.jellyfinUrl), { headers: { Authorization: auth, Accept: "application/json" } });
+      if (!res.ok) return false;
+      const user = (await res.json()) as { Id?: string };
+      return typeof user.Id === "string" && user.Id.length > 0;
+    });
+  }
+}
+
+/** Accepts a sign-in if the check for its kind of server does (e.g. both Plex and Jellyfin configured). */
+export class AnyOf implements TokenCheck {
+  readonly description: string;
+  constructor(private readonly checks: TokenCheck[]) {
+    this.description = checks.map((c) => c.description).join(" or ");
+  }
+  async allows(credential: Credential | undefined): Promise<boolean> {
+    for (const c of this.checks) if (await c.allows(credential)) return true;
+    return false;
   }
 }

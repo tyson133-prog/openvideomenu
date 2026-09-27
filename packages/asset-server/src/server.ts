@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { FORMAT_NAME, FORMAT_VERSION } from "@menustream/core";
-import { isLocalAddress, type TokenCheck } from "./auth.js";
+import { isLocalAddress, type Credential, type TokenCheck } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { sendFile } from "./files.js";
 
@@ -19,12 +19,17 @@ const json = (res: ServerResponse, status: number, body: unknown) =>
     .writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" })
     .end(JSON.stringify(body));
 
-/** The token comes in the X-Plex-Token header (or a Bearer Authorization header). Never in URLs. */
-function tokenOf(req: IncomingMessage): string | undefined {
+/**
+ * The viewer's sign-in, from headers only (never URLs): a Plex token in X-Plex-Token (or a Bearer
+ * Authorization header), or a Jellyfin token in its own `Authorization: MediaBrowser ..., Token="..."`.
+ */
+export function credentialOf(req: IncomingMessage): Credential | undefined {
   const plex = req.headers["x-plex-token"];
-  if (typeof plex === "string" && plex) return plex;
+  if (typeof plex === "string" && plex) return { kind: "plex", token: plex };
   const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
+  if (auth?.startsWith("Bearer ")) return { kind: "plex", token: auth.slice(7) };
+  const jellyfin = auth?.startsWith("MediaBrowser ") ? /\bToken="([^"]+)"/.exec(auth) : null;
+  if (jellyfin) return { kind: "jellyfin", token: jellyfin[1]! };
   return undefined;
 }
 
@@ -63,7 +68,7 @@ export function createAssetServer({ catalog, auth, allowRemote = false, log = ()
         auth: auth.description,
       });
 
-    if (!(await auth.allows(tokenOf(req)))) return json(res, 401, { error: "A valid token for this media server is required." });
+    if (!(await auth.allows(credentialOf(req)))) return json(res, 401, { error: "A valid token for this media server is required." });
 
     if (path === "/v1/index") {
       await (url.searchParams.has("refresh") ? catalog.scan() : catalog.ready());

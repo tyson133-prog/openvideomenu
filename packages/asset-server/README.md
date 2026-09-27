@@ -11,7 +11,7 @@ A small, **read-only** server that runs next to your Plex server and hands menu 
 - **Never serves your media.** Films, episodes and extras are refused. Any file no manifest names as menu art can't be reached at all.
 - **Never writes anything.** Mount your media read-only.
 - **Home network only.** It answers only local and VPN addresses: 10.x, 172.16–31.x, 192.168.x, and 100.64.x (Tailscale).
-- **Checks your Plex login.** The TV app sends its Plex token. The server asks plex.tv whether that token can access *your* Plex server, and caches the answer briefly in memory. It stores no credentials.
+- **Checks your Plex or Jellyfin login.** The TV app sends its sign-in. For Plex, the server asks plex.tv whether that token can access *your* Plex server. For Jellyfin, it asks your Jellyfin server whether it accepts the token (`GET /Users/Me`). Answers are cached briefly in memory. It stores no credentials.
 - **Announces itself** on the network (`_menustream._tcp`), so the TV app finds it without typing an address.
 
 ## Run with Docker (Linux, Unraid, Synology)
@@ -54,7 +54,8 @@ node packages/asset-server/dist/main.js --media "D:\Movies" --media "D:\TV" --pl
 | Flag | Environment | Default | |
 |---|---|---|---|
 | `--media <folder>` (repeatable) | `MEDIA_ROOTS` (comma-separated) | — | Media folders to scan |
-| `--plex-url <url>` | `PLEX_URL` | — | Your Plex server; tokens are checked against it |
+| `--plex-url <url>` | `PLEX_URL` | — | Your Plex server; Plex sign-ins are checked against it |
+| `--jellyfin-url <url>` | `JELLYFIN_URL` | — | Your Jellyfin server; Jellyfin sign-ins are checked against it. Give either or both. |
 | `--port <n>` | `PORT` | 8790 | |
 | `--name <text>` | `SERVER_NAME` | "MenuStream on &lt;host&gt;" | Name shown in the TV app |
 | `--no-discovery` | `DISCOVERY=off` | on | Don't announce on the network |
@@ -69,4 +70,4 @@ node packages/asset-server/dist/main.js --media "D:\Movies" --media "D:\TV" --pl
 | `GET /v1/index[?refresh]` | token | Every manifest: path, title, validity, the media paths it references (relative to the media folder), and its menu assets |
 | `GET /v1/files/<root>/<path>` | token | A manifest or one of its menu assets (supports Range requests) |
 
-The token goes in the `X-Plex-Token` header (or `Authorization: Bearer`), never in the URL.
+The sign-in goes in a header, never in the URL: a Plex token in `X-Plex-Token` (or `Authorization: Bearer`), or a Jellyfin token in Jellyfin's own `Authorization: MediaBrowser ..., Token="..."` header.

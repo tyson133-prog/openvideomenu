@@ -92,6 +92,8 @@ fun BrowseScreen(vm: AppViewModel) {
                 }
             }
             Button(onClick = { editingServer = !editingServer }) { Text(if (editingServer) "Close" else "Menu server") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { vm.signOut() }) { Text("Switch server") }
         }
         Text(source.status, style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
         if (editingServer) AssetServerEditor(source.url) { editingServer = false; vm.useAssetServer(it) }
@@ -110,7 +112,7 @@ fun BrowseScreen(vm: AppViewModel) {
                     if (tab is BrowseTab.Discs && tabRows != null && tabRows.none { it.title == "Disc Menus" }) {
                         item { Text("No disc menus yet. Put a .menustream.json manifest next to a title.", modifier = Modifier.padding(16.dp)) }
                     }
-                    if (tab is BrowseTab.Library && letterState != null) {
+                    if (tab is BrowseTab.Libraries && letterState != null) {
                         item(key = "letters") {
                             Column {
                                 Text("Browse A–Z", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
@@ -154,18 +156,18 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
     val (title, subtitle, thumb, hasMenu) = when (tile) {
         is Tile.Media -> {
             val i = tile.item
-            val isEpisode = i.type == "episode"
+            val isEpisode = i.type == org.menustream.tv.media.ItemType.EPISODE
             Quad(
-                if (isEpisode) i.grandparentTitle ?: i.title else i.title,
-                if (isEpisode) "S${i.parentIndex ?: 0} · E${i.index ?: 0}  ${i.title}" else i.year?.toString() ?: "",
-                if (isEpisode) i.grandparentThumb ?: i.thumb else i.thumb,
+                if (isEpisode) i.showTitle ?: i.title else i.title,
+                if (isEpisode) "S${i.seasonNumber ?: 0} · E${i.episodeNumber ?: 0}  ${i.title}" else i.year?.toString() ?: "",
+                if (isEpisode) i.showImage ?: i.image else i.image,
                 tile.menu != null,
             )
         }
         is Tile.Disc -> Quad(
             tile.entry.title?.name ?: "Disc",
             if (tile.pending) tile.entry.title?.year?.toString() ?: "" else discLabel(tile),
-            tile.show?.thumb,
+            tile.show?.image,
             true,
         )
     }
@@ -269,8 +271,8 @@ fun ShowScreen(vm: AppViewModel, state: ShowState) {
                 Column {
                     Text("Seasons", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.seasons, key = { it.ratingKey }) { season ->
-                            val isSelected = season.ratingKey == state.season?.ratingKey
+                        items(state.seasons, key = { it.id }) { season ->
+                            val isSelected = season.id == state.season?.id
                             Button(onClick = { vm.selectSeason(season) }) {
                                 Text(season.title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) Gold else Color.Unspecified)
                             }
@@ -278,14 +280,14 @@ fun ShowScreen(vm: AppViewModel, state: ShowState) {
                     }
                 }
             }
-            items(state.episodes, key = { it.ratingKey }) { ep ->
+            items(state.episodes, key = { it.id }) { ep ->
                 ListItem(
                     selected = false,
-                    onClick = { vm.play(ep, (ep.viewOffset ?: 0) / 1000.0) },
-                    headlineContent = { Text("${ep.index ?: ""}. ${ep.title}") },
+                    onClick = { vm.play(ep, ep.resumeSeconds) },
+                    headlineContent = { Text("${ep.episodeNumber ?: ""}. ${ep.title}") },
                     supportingContent = {
-                        val minutes = (ep.duration ?: 0) / 60_000
-                        val watched = if ((ep.viewCount ?: 0) > 0) " · watched" else if ((ep.viewOffset ?: 0) > 0) " · in progress" else ""
+                        val minutes = ((ep.durationSeconds ?: 0.0) / 60).toInt()
+                        val watched = if (ep.watched) " · watched" else if (ep.resumeSeconds > 0) " · in progress" else ""
                         Text("$minutes min$watched", color = Color.Gray)
                     },
                     modifier = Modifier.fillMaxWidth(),

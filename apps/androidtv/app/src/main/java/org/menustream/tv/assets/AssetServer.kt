@@ -42,12 +42,20 @@ data class CatalogTitle(val name: String, val year: Int? = null)
 @Serializable
 data class CatalogMedia(val id: String, val kind: String? = null, val label: String? = null, val ref: JsonElement, val path: String? = null)
 
-/** Talks to the MenuStream asset server. The Plex token proves this viewer may use the server. */
-class AssetServerClient(val baseUrl: String, private val token: String, private val http: OkHttpClient = Http.client) {
+/**
+ * Talks to the MenuStream asset server. [auth] (the viewer's Plex or Jellyfin sign-in, see
+ * [org.menustream.tv.media.MediaSource.assetServerAuth]) proves this viewer may use the server.
+ */
+class AssetServerClient(
+    val baseUrl: String,
+    private val auth: Map<String, String>,
+    private val kind: String,
+    private val http: OkHttpClient = Http.client,
+) {
 
     suspend fun index(refresh: Boolean = false): CatalogIndex = withContext(Dispatchers.IO) {
         get("/v1/index" + if (refresh) "?refresh" else "").use { res ->
-            if (res.code == 401) throw IOException("The asset server didn't accept this Plex sign-in.")
+            if (res.code == 401) throw IOException("The asset server didn't accept this $kind sign-in.")
             if (!res.isSuccessful) throw IOException("Asset server answered HTTP ${res.code}")
             json.decodeFromString<CatalogIndex>(res.body.string())
         }
@@ -55,7 +63,7 @@ class AssetServerClient(val baseUrl: String, private val token: String, private 
 
     /** Raw GET used by the menu web view's proxy (keeps the token out of the page). */
     fun get(path: String, range: String? = null): Response {
-        val req = Request.Builder().url(baseUrl.trimEnd('/') + path).header("X-Plex-Token", token)
+        val req = Request.Builder().url(baseUrl.trimEnd('/') + path).apply { auth.forEach { (k, v) -> header(k, v) } }
         if (range != null) req.header("Range", range)
         return http.newCall(req.build()).execute()
     }

@@ -214,8 +214,8 @@ class PlexServer(
      * give a decision: it serves the raw file at download priority, and servers can forbid it for
      * shared users (403).
      */
-    fun partUrl(part: PlexPart, download: Boolean = false): String =
-        if (download) url(part.key, "download" to "1") else url(part.key)
+    fun partUrl(partKey: String, download: Boolean = false): String =
+        if (download) url(partKey, "download" to "1") else url(partKey)
 
     /** Headers needed to fetch [partUrl] and images. */
     fun authHeaders(): Map<String, String> = identity.headers(token)

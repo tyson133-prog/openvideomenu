@@ -39,8 +39,21 @@ class Settings(context: Context) {
         get() = prefs.getString("lastServer", null)?.let { runCatching { org.menustream.tv.net.json.decodeFromString(LastServer.serializer(), Secrets.decrypt(it)) }.getOrNull() }
         set(value) = prefs.edit().putString("lastServer", value?.let { Secrets.encrypt(org.menustream.tv.net.json.encodeToString(LastServer.serializer(), it)) }).apply()
 
-    fun signOut() = prefs.edit().remove("plexToken").remove("serverId").remove("lastServer").apply()
+    /** Which kind of server this TV signed in to: "plex" or "jellyfin"; null = not chosen yet. */
+    var sourceKind: String?
+        get() = prefs.getString("sourceKind", null)
+        set(value) = prefs.edit().putString("sourceKind", value).apply()
+
+    /** The Jellyfin server and sign-in. Stored encrypted (it holds a token). */
+    var jellyfin: JellyfinLogin?
+        get() = prefs.getString("jellyfin", null)?.let { runCatching { org.menustream.tv.net.json.decodeFromString(JellyfinLogin.serializer(), Secrets.decrypt(it)) }.getOrNull() }
+        set(value) = prefs.edit().putString("jellyfin", value?.let { Secrets.encrypt(org.menustream.tv.net.json.encodeToString(JellyfinLogin.serializer(), it)) }).apply()
+
+    fun signOut() = prefs.edit().remove("plexToken").remove("serverId").remove("lastServer").remove("jellyfin").remove("sourceKind").apply()
 }
+
+@kotlinx.serialization.Serializable
+data class JellyfinLogin(val url: String, val serverId: String, val name: String, val userId: String, val token: String)
 
 @kotlinx.serialization.Serializable
 data class LastServer(val name: String, val machineId: String, val url: String, val token: String)

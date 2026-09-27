@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -109,6 +110,110 @@ fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit
     }
 }
 
+/** First run: which kind of media server to use. */
+@Composable
+fun ChooseSourceScreen(onChoose: (String) -> Unit) = Centered {
+    Text("Where are your movies?", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(12.dp))
+    Text("MenuStream plays titles from your media server and adds their disc menus.", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+    Spacer(Modifier.height(32.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        val focus = remember { FocusRequester() }
+        Button(onClick = { onChoose("plex") }, modifier = Modifier.width(240.dp).focusRequester(focus)) { Text("Plex") }
+        Button(onClick = { onChoose("jellyfin") }, modifier = Modifier.width(240.dp)) { Text("Jellyfin") }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+/** Jellyfin servers found on the network, or type an address. */
+@Composable
+fun FindJellyfinScreen(
+    servers: List<org.menustream.tv.jellyfin.FoundJellyfin>,
+    searching: Boolean,
+    error: String?,
+    onPick: (String) -> Unit,
+    onSearch: () -> Unit,
+    onBack: () -> Unit,
+) = Centered {
+    Text("Choose your Jellyfin server", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(16.dp))
+    if (error != null) {
+        Text(error, style = MaterialTheme.typography.titleMedium, color = Gold)
+        Spacer(Modifier.height(12.dp))
+    }
+    val first = remember { FocusRequester() }
+    when {
+        searching -> Text("Looking on your network…", style = MaterialTheme.typography.titleMedium)
+        servers.isEmpty() -> Text("No Jellyfin server answered on your network. Type its address below.", style = MaterialTheme.typography.titleMedium)
+        else -> servers.forEachIndexed { i, s ->
+            Button(onClick = { onPick(s.url) }, modifier = Modifier.padding(6.dp).width(520.dp).let { if (i == 0) it.focusRequester(first) else it }) {
+                Text("${s.name}  ·  ${s.url.removePrefix("http://")}")
+            }
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+    var address by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        BasicTextField(
+            value = address,
+            onValueChange = { address = it },
+            singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
+            // The on-screen keyboard's ✓ connects straight away.
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (address.text.isNotBlank()) onPick(address.text) }),
+            decorationBox = { inner ->
+                Box(Modifier.width(360.dp).background(Color(0xFF333333), RoundedCornerShape(6.dp)).padding(10.dp)) {
+                    if (address.text.isEmpty()) Text("e.g. 192.168.1.20:8096", color = Color.Gray)
+                    inner()
+                }
+            },
+            modifier = (if (servers.isEmpty() && !searching) Modifier.focusRequester(first) else Modifier)
+                // On a remote, right/down at the end of the text moves on to the buttons instead of
+                // being swallowed by the text cursor.
+                .onPreviewKeyEvent { e ->
+                    val atEnd = address.selection.collapsed && address.selection.end == address.text.length
+                    val key = e.nativeKeyEvent.keyCode
+                    if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN && atEnd &&
+                        (key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT || key == android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                    ) {
+                        focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+                    } else {
+                        false
+                    }
+                },
+        )
+        Button(onClick = { if (address.text.isNotBlank()) onPick(address.text) }) { Text("Connect") }
+        Button(onClick = onSearch) { Text("Search again") }
+        Button(onClick = onBack) { Text("Back") }
+    }
+    LaunchedEffect(searching, servers.size) { if (!searching) runCatching { first.requestFocus() } }
+}
+
+/** Jellyfin Quick Connect: approve this code in another Jellyfin app. */
+@Composable
+fun QuickConnectScreen(server: String, code: String?, error: String?, onBack: () -> Unit) = Centered {
+    Text("Sign in to $server", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(32.dp))
+    when {
+        error != null -> {
+            Text(error, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(16.dp))
+        }
+        code != null -> {
+            Text("In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+            Text(code, style = TextStyle(fontSize = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = 12.sp, color = Color.White))
+            Spacer(Modifier.height(16.dp))
+        }
+        else -> Text("Connecting…", style = MaterialTheme.typography.titleMedium)
+    }
+    val focus = remember { FocusRequester() }
+    Button(onClick = onBack, modifier = Modifier.focusRequester(focus)) { Text("Back") }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
 /** A title's disc menu, with native playback layered on top when a button plays something. */
 @Composable
 fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
@@ -125,7 +230,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
                 is PageMessage.Play -> scope.launch {
                     val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle)
-                    if (request == null) web.playError("\"${msg.label}\" isn't in your Plex library.") else playing = request
+                    if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else playing = request
                 }
                 PageMessage.Exit -> onExit()
                 is PageMessage.Error -> failure = msg.message
@@ -230,7 +335,7 @@ fun NetworkPermissionScreen(onAllow: () -> Unit) = Centered {
     Text("Allow access to your home network", style = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(16.dp))
     Text(
-        "MenuStream needs it to reach your Plex server and the menu server on your network. It connects to nothing else there.",
+        "MenuStream needs it to reach your Plex or Jellyfin server and the menu server on your network. It connects to nothing else there.",
         style = MaterialTheme.typography.titleMedium,
     )
     Spacer(Modifier.height(24.dp))

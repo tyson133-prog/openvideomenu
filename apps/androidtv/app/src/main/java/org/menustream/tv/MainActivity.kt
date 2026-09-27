@@ -98,7 +98,21 @@ fun App(vm: AppViewModel) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (val s = screen) {
                 is Screen.Busy -> BusyScreen(s.message)
-                is Screen.SignIn -> SignInScreen(s.code, s.error, vm::signIn)
+                Screen.ChooseSource -> org.menustream.tv.ui.ChooseSourceScreen(vm::choose)
+                is Screen.SignIn -> {
+                    androidx.activity.compose.BackHandler { vm.signOut() }
+                    SignInScreen(s.code, s.error, vm::signIn)
+                }
+                is Screen.FindJellyfin -> org.menustream.tv.ui.FindJellyfinScreen(
+                    s.servers, s.searching, s.error,
+                    onPick = { vm.useJellyfin(it) },
+                    onSearch = { vm.findJellyfin() },
+                    onBack = vm::signOut,
+                )
+                is Screen.QuickConnect -> {
+                    androidx.activity.compose.BackHandler { vm.findJellyfin() }
+                    org.menustream.tv.ui.QuickConnectScreen(s.server, s.code, s.error, onBack = { vm.findJellyfin() })
+                }
                 is Screen.PickServer -> PickServerScreen(s.servers) { vm.connect(it) }
                 Screen.Browse -> BrowseScreen(vm)
                 is Screen.Show -> {

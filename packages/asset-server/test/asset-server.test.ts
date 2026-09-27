@@ -3,7 +3,10 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { Catalog, createAssetServer, isLocalAddress, NoAuth, PlexTokenCheck, type TokenCheck } from "../src/index.js";
+import { AnyOf, Catalog, createAssetServer, isLocalAddress, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type Credential, type TokenCheck } from "../src/index.js";
+
+const plex = (token: string): Credential => ({ kind: "plex", token });
+const jellyfin = (token: string): Credential => ({ kind: "jellyfin", token });
 
 const MANIFEST = {
   format: "menustream",
@@ -104,7 +107,7 @@ describe("Catalog roots", () => {
 describe("server", () => {
   let base: string;
   let close: () => void;
-  const allow: TokenCheck = { description: "test", allows: async (t) => t === "good" };
+  const allow: TokenCheck = { description: "test", allows: async (c) => c?.token === "good" };
 
   beforeAll(async () => {
     const server = createAssetServer({ catalog: new Catalog([root]), auth: allow });
@@ -151,6 +154,11 @@ describe("server", () => {
     expect((await get("/v1/index", {})).status).toBe(401);
     expect((await get("/v1/index", { "X-Plex-Token": "bad" })).status).toBe(401);
     expect((await get("/v1/index", { Authorization: "Bearer good" })).status).toBe(200);
+    // Jellyfin clients send their own Authorization header; the token is read from it.
+    const jf = (token: string) => ({ Authorization: `MediaBrowser Client="MenuStream", Device="TV", DeviceId="d1", Version="1", Token="${token}"` });
+    expect((await get("/v1/index", jf("good"))).status).toBe(200);
+    expect((await get("/v1/index", jf("bad"))).status).toBe(401);
+    expect((await get("/v1/index", { Authorization: 'MediaBrowser Client="MenuStream", DeviceId="d1"' })).status).toBe(401);
     const index = (await (await get("/v1/index")).json()) as { manifests: unknown[] };
     expect(index.manifests).toHaveLength(2);
   });
@@ -226,22 +234,23 @@ describe("PlexTokenCheck", () => {
   it("allows tokens that can access this server and refuses others", async () => {
     const f = plexFetch();
     const check = new PlexTokenCheck("http://plex.local:32400", f as unknown as typeof fetch);
-    expect(await check.allows("owner")).toBe(true);
-    expect(await check.allows("other")).toBe(false);
-    expect(await check.allows("garbage")).toBe(false);
+    expect(await check.allows(plex("owner"))).toBe(true);
+    expect(await check.allows(plex("other"))).toBe(false);
+    expect(await check.allows(plex("garbage"))).toBe(false);
     expect(await check.allows(undefined)).toBe(false);
+    expect(await check.allows(jellyfin("owner"))).toBe(false); // a Jellyfin sign-in is not a Plex one
   });
 
   it("caches results and never sends the token to the Plex server itself", async () => {
     let now = 0;
     const f = plexFetch();
     const check = new PlexTokenCheck("http://plex.local:32400", f as unknown as typeof fetch, () => now);
-    await check.allows("owner");
-    await check.allows("owner");
+    await check.allows(plex("owner"));
+    await check.allows(plex("owner"));
     const resourceCalls = () => f.mock.calls.filter(([u]) => String(u).includes("plex.tv")).length;
     expect(resourceCalls()).toBe(1);
     now += 11 * 60_000;
-    await check.allows("owner");
+    await check.allows(plex("owner"));
     expect(resourceCalls()).toBe(2);
     const identityCall = f.mock.calls.find(([u]) => String(u).endsWith("/identity"))!;
     expect((identityCall[1]!.headers as Record<string, string>)["X-Plex-Token"]).toBeUndefined();
@@ -252,7 +261,58 @@ describe("PlexTokenCheck", () => {
       if (String(url).endsWith("/identity")) return Response.json({ MediaContainer: { machineIdentifier: "server-1" } });
       throw new Error("offline");
     });
-    expect(await new PlexTokenCheck("http://plex.local:32400", f as unknown as typeof fetch).allows("owner")).toBe(false);
+    expect(await new PlexTokenCheck("http://plex.local:32400", f as unknown as typeof fetch).allows(plex("owner"))).toBe(false);
+  });
+});
+
+describe("JellyfinTokenCheck", () => {
+  const jellyfinFetch = () =>
+    vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string>).Authorization ?? "";
+      if (!String(url).endsWith("/Users/Me")) return new Response("", { status: 404 });
+      if (!auth.startsWith("MediaBrowser ")) return new Response("", { status: 401 });
+      if (auth.includes('Token="user-token"')) return Response.json({ Id: "user-1", Name: "tyson" });
+      return new Response("", { status: 401 });
+    });
+
+  it("allows tokens the Jellyfin server accepts and refuses others", async () => {
+    const f = jellyfinFetch();
+    const check = new JellyfinTokenCheck("http://jellyfin.local:8096", f as unknown as typeof fetch);
+    expect(await check.allows(jellyfin("user-token"))).toBe(true);
+    expect(await check.allows(jellyfin("revoked"))).toBe(false);
+    expect(await check.allows(plex("user-token"))).toBe(false); // a Plex sign-in is not a Jellyfin one
+    expect(await check.allows(undefined)).toBe(false);
+  });
+
+  it("caches results by token", async () => {
+    let now = 0;
+    const f = jellyfinFetch();
+    const check = new JellyfinTokenCheck("http://jellyfin.local:8096", f as unknown as typeof fetch, () => now);
+    await check.allows(jellyfin("user-token"));
+    await check.allows(jellyfin("user-token"));
+    expect(f).toHaveBeenCalledTimes(1);
+    now += 11 * 60_000;
+    await check.allows(jellyfin("user-token"));
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses when the Jellyfin server is unreachable", async () => {
+    const f = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    expect(await new JellyfinTokenCheck("http://jellyfin.local:8096", f as unknown as typeof fetch).allows(jellyfin("user-token"))).toBe(false);
+  });
+});
+
+describe("AnyOf", () => {
+  it("accepts a sign-in any configured server accepts", async () => {
+    const plexOnly: TokenCheck = { description: "plex", allows: async (c) => c?.kind === "plex" && c.token === "p" };
+    const jfOnly: TokenCheck = { description: "jellyfin", allows: async (c) => c?.kind === "jellyfin" && c.token === "j" };
+    const both = new AnyOf([plexOnly, jfOnly]);
+    expect(both.description).toBe("plex or jellyfin");
+    expect(await both.allows(plex("p"))).toBe(true);
+    expect(await both.allows(jellyfin("j"))).toBe(true);
+    expect(await both.allows(jellyfin("p"))).toBe(false);
   });
 });
 

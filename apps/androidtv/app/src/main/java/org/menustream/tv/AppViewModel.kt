@@ -5,35 +5,45 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import org.menustream.tv.assets.AssetServerClient
 import org.menustream.tv.assets.CatalogEntry
 import org.menustream.tv.assets.discoverAssetServers
+import org.menustream.tv.jellyfin.FoundJellyfin
+import org.menustream.tv.jellyfin.JellyfinAccount
+import org.menustream.tv.jellyfin.JellyfinSource
+import org.menustream.tv.jellyfin.discoverJellyfin
+import org.menustream.tv.media.Item
+import org.menustream.tv.media.ItemType
+import org.menustream.tv.media.Letter
+import org.menustream.tv.media.Library
+import org.menustream.tv.media.LibraryKind
+import org.menustream.tv.media.MediaSource
+import org.menustream.tv.media.Playable
+import org.menustream.tv.media.filesOf
 import org.menustream.tv.menu.LastStop
 import org.menustream.tv.menu.MenuIndex
 import org.menustream.tv.menu.MenuMatcher
+import org.menustream.tv.net.Http
 import org.menustream.tv.player.PlayRequest
+import org.menustream.tv.plex.HttpStatusException
 import org.menustream.tv.plex.PlexAccount
-import org.menustream.tv.plex.PlexDirectory
 import org.menustream.tv.plex.PlexIdentity
-import org.menustream.tv.plex.PlexItem
-import org.menustream.tv.plex.PlexLetter
 import org.menustream.tv.plex.PlexResource
-import org.menustream.tv.plex.PlayablePart
-import org.menustream.tv.plex.PlexPart
 import org.menustream.tv.plex.PlexServer
-import org.menustream.tv.plex.filesOf
+import org.menustream.tv.plex.PlexSource
+import org.menustream.tv.store.JellyfinLogin
 import org.menustream.tv.store.Settings
 
 /** Something on screen you can pick: a movie, show or episode, or a disc (a TV disc manifest). */
@@ -41,27 +51,33 @@ sealed interface Tile {
     val key: String
 
     /** [rowKey] keeps a tile's identity (and focus) when it replaces a placeholder in the Disc Menus row. */
-    data class Media(val item: PlexItem, val menu: CatalogEntry?, val rowKey: String? = null) : Tile {
-        override val key get() = rowKey ?: item.ratingKey
+    data class Media(val item: Item, val menu: CatalogEntry?, val rowKey: String? = null) : Tile {
+        override val key get() = rowKey ?: item.id
     }
 
-    /** [pending]: a Disc Menus placeholder whose Plex title is still being looked up. */
-    data class Disc(val entry: CatalogEntry, val show: PlexItem?, val pending: Boolean = false) : Tile {
+    /** [pending]: a Disc Menus placeholder whose title is still being looked up. */
+    data class Disc(val entry: CatalogEntry, val show: Item?, val pending: Boolean = false) : Tile {
         override val key get() = "disc:" + entry.id
     }
 }
 
 data class TileRow(val title: String, val tiles: List<Tile>)
 
-/** A title opened into its disc menu: manifest media ids resolved to Plex items. */
-data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, PlayablePart>, val lastStop: LastStop?)
+/** A title opened into its disc menu: manifest media ids resolved to the server's files. */
+data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, Playable>, val lastStop: LastStop?)
 
-data class ShowState(val show: PlexItem, val seasons: List<PlexItem>, val season: PlexItem?, val episodes: List<PlexItem>, val discs: List<Tile.Disc>)
+data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val discs: List<Tile.Disc>)
 
 sealed interface Screen {
     data class Busy(val message: String) : Screen
+    /** First run (or after signing out): Plex or Jellyfin? */
+    data object ChooseSource : Screen
     data class SignIn(val code: String?, val error: String? = null) : Screen
     data class PickServer(val servers: List<PlexResource>) : Screen
+    /** Jellyfin servers found on the network, plus typing an address. */
+    data class FindJellyfin(val servers: List<FoundJellyfin>, val searching: Boolean, val error: String? = null) : Screen
+    /** Quick Connect: the code to approve in another Jellyfin app. */
+    data class QuickConnect(val server: String, val code: String?, val error: String? = null) : Screen
     data object Browse : Screen
     data class Show(val state: ShowState) : Screen
     data class Menu(val open: OpenMenu) : Screen
@@ -79,9 +95,9 @@ sealed interface BrowseTab {
         override val title = "Disc Menus"
     }
 
-    data class Library(val section: PlexDirectory) : BrowseTab {
-        override val id get() = "lib:" + section.key
-        override val title get() = section.title
+    data class Libraries(val library: Library) : BrowseTab {
+        override val id get() = "lib:" + library.id
+        override val title get() = library.title
     }
 
     data object Search : BrowseTab {
@@ -94,7 +110,7 @@ sealed interface BrowseTab {
 data class MenuSource(val url: String?, val status: String)
 
 /** Browse A–Z within a library: the letters, the chosen one, and its titles. */
-data class LetterState(val letters: List<PlexLetter> = emptyList(), val selected: PlexLetter? = null, val tiles: List<Tile> = emptyList())
+data class LetterState(val letters: List<Letter> = emptyList(), val selected: Letter? = null, val tiles: List<Tile> = emptyList())
 
 /** Movies per request when paging a library for the Disc Menus row. */
 private const val MOVIE_PAGE = 300
@@ -120,7 +136,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _searchResults = MutableStateFlow<List<Tile>>(emptyList())
     val searchResults: StateFlow<List<Tile>> = _searchResults.asStateFlow()
 
-    var server: PlexServer? = null
+    /** The media server this TV is signed in to (Plex or Jellyfin). */
+    var source: MediaSource? = null
         private set
     var assets: AssetServerClient? = null
         private set
@@ -130,7 +147,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             menuIndex = MenuIndex(value)
         }
     private var menuIndex = MenuIndex(emptyList())
-    private var sections: List<PlexDirectory> = emptyList()
+    private var libraries: List<Library> = emptyList()
     private var signInJob: Job? = null
 
     private var begun = false
@@ -155,27 +172,52 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _screen.value = stack.removeLastOrNull() ?: Screen.Browse
     }
 
-    // --- sign-in and server -------------------------------------------------------------------------
+    // --- choosing a server --------------------------------------------------------------------------
 
     fun start(): Job = viewModelScope.launch {
-        val token = settings.plexToken ?: return@launch signIn()
+        // Installs from before Jellyfin support have a Plex token but no kind saved.
+        when (settings.sourceKind ?: if (settings.plexToken != null) "plex" else null) {
+            "plex" -> startPlex()
+            "jellyfin" -> settings.jellyfin?.let(::startJellyfin) ?: findJellyfin()
+            else -> _screen.value = Screen.ChooseSource
+        }
+    }
+
+    fun choose(kind: String) {
+        settings.sourceKind = kind
+        if (kind == "plex") signIn() else findJellyfin()
+    }
+
+    fun signOut() {
+        signInJob?.cancel()
+        settings.signOut()
+        source = null
+        _rows.value = emptyMap()
+        _letters.value = emptyMap()
+        _screen.value = Screen.ChooseSource
+    }
+
+    // --- Plex ---------------------------------------------------------------------------------------
+
+    private suspend fun startPlex() {
+        val token = settings.plexToken ?: return signIn()
         if (_screen.value !is Screen.Busy) _screen.value = Screen.Busy("Connecting to Plex…")
         val servers = attempt { account.servers(token) }.getOrElse { e ->
-            if (e is org.menustream.tv.plex.HttpStatusException && e.code == 401) {
+            if (e is HttpStatusException && e.code == 401) {
                 // The sign-in was revoked or expired: ask for a new one instead of showing an error.
-                settings.signOut()
-                return@launch signIn()
+                settings.plexToken = null
+                return signIn()
             }
             // plex.tv unreachable (e.g. internet down): the home network may still work.
             val last = settings.lastServer
             val direct = last?.let { attempt { PlexServer.reconnect(it, identity) }.getOrNull() }
             if (direct != null) {
-                server = direct
+                source = PlexSource(direct)
                 loadBrowse()
             } else {
                 _screen.value = Screen.Failed("Couldn't reach plex.tv (${e.message}), and your Plex server didn't answer directly either.")
             }
-            return@launch
+            return
         }
         val chosen = servers.firstOrNull { it.clientIdentifier == settings.serverId } ?: servers.singleOrNull()
         if (chosen == null) _screen.value = if (servers.isEmpty()) Screen.Failed("No Plex servers on this account.") else Screen.PickServer(servers)
@@ -201,86 +243,143 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (token == null) return@launch signIn() // code expired: show a new one
             settings.plexToken = token
+            settings.sourceKind = "plex"
             _screen.value = Screen.Busy("Signed in. Finding your Plex servers…")
-            start()
+            startPlex()
         }
-    }
-
-    fun signOut() {
-        settings.signOut()
-        server = null
-        signIn()
     }
 
     fun connect(resource: PlexResource): Job = viewModelScope.launch {
         _screen.value = Screen.Busy("Connecting to ${resource.name}…")
-        server = attempt { PlexServer.connect(resource, identity) }.getOrElse {
+        val server = attempt { PlexServer.connect(resource, identity) }.getOrElse {
             _screen.value = Screen.Failed(it.message ?: "Couldn't connect to ${resource.name}")
             return@launch
         }
         settings.serverId = resource.clientIdentifier
-        server?.let { settings.lastServer = org.menustream.tv.store.LastServer(it.name, it.machineId, it.baseUrl, it.token) }
+        settings.lastServer = org.menustream.tv.store.LastServer(server.name, server.machineId, server.baseUrl, server.token)
+        source = PlexSource(server)
+        loadBrowse()
+    }
+
+    // --- Jellyfin -----------------------------------------------------------------------------------
+
+    /** Look for Jellyfin servers on the network (the viewer can also type an address). */
+    fun findJellyfin(): Job = viewModelScope.launch {
+        signInJob?.cancel()
+        _screen.value = Screen.FindJellyfin(emptyList(), searching = true)
+        val found = attempt { discoverJellyfin(getApplication()) }.getOrDefault(emptyList())
+        if (_screen.value is Screen.FindJellyfin) _screen.value = Screen.FindJellyfin(found, searching = false)
+    }
+
+    /**
+     * Sign in to the Jellyfin server at [address] with Quick Connect: show a code, wait for the viewer
+     * to approve it in another Jellyfin app, then keep the token this device is given.
+     */
+    fun useJellyfin(address: String) {
+        signInJob?.cancel()
+        signInJob = viewModelScope.launch {
+            val url = address.trim().trimEnd('/').let { if (it.startsWith("http")) it else "http://$it" }
+                .let { if (Regex(":\\d+$").containsMatchIn(it.substringAfter("//"))) it else "$it:8096" }
+            val jf = JellyfinAccount(url, settings.clientId)
+            _screen.value = Screen.QuickConnect(url, null)
+            val info = attempt { jf.publicInfo() }.getOrElse {
+                _screen.value = Screen.FindJellyfin(emptyList(), searching = false, error = "No Jellyfin server answered at $url (${it.message}).")
+                return@launch
+            }
+            if (!attempt { jf.quickConnectEnabled() }.getOrDefault(false)) {
+                _screen.value = Screen.QuickConnect(info.serverName, null, "Quick Connect is turned off on ${info.serverName}. An admin can turn it on in Dashboard → General.")
+                return@launch
+            }
+            val start = attempt { jf.initiate() }.getOrElse {
+                _screen.value = Screen.QuickConnect(info.serverName, null, "Couldn't start Quick Connect: ${it.message}")
+                return@launch
+            }
+            _screen.value = Screen.QuickConnect(info.serverName, start.code)
+            val approved = withTimeoutOrNull(10 * 60_000L) {
+                while (attempt { jf.check(start.secret).authenticated }.getOrDefault(false).not()) delay(3_000)
+                true
+            }
+            if (approved == null) return@launch useJellyfin(url) // code expired: show a new one
+            val auth = attempt { jf.authenticate(start.secret) }.getOrElse {
+                _screen.value = Screen.QuickConnect(info.serverName, null, "Sign-in failed: ${it.message}")
+                return@launch
+            }
+            val login = JellyfinLogin(url, info.id, info.serverName, auth.user.id, auth.accessToken)
+            settings.sourceKind = "jellyfin"
+            settings.jellyfin = login
+            startJellyfin(login)
+        }
+    }
+
+    private fun startJellyfin(login: JellyfinLogin) {
+        source = JellyfinSource(login.url, settings.clientId, login.token, login.userId, login.name)
         loadBrowse()
     }
 
     // --- browsing ----------------------------------------------------------------------------------
 
     fun loadBrowse(): Job = viewModelScope.launch {
-        val plex = server ?: run { start(); return@launch }
+        val src = source ?: run { start(); return@launch }
         _screen.value = Screen.Busy("Loading your libraries…")
-        sections = attempt { plex.sections().filter { it.type == "movie" || it.type == "show" } }.getOrElse {
-            _screen.value = Screen.Failed("Couldn't load your libraries: ${it.message}")
+        libraries = attempt { src.libraries() }.getOrElse {
+            if (it is HttpStatusException && it.code == 401) {
+                // Signed out on the server (e.g. the device was removed in Jellyfin): sign in again.
+                settings.jellyfin = null
+                settings.plexToken = null
+                start()
+                return@launch
+            }
+            _screen.value = Screen.Failed("Couldn't load your libraries from ${src.name}: ${it.message}")
             return@launch
         }
-        _tabs.value = listOf(BrowseTab.Discs) + sections.map { BrowseTab.Library(it) } + BrowseTab.Search
+        _tabs.value = listOf(BrowseTab.Discs) + libraries.map { BrowseTab.Libraries(it) } + BrowseTab.Search
         stack.clear()
         _screen.value = Screen.Browse
         loadMenuServer()
         loadDiscsTab()
     }
 
-    private fun tile(item: PlexItem): Tile.Media =
-        Tile.Media(item, if (item.type == "movie") item.allParts.firstNotNullOfOrNull { p -> p.file?.let(menuIndex::manifestFor) } else null)
+    private fun tile(item: Item): Tile.Media =
+        Tile.Media(item, if (item.type == ItemType.MOVIE) item.files.firstNotNullOfOrNull { f -> f.path?.let(menuIndex::manifestFor) } else null)
 
     /** Rows for a library tab, loaded when the tab is first shown. */
     fun loadTab(tab: BrowseTab): Job = viewModelScope.launch {
-        val plex = server ?: return@launch
-        if (tab !is BrowseTab.Library || _rows.value.containsKey(tab.id)) return@launch
-        val key = tab.section.key
+        val src = source ?: return@launch
+        if (tab !is BrowseTab.Libraries || _rows.value.containsKey(tab.id)) return@launch
         _rows.update { it + (tab.id to emptyList()) } // mark as loading
         val rows = listOf(
-            TileRow("Continue Watching", attempt { plex.onDeck(key) }.getOrDefault(emptyList()).map(::tile)),
-            TileRow("Recently Added", attempt { plex.recentlyAdded(key) }.getOrDefault(emptyList()).map(::tile)),
+            TileRow("Continue Watching", attempt { src.continueWatching(tab.library) }.getOrDefault(emptyList()).map(::tile)),
+            TileRow("Recently Added", attempt { src.recentlyAdded(tab.library) }.getOrDefault(emptyList()).map(::tile)),
         ).filter { it.tiles.isNotEmpty() }
         _rows.update { it + (tab.id to rows) }
-        val letters = attempt { plex.letters(key) }.getOrDefault(emptyList())
+        val letters = attempt { src.letters(tab.library) }.getOrDefault(emptyList())
         _letters.update { it + (tab.id to LetterState(letters)) }
         letters.firstOrNull()?.let { selectLetter(tab, it) }
     }
 
-    fun selectLetter(tab: BrowseTab.Library, letter: PlexLetter): Job = viewModelScope.launch {
-        val plex = server ?: return@launch
+    fun selectLetter(tab: BrowseTab.Libraries, letter: Letter): Job = viewModelScope.launch {
+        val src = source ?: return@launch
         _letters.update { it + (tab.id to (it[tab.id] ?: LetterState()).copy(selected = letter, tiles = emptyList())) }
-        val items = attempt { plex.byLetter(tab.section.key, letter) }.getOrDefault(emptyList())
+        val items = attempt { src.byLetter(tab.library, letter) }.getOrDefault(emptyList())
         _letters.update { it + (tab.id to (it[tab.id] ?: LetterState()).copy(selected = letter, tiles = items.map(::tile))) }
     }
 
     fun search(query: String): Job = viewModelScope.launch {
-        val plex = server ?: return@launch
+        val src = source ?: return@launch
         if (query.isBlank()) {
             _searchResults.value = emptyList()
             return@launch
         }
-        _searchResults.value = attempt { plex.search(query) }.getOrDefault(emptyList()).map(::tile)
+        _searchResults.value = attempt { src.search(query) }.getOrDefault(emptyList()).map(::tile)
     }
 
     /**
      * The Disc Menus tab: every title with a menu, plus what's in progress and new. The row appears at
      * once with a placeholder per manifest (named from the manifest), and each fills in with its
-     * poster as its Plex title is found, so hundreds of menus never hold the screen up.
+     * poster as its title is found, so hundreds of menus never hold the screen up.
      */
     private suspend fun loadDiscsTab() = coroutineScope {
-        val plex = server ?: return@coroutineScope
+        val src = source ?: return@coroutineScope
         val menus = catalog.filter { it.valid && it.hasMenus }.sortedBy { (it.title?.name ?: it.path).lowercase() }
         val found = HashMap<String, Tile>() // manifest id → its tile, once found
         var continueWatching = emptyList<Tile>()
@@ -297,11 +396,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         publish()
         launch {
-            continueWatching = attempt { plex.onDeck() }.getOrDefault(emptyList()).map(::tile)
+            continueWatching = attempt { src.continueWatching() }.getOrDefault(emptyList()).map(::tile)
             publish()
         }
         launch {
-            recentlyAdded = attempt { plex.recentlyAdded() }.getOrDefault(emptyList()).map(::tile)
+            recentlyAdded = attempt { src.recentlyAdded() }.getOrDefault(emptyList()).map(::tile)
             publish()
         }
         val started = System.currentTimeMillis()
@@ -313,43 +412,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Find the Plex title for each manifest and report it with [onFound] as soon as it's known:
+     * Find the title for each manifest and report it with [onFound] as soon as it's known:
      *  1. Movies: page through each movie library once (a few requests, even for thousands of films)
      *     and match every file locally against the manifests.
-     *  2. The rest are TV discs (or titles Plex doesn't have): look for their show, a few at a time.
+     *  2. The rest are TV discs (or titles the server doesn't have): look for their show, a few at a time.
      */
     private suspend fun findCatalogTitles(menus: List<CatalogEntry>, onFound: (String, Tile) -> Unit) = coroutineScope {
-        val plex = server ?: return@coroutineScope
+        val src = source ?: return@coroutineScope
         val remaining = menus.associateBy { it.id }.toMutableMap()
         val index = MenuIndex(menus)
-        for (s in sections.filter { it.type == "movie" }) {
+        for (lib in libraries.filter { it.kind == LibraryKind.MOVIES }) {
             var start = 0
             while (remaining.isNotEmpty()) {
-                val page = attempt { plex.moviesPage(s.key, start, MOVIE_PAGE) }.getOrElse {
-                    if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "movies page ${s.title} @$start failed: $it")
+                val page = attempt { src.moviesPage(lib, start, MOVIE_PAGE) }.getOrElse {
+                    if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "movies page ${lib.title} @$start failed: $it")
                     null
                 } ?: break
-                for (movie in page.metadata) {
+                for (movie in page.items) {
                     // Every manifest naming one of its files (two manifests for one film is a setup
                     // mistake, but both should still find it).
-                    for (entry in movie.allParts.mapNotNull { it.file }.flatMap(index::manifestsFor).distinct()) {
+                    for (entry in movie.files.mapNotNull { it.path }.flatMap(index::manifestsFor).distinct()) {
                         if (remaining.remove(entry.id) != null) onFound(entry.id, Tile.Media(movie, entry, rowKey = "disc:" + entry.id))
                     }
                 }
-                start += page.metadata.size
-                if (page.metadata.isEmpty() || start >= (page.totalSize ?: Int.MAX_VALUE)) break
+                start += page.items.size
+                if (page.items.isEmpty() || start >= (page.total ?: Int.MAX_VALUE)) break
             }
         }
         if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "disc menus: movie libraries done, ${menus.size - remaining.size} found, ${remaining.size} left for TV lookups")
-        val showSections = sections.filter { it.type == "show" }
-        val recent = HashMap<String, List<PlexItem>>() // per show section, fetched once for all discs
-        suspend fun recentEpisodes(sectionKey: String): List<PlexItem> = recent[sectionKey]
-            ?: attempt { plex.recentlyAdded(sectionKey, size = 100, type = "4") }.getOrDefault(emptyList()).also { recent[sectionKey] = it }
+        val showLibraries = libraries.filter { it.kind == LibraryKind.SHOWS }
+        val recent = HashMap<String, List<Item>>() // per TV library, fetched once for all discs
+        suspend fun recentEpisodes(lib: Library): List<Item> = recent[lib.id]
+            ?: attempt { src.recentEpisodes(lib, 100) }.getOrDefault(emptyList()).also { recent[lib.id] = it }
         val gate = Semaphore(4)
         remaining.values.map { entry ->
             launch {
                 val show = gate.withPermit {
-                    entry.title?.name?.let { findShowForDisc(entry, it, showSections, ::recentEpisodes) }
+                    entry.title?.name?.let { findShowForDisc(entry, it, showLibraries, ::recentEpisodes) }
                 }
                 onFound(entry.id, Tile.Disc(entry, show))
             }
@@ -357,37 +456,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The Plex show a TV disc manifest belongs to. Titles are unreliable (Plex's metadata agents rename
-     * shows), so candidates come from the exact title, a search, and recently added episodes, and a
-     * candidate only counts if one of its episode files matches a file the disc references.
+     * The show a TV disc manifest belongs to. Titles are unreliable (metadata agents rename shows), so
+     * candidates come from the exact title, a search, and recently added episodes, and a candidate only
+     * counts if one of its episode files matches a file the disc references.
      */
     private suspend fun findShowForDisc(
         entry: CatalogEntry,
         name: String,
-        showSections: List<PlexDirectory>,
-        recentEpisodes: suspend (sectionKey: String) -> List<PlexItem>,
-    ): PlexItem? {
-        val plex = server ?: return null
+        showLibraries: List<Library>,
+        recentEpisodes: suspend (Library) -> List<Item>,
+    ): Item? {
+        val src = source ?: return null
         val discFiles = entry.media.mapNotNull { it.path }
         if (discFiles.isEmpty()) return null
-        fun episodeMatches(ep: PlexItem) = ep.allParts.any { p -> p.file?.let { f -> discFiles.any { MenuMatcher.matches(it, f) } } == true }
-        suspend fun confirmed(show: PlexItem): Boolean =
-            attempt { plex.allEpisodes(show.ratingKey) }.getOrDefault(emptyList()).any(::episodeMatches)
+        fun episodeMatches(ep: Item) = ep.files.any { f -> f.path?.let { p -> discFiles.any { MenuMatcher.matches(it, p) } } == true }
+        suspend fun confirmed(show: Item): Boolean =
+            attempt { src.allEpisodes(show) }.getOrDefault(emptyList()).any(::episodeMatches)
 
         // 1. Exact title.
-        for (s in showSections) for (show in attempt { plex.showsTitled(s.key, name) }.getOrDefault(emptyList())) {
+        for (lib in showLibraries) for (show in attempt { src.showsTitled(lib, name) }.getOrDefault(emptyList())) {
             if (confirmed(show)) return show
         }
         // 2. Search (catches small title differences).
-        val searched = attempt { plex.search(name) }.getOrDefault(emptyList())
-        for (show in searched.filter { it.type == "show" }) if (confirmed(show)) return show
+        val searched = attempt { src.search(name) }.getOrDefault(emptyList())
+        for (show in searched.filter { it.type == ItemType.SHOW }) if (confirmed(show)) return show
         // 3. Recently added episodes, matched by file; their show is the one.
-        for (s in showSections) {
-            recentEpisodes(s.key).firstOrNull(::episodeMatches)?.grandparentRatingKey?.let { key ->
-                attempt { plex.item(key) }.getOrNull()?.let { return it }
+        for (lib in showLibraries) {
+            recentEpisodes(lib).firstOrNull(::episodeMatches)?.showId?.let { id ->
+                attempt { src.item(id) }.getOrNull()?.let { return it }
             }
         }
-        if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "no Plex show found for disc '$name' (${entry.path})")
+        if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "no show found for disc '$name' (${entry.path})")
         return null
     }
 
@@ -395,31 +494,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Find the asset server (saved, else discovered) and load its catalog of menus. */
     private suspend fun loadMenuServer() {
-        val plex = server ?: return
+        val src = source ?: return
         suspend fun discover(): String? {
             _menuSource.value = MenuSource(null, "Looking for a menu server…")
             return withTimeoutOrNull(8_000) { discoverAssetServers(getApplication()).first { it.isNotEmpty() } }?.first()?.url
         }
+        fun client(url: String) = AssetServerClient(url, src.assetServerAuth, src.kind, Http.assets(getApplication()))
         var url = settings.assetServer ?: discover()
         if (url == null) {
             _menuSource.value = MenuSource(null, "No menu server found. Titles play without menus.")
             return
         }
-        var result = attempt { AssetServerClient(url!!, plex.token, org.menustream.tv.net.Http.assets(getApplication())).index().manifests }
+        var result = attempt { client(url!!).index().manifests }
         // The saved address stopped answering (server moved to a new IP, or is off): look for it again.
         if (result.isFailure && result.exceptionOrNull()?.message?.contains("didn't accept") != true) {
             val found = discover()
             if (found != null && found != url) {
                 url = found
-                result = attempt { AssetServerClient(found, plex.token, org.menustream.tv.net.Http.assets(getApplication())).index().manifests }
+                result = attempt { client(found).index().manifests }
             }
         }
-        val client = AssetServerClient(url!!, plex.token, org.menustream.tv.net.Http.assets(getApplication()))
         catalog = result.getOrElse {
             _menuSource.value = MenuSource(url, "Menu server at $url: ${it.message} Titles play without menus.")
             return
         }
-        assets = client
+        assets = client(url!!)
         settings.assetServer = url
         _menuSource.value = MenuSource(url, "Menus from $url · ${catalog.count { it.valid && it.hasMenus }} available")
     }
@@ -435,7 +534,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun open(tile: Tile): Job = viewModelScope.launch {
         if (tile is Tile.Disc && tile.pending) {
-            // Picked before its Plex title was found: wait for it (it's being looked up now).
+            // Picked before its title was found: wait for it (it's being looked up now).
             val ready = withTimeoutOrNull(30_000) {
                 rows.map { r -> r[BrowseTab.Discs.id]?.flatMap { it.tiles }?.firstOrNull { it.key == tile.key } }
                     .first { it != null && !(it is Tile.Disc && it.pending) }
@@ -446,47 +545,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         when (tile) {
             is Tile.Disc -> openDisc(tile)
             is Tile.Media -> when (tile.item.type) {
-                "show" -> openShow(tile.item)
-                "movie" -> if (tile.menu != null) openMovieMenu(tile.item, tile.menu) else play(tile.item, resumeAt(tile.item))
-                else -> play(tile.item, resumeAt(tile.item))
+                ItemType.SHOW -> openShow(tile.item)
+                ItemType.MOVIE -> if (tile.menu != null) openMovieMenu(tile.item, tile.menu) else play(tile.item, tile.item.resumeSeconds)
+                else -> play(tile.item, tile.item.resumeSeconds)
             }
         }
     }
 
-    private fun resumeAt(item: PlexItem) = (item.viewOffset ?: 0) / 1000.0
-
-    private suspend fun openMovieMenu(movie: PlexItem, entry: CatalogEntry) {
-        val plex = server ?: return
-        val full = plex.item(movie.ratingKey) ?: movie
-        val extras = attempt { plex.extras(movie.ratingKey) }.getOrDefault(emptyList())
+    private suspend fun openMovieMenu(movie: Item, entry: CatalogEntry) {
+        val src = source ?: return
+        val full = attempt { src.item(movie.id) }.getOrNull() ?: movie
+        val extras = attempt { src.extras(movie) }.getOrDefault(emptyList())
         val files = filesOf(listOf(full) + extras)
         val media = MenuMatcher.resolveMedia(entry, files)
         if (BuildConfig.DEBUG) {
-            android.util.Log.d("MenuStream", "open ${movie.ratingKey} -> ${full.ratingKey}; plex files=${files.map { it.first }}")
-            android.util.Log.d("MenuStream", "manifest media=${entry.media.map { it.id + "=" + it.path }}; resolved=${media.mapValues { it.value.item.ratingKey + ":" + it.value.part.file }}")
+            android.util.Log.d("MenuStream", "open ${movie.id} -> ${full.id}; files=${files.map { it.first }}")
+            android.util.Log.d("MenuStream", "manifest media=${entry.media.map { it.id + "=" + it.path }}; resolved=${media.mapValues { it.value.item.id + ":" + it.value.file.path }}")
         }
-        val featureId = media.entries.firstOrNull { it.value.item.ratingKey == full.ratingKey }?.key
-        val lastStop = full.viewOffset?.takeIf { it > 0 && featureId != null }?.let { LastStop(featureId!!, it / 1000.0) }
+        val featureId = media.entries.firstOrNull { it.value.item.id == full.id }?.key
+        val lastStop = full.resumeSeconds.takeIf { it > 0 && featureId != null }?.let { LastStop(featureId!!, it) }
         go(Screen.Menu(OpenMenu(full.title, entry, media, lastStop)))
     }
 
-    private suspend fun openShow(show: PlexItem) {
-        val plex = server ?: return
-        val children = attempt { plex.children(show.ratingKey) }
+    private suspend fun openShow(show: Item) {
+        val src = source ?: return
+        val children = attempt { src.children(show) }
         if (BuildConfig.DEBUG) android.util.Log.d(
             "MenuStream",
-            "show ${show.ratingKey} '${show.title}' children: ${children.getOrNull()?.map { "${it.type}:${it.index}:${it.title}" } ?: children.exceptionOrNull()}",
+            "show ${show.id} '${show.title}' children: ${children.getOrNull()?.map { "${it.type}:${it.seasonNumber}:${it.title}" } ?: children.exceptionOrNull()}",
         )
         val seasons = children.getOrDefault(emptyList())
-        val season = seasons.firstOrNull { (it.index ?: 0) > 0 } ?: seasons.firstOrNull()
-        val episodes = season?.let { attempt { plex.children(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
+        val season = seasons.firstOrNull { it.type == ItemType.SEASON && (it.seasonNumber ?: 0) > 0 } ?: seasons.firstOrNull()
+        val episodes = season?.let { attempt { src.children(it) }.getOrDefault(emptyList()) } ?: emptyList()
         go(Screen.Show(ShowState(show, seasons, season, episodes, emptyList())))
         // Discs: manifests whose media are this show's episode files.
-        val files = attempt { plex.allEpisodes(show.ratingKey) }.getOrDefault(emptyList()).flatMap { e -> e.allParts.mapNotNull { it.file } }
+        val files = attempt { src.allEpisodes(show) }.getOrDefault(emptyList()).flatMap { e -> e.files.mapNotNull { it.path } }
         val discs = files.flatMap(menuIndex::manifestsFor).distinct()
             .sortedBy { it.path.lowercase() }
             .map { Tile.Disc(it, show) }
-        (_screen.value as? Screen.Show)?.takeIf { it.state.show.ratingKey == show.ratingKey }?.let {
+        (_screen.value as? Screen.Show)?.takeIf { it.state.show.id == show.id }?.let {
             _screen.value = Screen.Show(it.state.copy(discs = discs))
         }
     }
@@ -495,101 +592,66 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun debugOpenShow(title: String): Job = viewModelScope.launch {
         if (!BuildConfig.DEBUG) return@launch
         screen.first { it is Screen.Browse }
-        val plex = server ?: return@launch
-        val show = sections.filter { it.type == "show" }.firstNotNullOfOrNull { s ->
-            attempt { plex.showsTitled(s.key, title) }.getOrDefault(emptyList()).firstOrNull()
+        val src = source ?: return@launch
+        val show = libraries.filter { it.kind == LibraryKind.SHOWS }.firstNotNullOfOrNull { lib ->
+            attempt { src.showsTitled(lib, title) }.getOrDefault(emptyList()).firstOrNull()
         } ?: return@launch
         openShow(show)
     }
 
-    fun selectSeason(season: PlexItem): Job = viewModelScope.launch {
-        val plex = server ?: return@launch
+    fun selectSeason(season: Item): Job = viewModelScope.launch {
+        val src = source ?: return@launch
         val current = (_screen.value as? Screen.Show)?.state ?: return@launch
-        val episodes = attempt { plex.children(season.ratingKey) }.getOrDefault(emptyList())
+        val episodes = attempt { src.children(season) }.getOrDefault(emptyList())
         _screen.value = Screen.Show(current.copy(season = season, episodes = episodes))
     }
 
     private suspend fun openDisc(disc: Tile.Disc) {
-        val plex = server ?: return
+        val src = source ?: return
         val show = disc.show
-        val episodes = show?.let { attempt { plex.allEpisodes(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
-        val extras = show?.let { attempt { plex.extras(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
+        val episodes = show?.let { attempt { src.allEpisodes(it) }.getOrDefault(emptyList()) } ?: emptyList()
+        val extras = show?.let { attempt { src.extras(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val files = filesOf(episodes + extras)
         val media = MenuMatcher.resolveMedia(disc.entry, files)
         go(Screen.Menu(OpenMenu(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, null)))
     }
 
-    fun play(item: PlexItem, startSeconds: Double): Job = viewModelScope.launch {
-        val part = item.part ?: return@launch
-        val request = playRequest(item, part, startSeconds) ?: return@launch
+    fun play(item: Item, startSeconds: Double): Job = viewModelScope.launch {
+        val src = source ?: return@launch
+        // List entries can come without files (e.g. some "continue watching" lists): fetch the item.
+        val full = if (item.files.isEmpty()) attempt { src.item(item.id) }.getOrNull() ?: item else item
+        val file = full.files.firstOrNull() ?: return@launch
+        val request = attempt { src.playRequest(full, file, startSeconds) }.getOrElse {
+            _screen.value = Screen.Failed("Couldn't play ${item.title}: ${it.message}")
+            return@launch
+        }
         go(Screen.Play(request))
-    }
-
-    /**
-     * Plex's playback handshake: ask for a direct-play decision for this exact file, then stream the
-     * part with the same session id, and report progress with it too. If Plex won't approve direct
-     * play, fall back to fetching the raw file as a download (lower priority; can be forbidden for
-     * shared users). Transcoding comes later.
-     */
-    private suspend fun playRequest(item: PlexItem, part: PlexPart, startSeconds: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
-        val plex = server ?: return null
-        val session = java.util.UUID.randomUUID().toString()
-        val mediaIndex = item.media.indexOfFirst { m -> m.parts.any { it.id == part.id } }.coerceAtLeast(0)
-        val partIndex = item.media.getOrNull(mediaIndex)?.parts?.indexOfFirst { it.id == part.id }?.coerceAtLeast(0) ?: 0
-        val decision = attempt { plex.directPlayDecision(item.ratingKey, mediaIndex, partIndex, session) }
-        val directPlay = decision.getOrNull()?.directPlayOk == true
-        if (BuildConfig.DEBUG) {
-            android.util.Log.d(
-                "MenuStream",
-                "decision ${item.ratingKey} m$mediaIndex p$partIndex: " +
-                    (decision.getOrNull()?.explanation ?: decision.exceptionOrNull()?.toString()) + if (directPlay) "" else " -> download fallback",
-            )
-        }
-        return PlayRequest(
-            url = plex.partUrl(part, download = !directPlay),
-            headers = plex.authHeaders() + ("X-Plex-Session-Identifier" to session),
-            startSeconds = startSeconds,
-            title = item.title,
-            reporter = reporterFor(item, session),
-            audioTrack = audio,
-            subtitleTrack = subtitle,
-        )
-    }
-
-    /**
-     * Sends playback state to Plex (timeline), so resume points and watched status match other Plex apps.
-     * Uses the playback's session id; failures are ignored (playback matters more than the report).
-     */
-    private fun reporterFor(item: PlexItem, session: String): org.menustream.tv.player.PlaybackReporter {
-        val plex = server
-        return org.menustream.tv.player.PlaybackReporter { state, positionMs, durationMs ->
-            if (plex == null) return@PlaybackReporter
-            viewModelScope.launch {
-                attempt { plex.timeline(item.ratingKey, state, positionMs, durationMs.takeIf { it > 0 } ?: (item.duration ?: 0), session) }
-            }
-        }
     }
 
     /** Resolve a menu button's media to something the native player can play. */
     suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
-        val (item, part) = open.media[mediaId] ?: return null
-        return playRequest(item, part, start, audio, subtitle)
+        val src = source ?: return null
+        val (item, file) = open.media[mediaId] ?: return null
+        return attempt { src.playRequest(item, file, start, audio, subtitle) }.getOrNull()
     }
 
-    fun imageUrl(path: String?, width: Int, height: Int): String? = path?.let { server?.imageUrl(it, width, height) }
+    fun imageUrl(image: String?, width: Int, height: Int): String? = image?.let { source?.imageUrl(it, width, height) }
 
-    fun imageHeaders(): Map<String, String> = server?.authHeaders() ?: emptyMap()
+    fun imageHeaders(): Map<String, String> = source?.imageHeaders() ?: emptyMap()
+
+    /** "Plex" or "Jellyfin", for messages like "isn't in your Plex library". */
+    val sourceKind: String get() = source?.kind ?: "media"
 
     /**
-     * Debug builds only: open a manifest straight from an asset server, without Plex (menu buttons then
-     * report that the media isn't in the library). Used to test menus on a device before Plex is set up:
+     * Debug builds only: open a manifest straight from an asset server, without a media server (menu
+     * buttons then report that the media isn't in the library). Used to test menus on a device:
      *   adb shell am start -n org.menustream.tv/.MainActivity --es debugAssetServer http://10.0.2.2:8790 --es debugManifest sintel
      */
     fun debugOpen(assetServer: String, manifestMatch: String): Job = viewModelScope.launch {
         if (!BuildConfig.DEBUG) return@launch
         signInJob?.cancel()
         _screen.value = Screen.Busy("Debug: loading $manifestMatch from $assetServer…")
-        val client = AssetServerClient(assetServer, "debug", org.menustream.tv.net.Http.assets(getApplication()))
+        val client = AssetServerClient(assetServer, mapOf("X-Plex-Token" to "debug"), "debug", Http.assets(getApplication()))
         val manifests = attempt { client.index().manifests }.getOrElse {
             _screen.value = Screen.Failed("Debug: ${it.message}")
             return@launch
