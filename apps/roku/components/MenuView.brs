@@ -12,6 +12,7 @@ sub init()
 
     m.motion.observeField("state", "onMotionState")
     m.motion.observeField("position", "onMotionPosition")
+    m.motion.notificationInterval = 0.1 ' fine enough to catch the last 0.3 s before a loop point
     m.music.observeField("state", "onMusicState")
 
     m.flash = CreateObject("roSGNode", "Timer")
@@ -148,7 +149,7 @@ sub showMenu(menu as object)
     if video <> invalid
         start = 0
         if not m.nav.intro then start = msOr(video["loopStart"], 0)
-        playVideo(video["src"], start, "background")
+        playVideo(video["src"], start, "background", msOr(video["loopStart"], 0))
     else
         stopBackground()
     end if
@@ -209,12 +210,20 @@ end function
 
 ' --- video: menu motion and transitions ------------------------------------------------------
 
-sub playVideo(src as string, start as float, role as string)
+' Play a menu clip. loopFrom (backgrounds only): where the loop restarts. Restarting a finished
+' clip re-opens the stream (about 1.3 s of black on the onn Roku TV), so loops never let the clip
+' finish: from 0 the player's own loop wraps internally; from later, the clip is sought back to the
+' loop point just before its end, in the same stream (as the web renderer does).
+sub playVideo(src as string, start as float, role as string, loopFrom = invalid as dynamic)
     m.videoRole = role
+    m.loopFrom = loopFrom
+    m.motion.loop = (loopFrom <> invalid and loopFrom = 0)
+    ' Clips always stream. (Keeping a local copy for seamless loops was tried: downloading the 21 MB
+    ' Matrix main-menu clip into tmp:, which is RAM on Roku, crashed the onn Roku TV.)
     content = CreateObject("roSGNode", "ContentNode")
     content.url = assetUrl(src)
-    content.StreamFormat = "mp4"
     content.HttpHeaders = ["Authorization:" + m.top.authHeader]
+    content.StreamFormat = "mp4"
     content.PlayStart = start
     m.motion.content = content
     m.motion.visible = true
@@ -240,7 +249,9 @@ sub onMotionState()
         else if m.videoRole = "background" and m.nav.mode = "menu"
             ' Loop from loopStart for as long as the menu is shown.
             menu = m.manifest["menus"][m.nav.menu]
-            playVideo(menu["background"]["video"]["src"], msOr(menu["background"]["video"]["loopStart"], 0), "background")
+            ' Fallback only: loops are normally handled before the clip finishes (see playVideo).
+            loopFrom = msOr(menu["background"]["video"]["loopStart"], 0)
+            playVideo(menu["background"]["video"]["src"], loopFrom, "background", loopFrom)
         end if
     else if state = "error"
         print "MenuStream: menu video error "; m.motion.errorMsg
@@ -249,6 +260,11 @@ sub onMotionState()
 end sub
 
 sub onMotionPosition()
+    ' Loop from a point after 0: seek back just before the end, so the stream never closes.
+    if m.videoRole = "background" and m.loopFrom <> invalid and m.loopFrom > 0
+        duration = m.motion.duration
+        if duration > 0 and m.motion.position >= duration - 0.3 then m.motion.seek = m.loopFrom
+    end if
     if m.videoRole <> "background" or m.nav.mode <> "menu" or m.nav.buttonsReady then return
     menu = m.manifest["menus"][m.nav.menu]
     if m.motion.position >= msOr(menu["buttonsAt"], 0) then stepWith({ type: "buttonsReady" })
