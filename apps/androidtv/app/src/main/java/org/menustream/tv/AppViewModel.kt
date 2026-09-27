@@ -500,6 +500,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return withTimeoutOrNull(8_000) { discoverAssetServers(getApplication()).first { it.isNotEmpty() } }?.first()?.url
         }
         fun client(url: String) = AssetServerClient(url, src.assetServerAuth, src.kind, Http.assets(getApplication()))
+        // 1. The media server itself, if it serves menus natively (no separate asset server needed).
+        src.nativeMenuServer()?.let { native ->
+            val result = attempt { client(native).index().manifests }
+            if (result.isSuccess) {
+                catalog = result.getOrThrow()
+                assets = client(native)
+                _menuSource.value = MenuSource(native, "Menus from ${src.name} (built in) · ${catalog.count { it.valid && it.hasMenus }} available")
+                return
+            }
+            if (BuildConfig.DEBUG) android.util.Log.d("MenuStream", "native menus at $native failed: ${result.exceptionOrNull()}")
+        }
+        // 2. A MenuStream asset server: the saved one, else one found on the network.
         var url = settings.assetServer ?: discover()
         if (url == null) {
             _menuSource.value = MenuSource(null, "No menu server found. Titles play without menus.")

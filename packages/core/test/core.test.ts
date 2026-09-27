@@ -59,4 +59,22 @@ describe("menuAssets", () => {
     expect(assets).toContain("menus/vts1-pgc2-b1-selected.png");
     expect(assets.some((a: string) => a.endsWith(".mkv"))).toBe(false);
   });
+
+  it("follows set actions to the transition their then-action plays", async () => {
+    const { menuAssets } = await import("../src/index.js");
+    const manifest = {
+      format: "menustream", version: "0.2", title: { name: "T" }, vars: { audio: 1 },
+      media: { feature: { ref: "f.mp4" } },
+      menus: {
+        main: { canvas: { width: 720, height: 480 }, buttons: [{ id: "b", rect: [0, 0, 1, 1], action: { type: "goto", menu: "lang" } }] },
+        lang: {
+          canvas: { width: 720, height: 480 },
+          buttons: [{ id: "c", rect: [0, 0, 1, 1], action: { type: "set", var: "audio", value: 2, then: { type: "goto", menu: "main", transition: "menus/back.mp4" } } }],
+        },
+      },
+      rootMenu: "main",
+      fallback: [{ label: "Movie", items: [{ label: "Play", action: { type: "play", media: "feature" } }] }],
+    };
+    expect(menuAssets(manifest as never)).toEqual(["menus/back.mp4"]);
+  });
 });

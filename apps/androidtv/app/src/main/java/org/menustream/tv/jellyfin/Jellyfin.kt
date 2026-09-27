@@ -224,6 +224,16 @@ class JellyfinSource(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** The MenuStream plugin answers an unauthenticated health check at /MenuStream/v1/health. */
+    override suspend fun nativeMenuServer(): String? = withContext(Dispatchers.IO) {
+        val url = http.url("/MenuStream/v1/health")
+        attempt {
+            Http.probe.newCall(Request.Builder().url(url).build()).execute().use { res ->
+                if (res.isSuccessful && res.body.string().contains("\"api\"")) "${http.baseUrl}/MenuStream" else null
+            }
+        }.getOrNull()
+    }
+
     override suspend fun libraries(): List<Library> =
         http.get<JfItems>("/UserViews", "userId" to userId).items.mapNotNull { v ->
             when (v.collectionType) {

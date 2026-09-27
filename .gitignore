@@ -19,3 +19,6 @@ apps/androidtv/local.properties
 *.keystore
 # Private showcase material (e.g. The Matrix): never committed
 private/
+# Jellyfin plugin build output
+plugins/jellyfin/**/bin/
+plugins/jellyfin/**/obj/

@@ -16,6 +16,13 @@ interface MediaSource {
     /** Headers proving to a MenuStream asset server that this viewer may use it. */
     val assetServerAuth: Map<String, String>
 
+    /**
+     * Base URL of the MenuStream asset API if this media server serves menus itself (e.g. Jellyfin
+     * with the MenuStream plugin), else null. Apps ask this first, so no separate asset server is
+     * needed once a server supports the format.
+     */
+    suspend fun nativeMenuServer(): String? = null
+
     suspend fun libraries(): List<Library>
 
     /** Titles in progress, in [library] or across all libraries. */
