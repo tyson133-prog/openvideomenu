@@ -147,6 +147,7 @@ sub onHttp(event as object)
     if pending.handler = "onCheck" then onCheck(res, pending.context)
     if pending.handler = "onAuthenticated" then onAuthenticated(res, pending.context)
     if pending.handler = "onHealth" then onHealth(res, pending.context)
+    if pending.handler = "onServerName" then onServerName(res, pending.context)
     if pending.handler = "onIndex" then onIndex(res, pending.context)
     if pending.handler = "onViews" then onViews(res, pending.context)
     if pending.handler = "onLibraryPage" then onLibraryPage(res, pending.context)
@@ -294,7 +295,18 @@ sub loadBrowse()
         plexLoadMenus()
         return
     end if
+    ' The server's name can change after sign-in (it's a server setting): show the current one.
+    http(m.login.url + "/System/Info/Public", "GET", invalid, "onServerName")
     http(m.login.url + "/MenuStream/v1/health", "GET", invalid, "onHealth")
+end sub
+
+sub onServerName(res as object, ctx as dynamic)
+    if res.json = invalid or res.json["ServerName"] = invalid or m.login = invalid then return
+    if m.login.name = res.json["ServerName"] then return
+    m.login.name = res.json["ServerName"]
+    m.registry.Write("login", FormatJson(m.login))
+    m.registry.Flush()
+    if m.libraries <> invalid then librariesProgress()
 end sub
 
 sub onHealth(res as object, ctx as dynamic)

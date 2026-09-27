@@ -42,7 +42,9 @@
       <Label id="browseTitle" text="MenuStream" translation="[96, 70]" color="0xE8E6E1FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="44" />
       </Label>
-      <Label id="browseStatus" text="" translation="[96, 130]" color="0x9BA0AAFF" />
+      <Label id="browseStatus" text="" translation="[96, 130]" width="1300" color="0x9BA0AAFF" />
+      <!-- the remote's * (options) key switches server: say so -->
+      <Label text="Press * to switch server" translation="[1424, 82]" width="400" horizAlign="right" color="0x9BA0AAFF" />
       <RowList id="rows" translation="[96, 190]" itemComponentName="TileItem" numRows="2" rowItemSize="[[264, 470]]" rowItemSpacing="[[28, 0]]" itemSize="[1760, 540]" rowLabelOffset="[[0, 16]]" showRowLabel="[true]" rowLabelColor="0xE8E6E1FF" rowFocusAnimationStyle="floatingFocus" />
     </Group>
 

@@ -59,18 +59,26 @@ sub startLibraries()
     librariesProgress()
 end sub
 
+' "Media Center (Plex) · 3 disc menus from http://…" — which server, which kind, where menus come from.
 sub showBrowseStatus()
-    status = m.top.findNode("browseStatus")
+    menus = m.catalog.Count().ToStr() + " disc menus"
+    if m.catalog.Count() = 1 then menus = "1 disc menu"
     if m.menuBase = invalid and isPlex()
-        status.text = m.login.name + " · no disc menus (no menu server)"
+        menus = "no disc menus (no menu server)"
     else if m.menuBase = invalid
-        status.text = m.login.name + " · no disc menus (the MenuStream plugin isn't installed)"
+        menus = "no disc menus (the MenuStream plugin isn't installed)"
     else if isPlex()
-        status.text = "Menus from " + m.menuBase + " · " + m.catalog.Count().ToStr() + " available · " + m.login.name
+        menus = menus + " from " + m.menuBase
     else
-        status.text = "Menus from " + m.login.name + " (built in) · " + m.catalog.Count().ToStr() + " available"
+        menus = menus + " (built in)"
     end if
+    m.top.findNode("browseStatus").text = serverLabel() + " · " + menus
 end sub
+
+function serverLabel() as string
+    if isPlex() then return m.login.name + " (Plex)"
+    return m.login.name + " (Jellyfin)"
+end function
 
 sub requestPage(i as integer, start as integer)
     lib = m.libraries[i]
@@ -168,7 +176,7 @@ sub librariesProgress()
     end for
     if moviesDone and m.tvLookups = -1 then findTvDiscs()
     if not allDone or m.tvLookups > 0
-        m.top.findNode("browseStatus").text = "Loading your library… · " + m.login.name
+        m.top.findNode("browseStatus").text = serverLabel() + " · loading your library…"
     else
         showBrowseStatus()
     end if
