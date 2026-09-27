@@ -22,7 +22,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   source: ["kind", "generator"],
   media: ["ref", "label", "kind", "duration", "chapters"],
   chapter: ["time", "label", "thumbnail"],
-  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt"],
+  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back"],
   canvas: ["width", "height", "aspect"],
   background: ["image", "color", "video", "audio"],
   loopingMedia: ["src", "loopStart"],
@@ -36,9 +36,10 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   play: ["type", "media", "chapter", "start", "after", "audio", "subtitle"],
   playAll: ["type", "items", "after"],
   set: ["type", "var", "value", "then"],
-  goto: ["type", "menu", "button", "transition"],
+  goto: ["type", "menu", "button", "transition", "history"],
   back: ["type"],
   resume: ["type"],
+  activate: ["type", "button"],
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -355,6 +356,8 @@ class Validator {
     });
     if (value.defaultButton !== undefined && !(isNonEmptyString(value.defaultButton) && own.has(value.defaultButton)))
       this.error(`${path}/defaultButton`, `No button "${String(value.defaultButton)}" in this menu.`);
+    // v0.2: what the remote's Back does here; may press one of this menu's own buttons.
+    if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
   }
 
   private loopingMedia(value: unknown, path: string) {
@@ -395,7 +398,8 @@ class Validator {
     if (value.subtitle !== undefined) this.varOrNumber(value.subtitle, `${path}/subtitle`, 0);
   }
 
-  action(value: unknown, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>) {
+  /** `ownButtons`: set when checking a menu's `back`, the only place `activate` may appear. */
+  action(value: unknown, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>, ownButtons?: Set<string>) {
     if (!isObject(value)) {
       this.error(path, "Required action object with a type.");
       return;
@@ -421,7 +425,12 @@ class Validator {
       case "set":
         if (!isNonEmptyString(value.var) || !this.varNames.has(value.var)) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars.`);
         if (!Number.isInteger(value.value)) this.error(`${path}/value`, "Must be an integer.");
-        if (value.then !== undefined) this.action(value.then, `${path}/then`, mediaIds, menus);
+        if (value.then !== undefined) this.action(value.then, `${path}/then`, mediaIds, menus, ownButtons);
+        break;
+      case "activate":
+        if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back.`);
+        else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
+          this.error(`${path}/button`, `No button "${String(value.button)}" in this menu.`);
         break;
       case "goto": {
         if (!isNonEmptyString(value.menu) || !menus.has(value.menu)) {
@@ -432,6 +441,8 @@ class Validator {
           this.error(`${path}/button`, `No button "${String(value.button)}" in menu "${value.menu}".`);
         if (value.transition !== undefined && !isNonEmptyString(value.transition))
           this.error(`${path}/transition`, "Must be a path or URL to a clip.");
+        if (value.history !== undefined && value.history !== "push" && value.history !== "replace")
+          this.error(`${path}/history`, 'Must be "push" or "replace".');
         break;
       }
     }
@@ -472,7 +483,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

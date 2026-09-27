@@ -24,6 +24,8 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Button text (e.g. from OCR) | `label`, and `a11yLabel` if the text is unhelpful |
 | Buttons unreachable by arrows / tiny hidden buttons | Keep them. Put their media in a `fallback` group with `hidden: true`. |
 | Titles and chapters (PTT) | `media` entries with `chapters` (start time in seconds within the output file) |
+| Remote Return (Go Up) | Menu `back`, chosen per menu to behave like the disc: the PGC's **Go Up** target when it has one (`goto` that menu); otherwise the menu's own **on-screen back button**, i.e. a button that returns to the menu this one was entered from (`activate` it, so its highlight shows and the viewer lands on the right item); otherwise leave `back` out (history). |
+| Next / previous page (`LinkNextPG`, `LinkPrevPG`, PGC next/prev) | `goto` with `history: "replace"`, so paging adds no Back steps. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |
 
 ## Suggested `x-dvd` shape

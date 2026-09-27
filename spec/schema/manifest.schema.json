@@ -387,6 +387,10 @@
         "buttonsAt": {
           "$ref": "#/$defs/seconds",
           "description": "v0.2: seconds into the intro before buttons appear."
+        },
+        "back": {
+          "$ref": "#/$defs/action",
+          "description": "v0.2: what the remote's Back key does on this menu (any action, incl. activate)."
         }
       }
     },
@@ -483,7 +487,8 @@
             "goto",
             "back",
             "resume",
-            "set"
+            "set",
+            "activate"
           ]
         }
       },
@@ -557,6 +562,13 @@
               "transition": {
                 "$ref": "#/$defs/path",
                 "description": "v0.2: clip played before the menu opens."
+              },
+              "history": {
+                "enum": [
+                  "push",
+                  "replace"
+                ],
+                "description": "v0.2: replace = don't add to Back's history (page turns)."
               }
             }
           }
@@ -584,6 +596,25 @@
               },
               "then": {
                 "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "activate"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "button"
+            ],
+            "properties": {
+              "button": {
+                "$ref": "#/$defs/id"
               }
             }
           }

@@ -140,6 +140,13 @@ export interface Menu {
    * Measured on the background video when there is one. Any key skips straight to this point.
    */
   buttonsAt?: number;
+  /**
+   * v0.2: what the remote's Back key does on this menu, like a disc's "Go Up" target. Any action,
+   * including `activate` (press one of this menu's buttons, e.g. its on-screen "Back"). Runs as a
+   * step up: gotos don't add to history, and a target already in history unwinds it. Absent: Back
+   * returns through history.
+   */
+  back?: Action;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -161,9 +168,19 @@ export interface PlayItem {
 export type Action =
   | ({ type: "play"; after?: Action } & PlayItem)
   | { type: "playAll"; items: PlayItem[]; after?: Action }
-  | { type: "goto"; menu: string; button?: string; /** v0.2: clip played before the menu opens (skippable). */ transition?: string }
+  | {
+      type: "goto";
+      menu: string;
+      button?: string;
+      /** v0.2: clip played before the menu opens (skippable). */
+      transition?: string;
+      /** v0.2: "replace" = don't add this menu to Back's history (page turns); default "push". */
+      history?: "push" | "replace";
+    }
   | { type: "back" }
   | { type: "resume" }
+  /** v0.2: press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
+  | { type: "activate"; button: string }
   /** Level 2: set a variable, then (optionally) run another action — e.g. choose a soundtrack and return to the menu. */
   | { type: "set"; var: string; value: number; then?: Action };
 

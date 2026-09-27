@@ -1,0 +1,24 @@
+{
+  "description": "v0.2: activate is only allowed in a menu's back and must name one of that menu's buttons; goto history must be push or replace.",
+  "level": 1,
+  "valid": false,
+  "errors": ["/menus/main/back/button", "/menus/main/buttons/0/action/type", "/menus/main/buttons/1/action/history"],
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Bad back" },
+    "media": { "feature": { "ref": "Film.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "back": { "type": "activate", "button": "nope" },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 100, 40], "action": { "type": "activate", "button": "b" } },
+          { "id": "b", "rect": [0, 50, 100, 40], "action": { "type": "goto", "menu": "main", "history": "forget" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

@@ -3,7 +3,7 @@
 > **Status: draft.** Fields and names may change before v1.0. "MenuStream" is a working name.
 > After v1.0 the [compatibility charter](COMPATIBILITY.md) applies and nothing here is ever removed or redefined.
 
-**v0.2** adds motion menus (§5.1), transitions (§6), and variables with audio/subtitle selection (§6.1). Every v0.1 manifest is a valid v0.2 manifest and behaves the same.
+**v0.2** adds motion menus (§5.1), transitions (§6), variables with audio/subtitle selection (§6.1), and menu-defined Back (§6.2). Every v0.1 manifest is a valid v0.2 manifest and behaves the same.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -73,6 +73,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - **`background.image`** is stretched to the whole canvas. `background.color` fills anything not covered.
 - **`buttonsAt`** *(v0.2)*: see §5.1.
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
+- **`back`** *(v0.2)*: what the remote's Back key does on this menu (§6.2).
 - **`autoNav: true`** means that pressing a direction with no `nav` entry moves to the nearest button that way. The reference algorithm uses button centres: a candidate must lie in the direction of travel, and the score is the distance along the axis plus twice the sideways offset. With `autoNav` false or absent, a missing direction does nothing, which matches DVD behaviour.
 
 ### Buttons
@@ -121,14 +122,15 @@ Every action is an object with a `type`:
 |---|---|---|
 | `play` | `media`, `chapter?`, `start?`, `after?` | Play one media item. `chapter` (1-based) wins over `start` (seconds). |
 | `playAll` | `items[]`, `after?` | Play `{ media, chapter?, start? }` items in order. |
-| `goto` | `menu`, `button?`, `transition?` | Open a menu, focusing `button` or its `defaultButton`. *(v0.2)* `transition` is a clip (path) played first, full screen. |
+| `goto` | `menu`, `button?`, `transition?`, `history?` | Open a menu, focusing `button` or its `defaultButton`. *(v0.2)* `transition` is a clip (path) played first, full screen. *(v0.2)* `history: "replace"` doesn't add the current menu to Back's history, for page turns (§6.2). |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
+| `activate` | `button` | *(v0.2)* Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu's `back` (§6.2). |
 | `set` | `var`, `value`, `then?` | *(v0.2, Level 2)* Set a variable, then optionally run another action (§6.1). |
 | `resume` | — | Continue the last playback the viewer stopped early, from where they stopped. Otherwise it does nothing. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
 1. **Start:** if `firstPlay` exists, run it. Otherwise open `rootMenu`. A manifest without menus shows the fallback list.
-2. **`goto` from a button** pushes the current menu and focused button onto the history. `back` pops it.
+2. **`goto` from a button** pushes the current menu and focused button onto the history (unless it says `history: "replace"`). `back` pops it.
 3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the media and position for `resume`.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic.
@@ -156,10 +158,33 @@ Discs remember choices, such as the soundtrack picked in a Languages menu, in re
 - **Players without Level 2** ignore these fields: the media plays with default tracks, and `set` actions still run their `then`.
 - Conditions on actions (`when`) are planned for a later draft.
 
+### 6.2 The remote's Back key (v0.2)
+
+On a disc, the remote's Return key doesn't retrace every menu you visited: each menu has a "go up" target. MenuStream menus say the same with `back`:
+
+```json
+"neo-bio-2": {
+  "back": { "type": "activate", "button": "cast" },
+  "buttons": [
+    { "id": "cast", "rect": [300, 400, 100, 40], "action": { "type": "goto", "menu": "cast", "button": "neo" } },
+    { "id": "next", "rect": [500, 400, 100, 40], "action": { "type": "goto", "menu": "neo-bio-3", "history": "replace" } }
+  ]
+}
+```
+
+- **Remote Back on a menu with `back`** runs that action instead of popping history. It MAY be any action; `activate` presses one of the menu's own buttons (typically its on-screen Back or "Cast" button), showing its activated state.
+- **It is a step up, not a new visit.** A `goto` run by `back` doesn't add to history, and if its target is already in the history, the history is unwound to it (that entry and everything after it are dropped). So ten bio pages still take one press to leave.
+- **Page turns** (next/previous page of the same thing) SHOULD use `history: "replace"`, so they add no Back steps even in menus without `back`.
+- **Without `back`**, Back returns through history as in §6 (at the top, the player MAY exit).
+- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead. (A disc may leave Return inactive; a TV app must not.)
+- **Importers choose per menu** to match the source as closely as possible: a disc's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
+- Players without v0.2 ignore `back` and `history`, and Back returns through history.
+
 ## 7. Cross-reference rules
 
 Validators MUST reject a manifest when:
-- a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button` or `nav` target doesn't exist, or
+- a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button` or `nav` target doesn't exist, or
+- `activate` is used anywhere but a menu's `back`, or
 - button ids are duplicated within a menu, or
 - a chapter number is out of range, or
 - `fallback` is empty or all of it is hidden.

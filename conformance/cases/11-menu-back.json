@@ -1,0 +1,69 @@
+{
+  "description": "v0.2: a menu's back says where the remote's Back goes (a step up, like a disc's Go Up), page turns with history \"replace\" add no Back steps, and Back never traps. Walk: main → cast list → bio page 1 → bio page 2 (page turn); Back presses the bio's on-screen Cast button and lands on the cast list with the actor still focused; the next Back returns to main (history was unwound, not walked).",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "menustream",
+    "version": "0.2",
+    "title": { "name": "Menu back" },
+    "media": { "feature": { "ref": "Film.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "cast" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "cast", "rect": [100, 160, 200, 40], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "cast" } }
+        ]
+      },
+      "cast": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "neo", "rect": [100, 100, 200, 40], "nav": { "down": "trinity" }, "action": { "type": "goto", "menu": "neo-1" } },
+          { "id": "trinity", "rect": [100, 160, 200, 40], "nav": { "up": "neo" }, "action": { "type": "goto", "menu": "trinity-1" } }
+        ]
+      },
+      "neo-1": {
+        "canvas": { "width": 720, "height": 480 },
+        "back": { "type": "activate", "button": "cast" },
+        "buttons": [
+          { "id": "next", "rect": [500, 400, 100, 40], "nav": { "left": "cast" }, "action": { "type": "goto", "menu": "neo-2", "history": "replace" } },
+          { "id": "cast", "rect": [300, 400, 100, 40], "nav": { "right": "next" }, "action": { "type": "goto", "menu": "cast", "button": "neo" } }
+        ]
+      },
+      "neo-2": {
+        "canvas": { "width": 720, "height": 480 },
+        "back": { "type": "activate", "button": "cast" },
+        "buttons": [
+          { "id": "cast", "rect": [300, 400, 100, 40], "action": { "type": "goto", "menu": "cast", "button": "neo" } }
+        ]
+      },
+      "trinity-1": {
+        "canvas": { "width": 720, "height": 480 },
+        "back": { "type": "goto", "menu": "trinity-1" },
+        "buttons": [
+          { "id": "cast", "rect": [300, 400, 100, 40], "action": { "type": "goto", "menu": "cast", "button": "trinity" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "cast" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "cast", "focus": "neo" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "neo-1", "focus": "next" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "neo-2", "focus": "cast" } },
+    {
+      "event": { "type": "press", "key": "back" },
+      "expect": { "mode": "menu", "menu": "cast", "focus": "neo", "effects": [{ "type": "activated", "menu": "neo-2", "button": "cast" }] }
+    },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "cast", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "cast", "focus": "neo" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "trinity" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "trinity-1" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "cast", "focus": "trinity", "effects": [] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "cast" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "effects": [{ "type": "exit" }] } }
+  ]
+}

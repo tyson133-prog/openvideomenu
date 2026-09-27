@@ -147,7 +147,7 @@ function handleInput(
       }
       if (s.mode !== "menu") break;
       if (event.key === "enter") activate(manifest, s, s.focus!, effects);
-      else if (event.key === "back") goBack(manifest, s, effects);
+      else if (event.key === "back") remoteBack(manifest, s, effects);
       else move(manifest, s, event.key, effects);
       break;
 
@@ -225,6 +225,23 @@ function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Ef
   run(manifest, s, button.action, effects, { pushHistory: true });
 }
 
+/**
+ * v0.2: the remote's Back key on a menu. A menu's `back` action says where Back goes (like a disc's
+ * "Go Up"), run as a step up: no history is added, and a target already in history unwinds it, so
+ * paging through ten bios never means ten presses. Without `back`, Back returns through history.
+ * Back must never trap the viewer: if `back` leaves them on the same menu, history is used instead.
+ */
+function remoteBack(manifest: Manifest, s: NavState, effects: Effect[]) {
+  const menu = menuOf(manifest, s.menu!);
+  if (!menu.back) {
+    goBack(manifest, s, effects);
+    return;
+  }
+  const from = s.menu;
+  run(manifest, s, menu.back, effects, { pushHistory: false, up: true });
+  if (s.mode === "menu" && s.menu === from) goBack(manifest, s, effects);
+}
+
 function goBack(manifest: Manifest, s: NavState, effects: Effect[]) {
   const previous = s.history.pop();
   if (!previous) {
@@ -238,11 +255,16 @@ function currentPosition(s: NavState): MenuPosition | undefined {
   return s.mode === "menu" && s.menu && s.focus ? { menu: s.menu, focus: s.focus } : undefined;
 }
 
-function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[], opts: { pushHistory: boolean }) {
+/** `up`: running a menu's `back` (see remoteBack): gotos unwind history instead of adding to it. */
+function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean }) {
   switch (action.type) {
     case "goto": {
       const here = currentPosition(s);
-      if (opts.pushHistory && here) s.history.push(here);
+      if (opts.up) {
+        // Going up to a menu already in history: drop it and everything after it.
+        const i = s.history.map((h) => h.menu).lastIndexOf(action.menu);
+        if (i >= 0) s.history.length = i;
+      } else if (opts.pushHistory && here && action.history !== "replace") s.history.push(here);
       if (action.transition) {
         s.mode = "transition";
         s.transitionTo = { menu: action.menu, button: action.button };
@@ -268,6 +290,15 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
       s.vars = { ...s.vars, [action.var]: action.value };
       if (action.then) run(manifest, s, action.then, effects, opts);
       break;
+    case "activate": {
+      // Press a button of the current menu, as if the viewer had: focus, activated state, action.
+      const button = s.menu ? findButton(menuOf(manifest, s.menu), action.button) : undefined;
+      if (!button) break;
+      s.focus = button.id;
+      effects.push({ type: "activated", menu: s.menu!, button: button.id });
+      run(manifest, s, button.action, effects, opts);
+      break;
+    }
   }
 }
 

@@ -83,7 +83,7 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
         if key = "enter"
             msNavActivate(manifest, s, s.focus, effects)
         else if key = "back"
-            msNavGoBack(manifest, s, effects)
+            msNavRemoteBack(manifest, s, effects)
         else
             msNavMove(manifest, s, key, effects)
         end if
@@ -170,6 +170,21 @@ sub msNavActivate(manifest as object, s as object, buttonId as string, effects a
     msNavRun(manifest, s, button["action"], effects, true)
 end sub
 
+' v0.2: the remote's Back key on a menu. A menu's back action says where Back goes (like a disc's
+' "Go Up"), run as a step up: no history is added, and a target already in history unwinds it.
+' Without back, Back returns through history. Back never traps: if back leaves the viewer on the
+' same menu, history is used instead.
+sub msNavRemoteBack(manifest as object, s as object, effects as object)
+    menu = msNavMenu(manifest, s.menu)
+    if menu["back"] = invalid
+        msNavGoBack(manifest, s, effects)
+        return
+    end if
+    from = s.menu
+    msNavRunOpts(manifest, s, menu["back"], effects, false, true)
+    if s.mode = "menu" and s.menu = from then msNavGoBack(manifest, s, effects)
+end sub
+
 sub msNavGoBack(manifest as object, s as object, effects as object)
     if s.history.count() = 0
         effects.push({ type: "exit" })
@@ -185,10 +200,30 @@ function msNavCurrentPosition(s as object) as dynamic
 end function
 
 sub msNavRun(manifest as object, s as object, action as object, effects as object, pushHistory as boolean)
+    msNavRunOpts(manifest, s, action, effects, pushHistory, false)
+end sub
+
+' up: running a menu's back (see msNavRemoteBack): gotos unwind history instead of adding to it.
+sub msNavRunOpts(manifest as object, s as object, action as object, effects as object, pushHistory as boolean, up as boolean)
     t = action["type"]
     if t = "goto"
         here = msNavCurrentPosition(s)
-        if pushHistory and here <> invalid then s.history.push(here)
+        if up
+            ' Going up to a menu already in history: drop it and everything after it.
+            i = s.history.Count() - 1
+            while i >= 0 and s.history[i].menu <> action["menu"]
+                i = i - 1
+            end while
+            if i >= 0
+                kept = []
+                for j = 0 to i - 1
+                    kept.push(s.history[j])
+                end for
+                s.history = kept
+            end if
+        else if pushHistory and here <> invalid and action["history"] <> "replace"
+            s.history.push(here)
+        end if
         if action["transition"] <> invalid
             s.mode = "transition"
             s.transitionTo = { menu: action["menu"], button: action["button"] }
@@ -210,7 +245,15 @@ sub msNavRun(manifest as object, s as object, action as object, effects as objec
         vars = msCopyAA(s.vars)
         vars[action["var"]] = action["value"]
         s.vars = vars
-        if action["then"] <> invalid then msNavRun(manifest, s, action["then"], effects, pushHistory)
+        if action["then"] <> invalid then msNavRunOpts(manifest, s, action["then"], effects, pushHistory, up)
+    else if t = "activate"
+        ' Press a button of the current menu, as if the viewer had: focus, activated state, action.
+        if s.menu = invalid then return
+        button = msNavFindButton(msNavMenu(manifest, s.menu), action["button"])
+        if button = invalid then return
+        s.focus = button["id"]
+        effects.push({ type: "activated", menu: s.menu, button: button["id"] })
+        msNavRunOpts(manifest, s, button["action"], effects, pushHistory, up)
     end if
 end sub
 
