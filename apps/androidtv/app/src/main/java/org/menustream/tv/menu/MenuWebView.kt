@@ -91,6 +91,14 @@ class MenuWebView(
                 return true
             }
         }
+        webChromeClient = object : android.webkit.WebChromeClient() {
+            /**
+             * WebView draws this over a <video> until its first frame (the start of a motion menu or
+             * transition). The default is a grey play icon; a transparent pixel lets the black page show.
+             */
+            override fun getDefaultVideoPoster(): android.graphics.Bitmap =
+                android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888)
+        }
         check(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) { "This device's WebView is too old." }
         WebViewCompat.addWebMessageListener(this, "menustreamHost", setOf(ORIGIN)) { _, message: WebMessageCompat, _, _, replyProxy ->
             reply = replyProxy
