@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
     /** Debug builds: `--es debugAssetServer <url> --es debugManifest <name>` opens a menu without Plex. */
     private fun handleDebugIntent() {
         if (!BuildConfig.DEBUG) return
+        intent?.getStringExtra("debugShow")?.let { vm.debugOpenShow(it); return }
         val server = intent?.getStringExtra("debugAssetServer") ?: return
         vm.debugOpen(server, intent.getStringExtra("debugManifest") ?: "")
     }

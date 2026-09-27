@@ -373,7 +373,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun openShow(show: PlexItem) {
         val plex = server ?: return
-        val seasons = attempt { plex.children(show.ratingKey) }.getOrDefault(emptyList())
+        val children = attempt { plex.children(show.ratingKey) }
+        if (BuildConfig.DEBUG) android.util.Log.d(
+            "MenuStream",
+            "show ${show.ratingKey} '${show.title}' children: ${children.getOrNull()?.map { "${it.type}:${it.index}:${it.title}" } ?: children.exceptionOrNull()}",
+        )
+        val seasons = children.getOrDefault(emptyList())
         val season = seasons.firstOrNull { (it.index ?: 0) > 0 } ?: seasons.firstOrNull()
         val episodes = season?.let { attempt { plex.children(it.ratingKey) }.getOrDefault(emptyList()) } ?: emptyList()
         go(Screen.Show(ShowState(show, seasons, season, episodes, emptyList())))
@@ -386,6 +391,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         (_screen.value as? Screen.Show)?.takeIf { it.state.show.ratingKey == show.ratingKey }?.let {
             _screen.value = Screen.Show(it.state.copy(discs = discs))
         }
+    }
+
+    /** Debug builds: `--es debugShow <title>` opens that show's page once the library has loaded. */
+    fun debugOpenShow(title: String): Job = viewModelScope.launch {
+        if (!BuildConfig.DEBUG) return@launch
+        screen.first { it is Screen.Browse }
+        val plex = server ?: return@launch
+        val show = sections.filter { it.type == "show" }.firstNotNullOfOrNull { s ->
+            attempt { plex.showsTitled(s.key, title) }.getOrDefault(emptyList()).firstOrNull()
+        } ?: return@launch
+        openShow(show)
     }
 
     fun selectSeason(season: PlexItem): Job = viewModelScope.launch {

@@ -56,7 +56,8 @@ data class LettersResponse(@SerialName("MediaContainer") val container: LettersC
 data class LettersContainer(@SerialName("Directory") val letters: List<PlexLetter> = emptyList())
 
 @Serializable
-data class PlexDirectory(val key: String, val title: String, val type: String)
+/** A library section (or, in child lists, extra entries such as "All episodes", which have no type). */
+data class PlexDirectory(val key: String = "", val title: String = "", val type: String = "")
 
 @Serializable
 data class PlexItem(
