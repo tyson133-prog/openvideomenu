@@ -415,7 +415,7 @@ sub chooseTile(tile as object, screen as string, list as object)
         end if
         tile.entryId = m.menuOf[itemKey(item)]
     end if
-    m.menuFrom = { screen: screen, list: list }
+    m.menuFrom = { screen: screen, list: list, tile: tile }
     entry = invalid
     for each e in m.catalog
         if e["id"] = tile.entryId then entry = e
@@ -464,7 +464,74 @@ sub openWhenReady()
     files = m.opening.files
     if m.opening.movie = invalid then files = discEpisodeFiles(m.opening.entry["id"]) ' a TV disc: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
+    ' Stopped partway last time (the server's resume point for the film): ask first, like a
+    ' Blu-ray player. The menu's own Resume button gets the same point either way.
+    lastStop = invalid
+    movie = m.opening.movie
+    if movie <> invalid
+        for each id in m.menuMedia
+            target = m.menuMedia[id]
+            if itemKey(target.item) = itemKey(movie) and resumeOf(target.item) > 0
+                lastStop = { media: id, position: resumeOf(target.item) }
+            end if
+        end for
+    end if
+    m.opening.lastStop = lastStop
+    if lastStop <> invalid
+        askResume()
+    else
+        startMenu()
+    end if
+end sub
+
+sub askResume()
+    at = clockOf(m.opening.lastStop.position)
+    dialog = CreateObject("roSGNode", "StandardMessageDialog")
+    dialog.title = titleOf(m.opening.movie)
+    dialog.message = ["You stopped at " + at + "."]
+    dialog.buttons = ["Resume from " + at, "Disc menu"]
+    dialog.observeField("buttonSelected", "onResumeChosen")
+    dialog.observeField("wasClosed", "onResumeClosed")
+    m.top.dialog = dialog
+end sub
+
+sub onResumeChosen()
+    choice = m.top.dialog.buttonSelected
+    m.top.dialog.close = true
+    if m.opening = invalid then return
+    if choice = 0
+        ' Straight to where they stopped; afterwards back to the tile, as for any title.
+        stoppedAt = m.opening.lastStop
+        m.direct = { item: m.opening.movie, tile: m.menuFrom.tile, screen: m.menuFrom.screen, list: m.menuFrom.list }
+        m.opening = invalid
+        startTitle({ start: stoppedAt.position }, m.menuMedia[stoppedAt.media])
+    else
+        startMenu()
+    end if
+end sub
+
+sub onResumeClosed()
+    ' Back on the question: stay in the library.
+    if m.opening <> invalid and m.top.dialog <> invalid and m.top.dialog.buttonSelected = invalid then m.opening = invalid
+end sub
+
+' Seconds as h:mm:ss (or m:ss under an hour).
+function clockOf(seconds as float) as string
+    t = Int(seconds)
+    h = Int(t / 3600)
+    mm = Int((t mod 3600) / 60)
+    ss = t mod 60
+    if h > 0 then return h.ToStr() + ":" + twoDigits(mm) + ":" + twoDigits(ss)
+    return mm.ToStr() + ":" + twoDigits(ss)
+end function
+
+function twoDigits(n as integer) as string
+    return Right("0" + n.ToStr(), 2)
+end function
+
+sub startMenu()
     m.menu = CreateObject("roSGNode", "MenuView")
+    if m.opening.lastStop <> invalid then m.menu.lastStop = m.opening.lastStop
     m.menu.manifest = m.opening.manifest
     m.menu.manifestUrl = m.menuBase + m.opening.entry["url"]
     m.menu.authHeaders = assetHeaders()

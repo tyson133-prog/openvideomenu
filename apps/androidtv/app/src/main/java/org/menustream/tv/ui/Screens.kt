@@ -69,6 +69,28 @@ fun Centered(content: @Composable () -> Unit) =
 fun BusyScreen(message: String) = Centered { Text(message, style = MaterialTheme.typography.headlineSmall) }
 
 @Composable
+fun ResumeScreen(title: String, seconds: Double, onChoose: (resume: Boolean) -> Unit) = Centered {
+    val at = clock(seconds)
+    Text(title, style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(12.dp))
+    Text("You stopped at $at.", style = MaterialTheme.typography.titleLarge)
+    Spacer(Modifier.height(32.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val focus = remember { FocusRequester() }
+        Button(onClick = { onChoose(true) }, modifier = Modifier.focusRequester(focus)) { Text("Resume from $at") }
+        Button(onClick = { onChoose(false) }) { Text("Disc menu") }
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    }
+}
+
+/** Seconds as h:mm:ss (m:ss under an hour). */
+private fun clock(seconds: Double): String {
+    val t = seconds.toLong()
+    val (h, m, s) = Triple(t / 3600, t % 3600 / 60, t % 60)
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+@Composable
 fun FailedScreen(message: String, onRetry: () -> Unit, onSignOut: () -> Unit) = Centered {
     Text(message, style = MaterialTheme.typography.headlineSmall)
     Spacer(Modifier.height(24.dp))

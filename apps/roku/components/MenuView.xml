@@ -10,6 +10,8 @@
     <field id="manifest" type="assocarray" />
     <field id="manifestUrl" type="string" />
     <field id="authHeaders" type="assocarray" />
+    <!-- in (optional): { media, position } the viewer stopped at last time, for the menu's resume -->
+    <field id="lastStop" type="assocarray" />
     <!-- in: set to start (after the fields above) -->
     <field id="control" type="string" onChange="onControl" />
     <!-- out: { media, start, audio?, subtitle? } -->

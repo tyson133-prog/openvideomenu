@@ -81,6 +81,8 @@ sealed interface Screen {
     data object Browse : Screen
     data class Show(val state: ShowState) : Screen
     data class Menu(val open: OpenMenu) : Screen
+    /** A disc stopped partway last time: resume the film, or open the disc menu? */
+    data class ResumeAsk(val open: OpenMenu, val item: Item) : Screen
     data class Play(val request: PlayRequest) : Screen
     data class Failed(val message: String) : Screen
 }
@@ -586,7 +588,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         val featureId = media.entries.firstOrNull { it.value.item.id == full.id }?.key
         val lastStop = full.resumeSeconds.takeIf { it > 0 && featureId != null }?.let { LastStop(featureId!!, it) }
-        go(Screen.Menu(OpenMenu(full.title, entry, media, lastStop)))
+        val open = OpenMenu(full.title, entry, media, lastStop)
+        // Stopped partway last time: ask first, like a Blu-ray player. The menu's own Resume button
+        // gets the same point either way.
+        go(if (lastStop != null) Screen.ResumeAsk(open, full) else Screen.Menu(open))
+    }
+
+    /** The answer to [Screen.ResumeAsk]: the film from where it stopped, or the disc menu. */
+    fun resumeChosen(resume: Boolean) {
+        val ask = _screen.value as? Screen.ResumeAsk ?: return
+        if (resume) play(ask.item, ask.open.lastStop?.position ?: 0.0) else _screen.value = Screen.Menu(ask.open)
     }
 
     private suspend fun openShow(show: Item) {

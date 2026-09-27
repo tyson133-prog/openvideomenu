@@ -35,6 +35,8 @@ sub onControl()
     if m.top.control <> "start" then return
     m.manifest = m.top.manifest
     m.nav = msNavInitialState()
+    seed = m.top.lastStop
+    if seed <> invalid and seed.media <> invalid then m.nav.lastStop = { media: seed.media, position: seed.position }
     stepWith({ type: "start" })
     m.top.setFocus(true)
 end sub
