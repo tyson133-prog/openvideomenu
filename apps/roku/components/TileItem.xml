@@ -1,18 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A poster tile in the browse rows: poster, "DISC MENU" badge, title and year. -->
+<!-- A tile in the browse rows: a poster (or a wide episode still), a "DISC MENU" badge when the
+     title has one, its title and a second line (year, progress). -->
 <component name="TileItem" extends="Group">
   <interface>
     <field id="itemContent" type="node" onChange="showContent" />
   </interface>
   <script type="text/brightscript" uri="TileItem.brs" />
   <children>
-    <Rectangle width="264" height="396" color="0x222222FF" />
+    <Rectangle id="frame" width="264" height="396" color="0x222222FF" />
     <Label id="placeholder" width="240" height="396" translation="[12, 0]" vertAlign="center" horizAlign="center" wrap="true" color="0xE8E6E1FF" />
-    <Poster id="poster" width="264" height="396" loadDisplayMode="scaleToZoom" />
-    <Rectangle translation="[150, 10]" width="104" height="26" color="0xFFD27AFF" />
-    <Label text="DISC MENU" translation="[150, 10]" width="104" height="26" horizAlign="center" vertAlign="center" color="0x000000FF">
-      <Font role="font" uri="font:BoldSystemFontFile" size="16" />
-    </Label>
+    <Poster id="poster" width="264" height="396" loadDisplayMode="scaleToZoom" loadingBitmapUri="" failedBitmapUri="" />
+    <Group id="badge">
+      <Rectangle id="badgeBg" translation="[150, 10]" width="104" height="26" color="0xFFD27AFF" />
+      <Label id="badgeText" text="DISC MENU" translation="[150, 10]" width="104" height="26" horizAlign="center" vertAlign="center" color="0x000000FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="16" />
+      </Label>
+    </Group>
     <Label id="title" translation="[0, 404]" width="264" color="0xE8E6E1FF">
       <Font role="font" uri="font:SystemFontFile" size="24" />
     </Label>

@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The app: choose a Jellyfin server, sign in with Quick Connect, browse titles with disc menus, and
-  open a menu (MenuView). One screen group is visible at a time.
+  The app: choose Plex or Jellyfin, sign in, browse the library (disc menus first), open a menu
+  (MenuView) or play a title without one. One screen group is visible at a time.
 -->
 <component name="MainScene" extends="Scene">
   <script type="text/brightscript" uri="MainScene.brs" />
   <script type="text/brightscript" uri="MainScene.plex.brs" />
+  <script type="text/brightscript" uri="MainScene.library.brs" />
   <script type="text/brightscript" uri="pkg:/source/matcher.brs" />
   <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
   <children>
@@ -43,6 +44,14 @@
       </Label>
       <Label id="browseStatus" text="" translation="[96, 130]" color="0x9BA0AAFF" />
       <RowList id="rows" translation="[96, 190]" itemComponentName="TileItem" numRows="2" rowItemSize="[[264, 470]]" rowItemSpacing="[[28, 0]]" itemSize="[1760, 540]" rowLabelOffset="[[0, 16]]" showRowLabel="[true]" rowLabelColor="0xE8E6E1FF" rowFocusAnimationStyle="floatingFocus" />
+    </Group>
+
+    <Group id="show" visible="false">
+      <Label id="showTitle" text="" translation="[96, 70]" color="0xE8E6E1FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="44" />
+      </Label>
+      <Label id="showInfo" text="" translation="[96, 130]" color="0x9BA0AAFF" />
+      <RowList id="showRows" translation="[96, 190]" itemComponentName="TileItem" numRows="2" rowItemSize="[[400, 330]]" rowItemSpacing="[[28, 0]]" itemSize="[1760, 400]" rowLabelOffset="[[0, 16]]" showRowLabel="[true]" rowLabelColor="0xE8E6E1FF" rowFocusAnimationStyle="floatingFocus" />
     </Group>
 
     <Label id="status" text="" translation="[96, 1000]" width="1728" color="0xFFD27AFF" />

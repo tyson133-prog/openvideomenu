@@ -18,6 +18,8 @@ sub init()
     m.serverList.observeField("itemSelected", "onServerChosen")
     m.rows = m.top.findNode("rows")
     m.rows.observeField("rowItemSelected", "onTileChosen")
+    m.showRows = m.top.findNode("showRows")
+    m.showRows.observeField("rowItemSelected", "onShowTileChosen")
 
     ' While a title plays, tell the server where we are, as its own apps do (~every 10 s).
     m.progressTimer = CreateObject("roSGNode", "Timer")
@@ -68,7 +70,7 @@ end function
 ' --- screens ------------------------------------------------------------------------------
 
 sub show(name as string)
-    for each id in ["choose", "servers", "code", "browse"]
+    for each id in ["choose", "servers", "code", "browse", "show"]
         m.top.findNode(id).visible = (id = name)
     end for
     setStatus("")
@@ -149,6 +151,7 @@ sub onHttp(event as object)
     if pending.handler = "onViews" then onViews(res, pending.context)
     if pending.handler = "onMovies" then onMovies(res, pending.context)
     if pending.handler = "onEpisodes" then onEpisodes(res, pending.context)
+    if pending.handler = "onShowList" then onShowList(res, pending.context)
     if pending.handler = "onPlaybackInfo" then onPlaybackInfo(res, pending.context)
     if pending.handler = "onManifest" then onManifest(res, pending.context)
     if pending.handler = "onTitleFiles" then onTitleFiles(res, pending.context)
@@ -297,7 +300,9 @@ sub onHealth(res as object, ctx as dynamic)
         return
     end if
     if res.code <> 200
-        m.top.findNode("browseStatus").text = m.login.name + " doesn't serve disc menus (the MenuStream plugin isn't installed)."
+        ' No plugin: no disc menus, but the library still browses and plays.
+        m.menuBase = invalid
+        onIndex({ code: 200, json: { manifests: [] } }, invalid)
         return
     end if
     m.menuBase = m.login.url + "/MenuStream"
@@ -329,9 +334,7 @@ sub onIndex(res as object, ctx as dynamic)
         plexLibraries()
         return
     end if
-    m.found = {}
-    m.shows = {}
-    m.episodeFiles = []
+    resetLibraries()
     http(m.login.url + "/UserViews?userId=" + m.login.userId, "GET", invalid, "onViews")
 end sub
 
@@ -339,13 +342,17 @@ sub onViews(res as object, ctx as dynamic)
     if res.json = invalid then return
     m.moviesPending = 0
     for each view in res.json["Items"]
+        items = m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + view["Id"] + "&recursive=true&sortBy=SortName"
         if view["CollectionType"] = "movies"
+            lib = addLibrary(view["Name"], "movie")
             m.moviesPending = m.moviesPending + 1
-            http(m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + view["Id"] + "&includeItemTypes=Movie&recursive=true&fields=Path,MediaSources&limit=500", "GET", invalid, "onMovies")
+            http(items + "&includeItemTypes=Movie&fields=Path,MediaSources&limit=2000", "GET", invalid, "onMovies", lib)
         else if view["CollectionType"] = "tvshows"
+            lib = addLibrary(view["Name"], "show")
+            m.moviesPending = m.moviesPending + 2
+            http(items + "&includeItemTypes=Series&limit=2000", "GET", invalid, "onShowList", lib)
             ' TV discs reference episode files: fetch episodes (with paths) once, match locally.
-            m.moviesPending = m.moviesPending + 1
-            http(m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + view["Id"] + "&includeItemTypes=Episode&recursive=true&fields=Path,MediaSources&limit=2000", "GET", invalid, "onEpisodes")
+            http(items + "&includeItemTypes=Episode&fields=Path,MediaSources&limit=5000", "GET", invalid, "onEpisodes", lib)
         end if
     end for
     if m.moviesPending = 0 then showRows()
@@ -358,6 +365,7 @@ sub onEpisodes(res as object, ctx as dynamic)
     m.moviesPending = m.moviesPending - 1
     if res.json <> invalid
         for each ep in itemsOf(res.json)
+            addEpisode(ep)
             for each f in filesOf(ep)
                 m.episodeFiles.push(f)
                 for each entry in msManifestsFor(f.path, m.catalog)
@@ -373,9 +381,11 @@ sub onMovies(res as object, ctx as dynamic)
     m.moviesPending = m.moviesPending - 1
     if res.json <> invalid
         for each movie in itemsOf(res.json)
+            if ctx <> invalid then m.libraries[ctx].items.push(movie)
             for each f in filesOf(movie)
                 for each entry in msManifestsFor(f.path, m.catalog)
                     if not m.found.DoesExist(entry["id"]) then m.found[entry["id"]] = movie
+                    m.menuOf[itemKey(movie)] = entry["id"]
                 end for
             end for
         end for
@@ -410,11 +420,13 @@ end function
 
 sub showRows()
     root = CreateObject("roSGNode", "ContentNode")
-    row = root.createChild("ContentNode")
-    row.title = "Disc Menus"
+    if m.catalog.Count() > 0
+        row = root.createChild("ContentNode")
+        row.title = "Disc Menus"
+    end if
     for each entry in m.catalog
         tile = row.createChild("ContentNode")
-        tile.addFields({ entryId: entry["id"] })
+        tile.addFields({ kind: "disc", entryId: entry["id"], badge: true })
         title = entry["title"]
         tile.title = title["name"]
         movie = m.found[entry["id"]]
@@ -436,9 +448,14 @@ sub showRows()
             tile.shortDescriptionLine2 = title["year"].ToStr()
         end if
     end for
+    addLibraryRows(root)
     m.rows.content = root
-    if isPlex()
-        m.top.findNode("browseStatus").text = "Menus from " + msOr(m.menuBase, "(no menu server)") + " · " + m.catalog.Count().ToStr() + " available · " + m.login.name
+    if m.menuBase = invalid and isPlex()
+        m.top.findNode("browseStatus").text = m.login.name + " · no disc menus (no menu server)"
+    else if m.menuBase = invalid
+        m.top.findNode("browseStatus").text = m.login.name + " · no disc menus (the MenuStream plugin isn't installed)"
+    else if isPlex()
+        m.top.findNode("browseStatus").text = "Menus from " + m.menuBase + " · " + m.catalog.Count().ToStr() + " available · " + m.login.name
     else
         m.top.findNode("browseStatus").text = "Menus from " + m.login.name + " (built in) · " + m.catalog.Count().ToStr() + " available"
     end if
@@ -447,7 +464,28 @@ end sub
 
 sub onTileChosen()
     sel = m.rows.rowItemSelected
-    tile = m.rows.content.getChild(sel[0]).getChild(sel[1])
+    chooseTile(m.rows.content.getChild(sel[0]).getChild(sel[1]), "browse", m.rows)
+end sub
+
+' Open a disc menu, play a title that has none, or open a show.
+sub chooseTile(tile as object, screen as string, list as object)
+    if tile.kind = "show"
+        openShow(tile)
+        return
+    end if
+    if tile.kind = "episode" ' a TV disc's menu opens from the show's Discs row
+        playDirect(tileItem(tile), tile, screen, list)
+        return
+    end if
+    if tile.kind = "movie"
+        item = tileItem(tile)
+        if m.menuOf[itemKey(item)] = invalid
+            playDirect(item, tile, screen, list)
+            return
+        end if
+        tile.entryId = m.menuOf[itemKey(item)]
+    end if
+    m.menuFrom = { screen: screen, list: list }
     entry = invalid
     for each e in m.catalog
         if e["id"] = tile.entryId then entry = e
@@ -502,8 +540,9 @@ sub openWhenReady()
     m.menu.authHeaders = assetHeaders()
     m.menu.observeField("playRequest", "onPlayRequest")
     m.menu.observeField("exit", "onMenuExit")
-    m.top.findNode("browse").visible = false
+    m.top.findNode(m.menuFrom.screen).visible = false
     setStatus("")
+    m.direct = invalid
     m.top.appendChild(m.menu)
     m.menu.control = "start"
     m.opening = invalid
@@ -512,8 +551,8 @@ end sub
 sub onMenuExit()
     m.top.removeChild(m.menu)
     m.menu = invalid
-    show("browse")
-    m.rows.setFocus(true)
+    show(m.menuFrom.screen)
+    m.menuFrom.list.setFocus(true)
 end sub
 
 ' --- playing titles ------------------------------------------------------------------------
@@ -601,9 +640,14 @@ sub onPlayRequest()
     target = m.menuMedia[req.media]
     if target = invalid
         setStatus("That title isn't in your library.")
-        m.menu.playbackStopped = req.start
+        titleStopped(req.start)
         return
     end if
+    startTitle(req, target)
+end sub
+
+' Play one file: req { start, audio?, subtitle? } from a menu button or a library tile.
+sub startTitle(req as object, target as object)
     if isPlex()
         plexPlay(req, target)
         return
@@ -629,7 +673,7 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
     if res.json <> invalid and res.json["MediaSources"] <> invalid then source = res.json["MediaSources"][0]
     if source = invalid
         setStatus("Jellyfin couldn't prepare this title (HTTP " + res.code.ToStr() + ").")
-        m.menu.playbackStopped = req.start
+        titleStopped(req.start)
         return
     end if
     print "MenuStream: PlaybackInfo directPlay="; source["SupportsDirectPlay"]; " directStream="; source["SupportsDirectStream"]; " transcode="; source["SupportsTranscoding"]; " url="; source["TranscodingUrl"] <> invalid; " reasons="; FormatJson(msOr(source["TranscodeReasons"], [])); " container="; source["Container"]
@@ -693,12 +737,12 @@ sub onPlayerState()
         report("/Sessions/Playing/Stopped")
         m.playing = invalid
         closePlayer()
-        m.menu.playbackEnded = true
+        titleEnded()
     else if state = "error"
         print "MenuStream: playback error "; m.player.errorCode; " msg "; m.player.errorMsg; " info "; FormatJson(m.player.errorInfo)
         setStatus("Couldn't play this title: " + m.player.errorMsg)
         closePlayer()
-        m.menu.playbackStopped = m.playing.req.start
+        titleStopped(m.playing.req.start)
     end if
 end sub
 
@@ -706,7 +750,25 @@ sub stopTitle()
     position = playerPosition()
     report("/Sessions/Playing/Stopped")
     closePlayer()
-    m.menu.playbackStopped = position
+    titleStopped(position)
+end sub
+
+' Playback is over: back to the menu that asked for it, or to the tile that was picked (whose
+' resume point and watched mark are updated here, as the server now has them).
+sub titleStopped(position as float)
+    if m.menu <> invalid
+        m.menu.playbackStopped = position
+    else
+        backFromTitle(position, false)
+    end if
+end sub
+
+sub titleEnded()
+    if m.menu <> invalid
+        m.menu.playbackEnded = true
+    else
+        backFromTitle(0, true)
+    end if
 end sub
 
 sub closePlayer()
@@ -773,6 +835,11 @@ function onKeyEvent(key as string, press as boolean) as boolean
     end if
     if key = "back" and m.top.findNode("servers").visible
         chooseKind()
+        return true
+    end if
+    if key = "back" and m.top.findNode("show").visible
+        show("browse")
+        m.rows.setFocus(true)
         return true
     end if
     if key = "options" and m.top.findNode("browse").visible

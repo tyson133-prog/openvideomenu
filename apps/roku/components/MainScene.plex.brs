@@ -208,9 +208,7 @@ end sub
 ' --- browsing ---------------------------------------------------------------------------------
 
 sub plexLibraries()
-    m.found = {}
-    m.shows = {}
-    m.episodeFiles = []
+    resetLibraries()
     http(m.login.url + "/library/sections", "GET", invalid, "onPlexSections")
 end sub
 
@@ -224,12 +222,16 @@ sub onPlexSections(res as object, ctx as dynamic)
     if res.json <> invalid then dirs = res.json["MediaContainer"]["Directory"]
     for each d in msOr(dirs, [])
         page = "&X-Plex-Container-Start=0&X-Plex-Container-Size=2000"
+        section = m.login.url + "/library/sections/" + d["key"] + "/all?sort=titleSort"
         if d["type"] = "movie"
+            lib = addLibrary(d["title"], "movie")
             m.moviesPending = m.moviesPending + 1
-            http(m.login.url + "/library/sections/" + d["key"] + "/all?type=1" + page, "GET", invalid, "onMovies")
+            http(section + "&type=1" + page, "GET", invalid, "onMovies", lib)
         else if d["type"] = "show"
-            m.moviesPending = m.moviesPending + 1
-            http(m.login.url + "/library/sections/" + d["key"] + "/all?type=4" + page, "GET", invalid, "onEpisodes")
+            lib = addLibrary(d["title"], "show")
+            m.moviesPending = m.moviesPending + 2
+            http(section + "&type=2" + page, "GET", invalid, "onShowList", lib)
+            http(section + "&type=4" + page, "GET", invalid, "onEpisodes", lib)
         end if
     end for
     if m.moviesPending = 0 then showRows()
@@ -252,9 +254,9 @@ end function
 
 ' Poster URL for a Plex image path, via Plex's image transcoder. Posters can't send headers, so the
 ' token travels in this URL (Plex's own clients do the same for images).
-function plexImage(path as dynamic) as dynamic
+function plexImage(path as dynamic, w = 264 as integer, h = 396 as integer) as dynamic
     if path = invalid then return invalid
-    return m.login.url + "/photo/:/transcode?width=264&height=396&minSize=1&upscale=1&url=" + percentEncodeQuery(path) + "&X-Plex-Token=" + m.login.token
+    return m.login.url + "/photo/:/transcode?width=" + w.ToStr() + "&height=" + h.ToStr() + "&minSize=1&upscale=1&url=" + percentEncodeQuery(path) + "&X-Plex-Token=" + m.login.token
 end function
 
 function percentEncodeQuery(s as string) as string
