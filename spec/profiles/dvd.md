@@ -40,6 +40,14 @@ On a button:
 "x-dvd": { "button": 3, "colorTable": 0, "commands": ["SetSTN (audio 1)", "JumpVTS_PTT 1:1"] }
 ```
 
+## Not supported yet
+
+These disc features have no manifest form in v0.2. Importers should keep what they know in `x-dvd`, label the affected buttons honestly, and play the film normally instead.
+
+- **Buttons during playback** (e.g. *The Matrix*'s "Follow the White Rabbit": an icon appears in certain scenes, Enter plays a short featurette, then the film resumes). The planned shape is a timed button on the media ("from 41:10 to 41:25, activating plays X, then resumes at 41:25"). This is a planned Level 2 feature.
+- **Seamless branching** (multi-path titles such as a theatrical and an extended cut sharing segments). The format can express this as a playlist of time ranges from one file, and players can join them gaplessly. The usual obstacle is the rip: many rips follow one path through the disc, so the other path's segments aren't in the file. A branching manifest needs a rip that keeps every segment. This is planned for a later draft.
+- **Multi-angle video**, which relies on the rip keeping every angle.
+
 ## Assets
 
 - **Images:** PNG. Backgrounds MAY be JPEG.

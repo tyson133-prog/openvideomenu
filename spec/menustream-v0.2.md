@@ -190,6 +190,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Disc** | *(v0.2, partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus. |
+| **2: Disc** | *(v0.2, partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.
