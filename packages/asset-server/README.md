@@ -12,7 +12,7 @@ A small, **read-only** server that runs next to your Plex server and hands menu 
 - **Never writes anything.** Mount your media read-only.
 - **Home network only.** It answers only local and VPN addresses: 10.x, 172.16–31.x, 192.168.x, and 100.64.x (Tailscale).
 - **Checks your Plex or Jellyfin login.** The TV app sends its sign-in. For Plex, the server asks plex.tv whether that token can access *your* Plex server. For Jellyfin, it asks your Jellyfin server whether it accepts the token (`GET /Users/Me`). Answers are cached briefly in memory. It stores no credentials.
-- **Announces itself** on the network (`_menustream._tcp`), so the TV app finds it without typing an address.
+- **Announces itself** on the network (`_menustream._tcp`), so the TV app finds it without typing an address. It also answers legacy unicast mDNS queries (RFC 6762 §6.7), which is how the Roku app browses.
 
 ## Run with Docker (Linux, Unraid, Synology)
 

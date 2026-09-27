@@ -32,7 +32,15 @@ Apps SHOULD look in this order and use the first that answers:
 2. **An asset server the viewer chose before** (a saved address).
 3. **An asset server on the network:** DNS-SD service type `_menustream._tcp`. The instance's
    address and port form `B` (`http://{address}:{port}`). A host may advertise several addresses;
-   apps SHOULD use the first whose `/v1/health` answers.
+   apps SHOULD use the first whose `/v1/health` answers. If a saved address stops answering, apps
+   SHOULD look on the network again before asking the viewer (the host may have a new address).
+
+   Servers that advertise MUST also answer *legacy unicast* queries (RFC 6762 §6.7): a query from a
+   port other than 5353 is answered directly to that address and port, repeating the query's ID and
+   question. TV platforms often can't bind port 5353 or join the multicast group, so this is how
+   their apps browse. Apple's mDNSResponder and Avahi already do this; some mDNS libraries don't.
+   An app then takes the server's address from where the answer came from, which also avoids
+   addresses the TV can't reach (e.g. a container's own address), and the port from the SRV record.
 
 If none answers, titles MUST still play, just without menus.
 

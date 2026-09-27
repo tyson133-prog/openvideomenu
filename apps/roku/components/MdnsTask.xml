@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Finds MenuStream asset servers: one DNS-SD browse for _menustream._tcp over mDNS. -->
+<component name="MdnsTask" extends="Task">
+  <interface>
+    <!-- [{ name, url }] -->
+    <field id="servers" type="array" />
+  </interface>
+  <script type="text/brightscript" uri="MdnsTask.brs" />
+</component>

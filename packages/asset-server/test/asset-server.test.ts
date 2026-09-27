@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AnyOf, Catalog, createAssetServer, isLocalAddress, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type Credential, type TokenCheck } from "../src/index.js";
+import { legacyUnicastReply } from "../src/discovery.js";
 
 const plex = (token: string): Credential => ({ kind: "plex", token });
 const jellyfin = (token: string): Credential => ({ kind: "jellyfin", token });
@@ -394,4 +395,35 @@ describe("checkIgnoreFiles", () => {
 
 describe("NoAuth", () => {
   it("allows everything (testing only)", async () => expect(await new NoAuth().allows(undefined)).toBe(true));
+});
+
+describe("legacyUnicastReply", () => {
+  const records = [
+    { name: "_services._dns-sd._udp.local", type: "PTR", ttl: 120, data: "_menustream._tcp.local" },
+    { name: "_menustream._tcp.local", type: "PTR", ttl: 28800, data: "Den._menustream._tcp.local" },
+    { name: "Den._menustream._tcp.local", type: "SRV", ttl: 120, data: { port: 8790, target: "pc.local" } },
+    { name: "Den._menustream._tcp.local", type: "TXT", ttl: 4500, data: ["api=1"] },
+    { name: "pc.local", type: "A", ttl: 120, flush: true, data: "192.168.1.20" },
+  ];
+
+  it("answers a PTR browse with the service's SRV, TXT and address, echoing ID and question", () => {
+    const query = { id: 4242, questions: [{ name: "_menustream._tcp.local", type: "PTR" }] };
+    const reply = legacyUnicastReply(query, records)!;
+    expect(reply.id).toBe(4242);
+    expect(reply.questions).toEqual(query.questions);
+    expect(reply.answers.map((r) => r.type)).toEqual(["PTR"]);
+    expect(reply.additionals.map((r) => r.type).sort()).toEqual(["A", "SRV", "TXT"]);
+  });
+
+  it("caps TTLs at 10 s and clears the cache-flush bit", () => {
+    const reply = legacyUnicastReply({ questions: [{ name: "_MENUSTREAM._tcp.local", type: "PTR" }] }, records)!;
+    for (const r of [...reply.answers, ...reply.additionals]) {
+      expect(r.ttl).toBeLessThanOrEqual(10);
+      expect(r.flush).toBe(false);
+    }
+  });
+
+  it("stays quiet for questions it can't answer", () => {
+    expect(legacyUnicastReply({ questions: [{ name: "_googlecast._tcp.local", type: "PTR" }] }, records)).toBeUndefined();
+  });
 });

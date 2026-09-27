@@ -127,15 +127,58 @@ end sub
 
 ' --- menus: the asset server ----------------------------------------------------------------
 
-' The saved asset server, else ask for its address. (Finding it on the network with mDNS is next.)
+' The saved asset server; else (or when it stops answering) look for one with mDNS; else ask.
 sub plexLoadMenus()
     saved = m.registry.Read("assetServer")
     if saved <> ""
         m.menuBase = saved
         http(m.menuBase + "/v1/index", "GET", invalid, "onIndex", invalid, { headers: plexHeaders(m.login.token), timeoutMs: 6000 })
     else
+        findAssetServers()
+    end if
+end sub
+
+sub findAssetServers()
+    m.searchedAssetServers = true
+    setStatus("Looking for a MenuStream menu server...")
+    m.mdns = CreateObject("roSGNode", "MdnsTask")
+    m.mdns.observeField("servers", "onAssetServersFound")
+    m.mdns.control = "RUN"
+end sub
+
+sub onAssetServersFound()
+    servers = m.mdns.servers
+    m.mdns = invalid
+    setStatus("")
+    if servers.Count() = 1
+        useAssetServer(servers[0].url)
+    else if servers.Count() > 1
+        m.assetServers = servers
+        dialog = CreateObject("roSGNode", "StandardMessageDialog")
+        dialog.title = "Choose a MenuStream menu server"
+        buttons = []
+        for each s in servers
+            buttons.Push(s.name + "  (" + Mid(s.url, 8) + ")")
+        end for
+        buttons.Push("Enter an address")
+        dialog.buttons = buttons
+        dialog.observeField("buttonSelected", "onAssetServerChosen")
+        m.top.dialog = dialog
+    else
         askAssetServer()
     end if
+end sub
+
+sub onAssetServerChosen()
+    i = m.top.dialog.buttonSelected
+    m.top.dialog.close = true
+    if i < m.assetServers.Count() then useAssetServer(m.assetServers[i].url) else askAssetServer()
+end sub
+
+sub useAssetServer(url as string)
+    m.registry.Write("assetServer", url)
+    m.registry.Flush()
+    plexLoadMenus()
 end sub
 
 sub askAssetServer()
@@ -159,9 +202,7 @@ sub onAssetServerEntered()
     end if
     if Left(text, 4) <> "http" then text = "http://" + text
     if CreateObject("roRegex", ":\d+/?$", "").IsMatch(text) = false then text = text + ":8790"
-    m.registry.Write("assetServer", text)
-    m.registry.Flush()
-    plexLoadMenus()
+    useAssetServer(text)
 end sub
 
 ' --- browsing ---------------------------------------------------------------------------------

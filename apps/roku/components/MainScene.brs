@@ -306,8 +306,13 @@ sub onIndex(res as object, ctx as dynamic)
     end if
     if res.json = invalid
         if isPlex()
-            setStatus("No menu server answered at " + m.menuBase + ".")
-            askAssetServer()
+            ' The saved server may have moved (a new IP): look again once, then ask.
+            if m.searchedAssetServers <> true
+                findAssetServers()
+            else
+                setStatus("No menu server answered at " + m.menuBase + ".")
+                askAssetServer()
+            end if
         end if
         return
     end if
