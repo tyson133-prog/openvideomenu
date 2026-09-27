@@ -272,22 +272,44 @@ end function
 sub plexPlay(req as object, target as object)
     parts = target.source.Split(":")
     m.playing = { kind: "plex", req: req, item: target.item, source: target.source, path: target.path, partKey: target.part["key"], mediaIndex: parts[0], partIndex: parts[1], session: CreateObject("roDeviceInfo").GetRandomUUID(), method: "DirectPlay", started: false, offset: 0 }
-    audio = plexAudioStream(target.part, req.audio)
+    audio = plexStream(target.part, req.audio, 2)
     m.playing.audioCodec = msOr(target.media["audioCodec"], "")
+    ' The menu's soundtrack and subtitle choices are set on the part, as Plex's own apps do.
+    ' Subtitles off is subtitleStreamID=0.
+    choice = ""
     if audio <> invalid
         m.playing.audioCodec = msOr(audio["codec"], m.playing.audioCodec)
-        http(m.login.url + "/library/parts/" + target.partId.ToStr() + "?audioStreamID=" + audio["id"].ToStr() + "&allParts=1", "PUT", "", "onPlexAudioSet")
+        choice = choice + "&audioStreamID=" + audio["id"].ToStr()
+    end if
+    if req.subtitle <> invalid
+        subtitle = plexStream(target.part, req.subtitle, 3)
+        subtitleId = "0"
+        if subtitle <> invalid
+            subtitleId = subtitle["id"].ToStr()
+            if subtitle["key"] <> invalid
+                ' A subtitle file next to the video: the player loads it itself.
+                m.playing.sidecar = { url: m.login.url + subtitle["key"] + "?X-Plex-Token=" + m.login.token, language: subtitle["languageCode"], label: subtitle["displayTitle"] }
+            else
+                ' Embedded: Plex can't hand it over for direct play, so it's burned into a transcode.
+                m.playing.burnSubtitles = true
+            end if
+        end if
+        choice = choice + "&subtitleStreamID=" + subtitleId
+    end if
+    if choice <> ""
+        http(m.login.url + "/library/parts/" + target.partId.ToStr() + "?allParts=1" + choice, "PUT", "", "onPlexAudioSet")
     else
         plexDecide()
     end if
 end sub
 
-' The Nth (1-based) audio stream of a part, when the item came with its streams.
-function plexAudioStream(part as object, n as dynamic) as dynamic
+' The Nth (1-based) stream of a type (2 audio, 3 subtitle) of a part, when the item came with
+' its streams.
+function plexStream(part as object, n as dynamic, streamType as integer) as dynamic
     if n = invalid or part["Stream"] = invalid then return invalid
     count = 0
     for each s in part["Stream"]
-        if s["streamType"] = 2
+        if s["streamType"] = streamType
             count = count + 1
             if count = n then return s
         end if
@@ -314,6 +336,7 @@ sub plexDecide()
     video = LCase(msOr(media["videoCodec"], ""))
     audio = LCase(p.audioCodec)
     fits = m.decodable.video.DoesExist(video) and m.decodable.audio.DoesExist(audio) and (container = "mp4" or container = "mkv" or container = "mov" or container = "mpegts")
+    if p.burnSubtitles = true then fits = false
     print "MenuStream: Plex file "; container; " / "; video; " / "; audio; " -> "; fits
     if fits
         http(m.login.url + "/video/:/transcode/universal/decision?" + plexPlayParams() + "&directPlay=1&directStream=1&directStreamAudio=1&hasMDE=1", "GET", invalid, "onPlexDecision")
@@ -338,7 +361,9 @@ end sub
 ' only allows an "ad hoc" session while this client has no other transcode running, so a restart
 ' right after playback (whose transcode Plex keeps for a few minutes) got HTTP 400.
 function plexTranscodeParams() as string
-    return plexPlayParams() + "&directPlay=0&directStream=1&fastSeek=1&hasMDE=1&offset=" + Int(m.playing.req.start).ToStr() + "&videoCodec=h264&audioCodec=aac&maxVideoBitrate=20000"
+    subtitles = "&subtitles=auto"
+    if m.playing.burnSubtitles = true then subtitles = "&subtitles=burn"
+    return plexPlayParams() + subtitles + "&directPlay=0&directStream=1&fastSeek=1&hasMDE=1&offset=" + Int(m.playing.req.start).ToStr() + "&videoCodec=h264&audioCodec=aac&maxVideoBitrate=20000"
 end function
 
 sub plexTranscode()
@@ -372,6 +397,7 @@ sub startPlexPlayer()
         content.PlayStart = p.req.start
     end if
     content.title = msOr(p.item["title"], "")
+    if p.sidecar <> invalid then sideloadSubtitle(content, p.sidecar.url, p.sidecar.language, p.sidecar.label)
     openPlayer(content)
 end sub
 

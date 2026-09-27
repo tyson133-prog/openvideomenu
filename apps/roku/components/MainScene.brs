@@ -525,18 +525,23 @@ function deviceProfile() as object
         ],
         "ContainerProfiles": [],
         "CodecProfiles": [],
-        "SubtitleProfiles": [{ "Format": "srt", "Method": "External" }, { "Format": "vtt", "Method": "External" }]
+        "SubtitleProfiles": [{ "Format": "srt", "Method": "External" }, { "Format": "ttml", "Method": "External" }]
     }
 end function
 
 ' Jellyfin's index of the Nth (1-based) audio stream of a media source, for AudioStreamIndex.
 function audioStreamIndex(item as object, sourceId as string, n as dynamic) as dynamic
+    return streamIndex(item, sourceId, n, "Audio")
+end function
+
+' The same for the Nth subtitle stream (SubtitleStreamIndex).
+function streamIndex(item as object, sourceId as string, n as dynamic, kind as string) as dynamic
     if n = invalid or item["MediaSources"] = invalid then return invalid
     for each src in item["MediaSources"]
         if src["Id"] = sourceId and src["MediaStreams"] <> invalid
             count = 0
             for each stream in src["MediaStreams"]
-                if stream["Type"] = "Audio"
+                if stream["Type"] = kind
                     count = count + 1
                     if count = n then return stream["Index"]
                 end if
@@ -592,7 +597,13 @@ sub startTitle(req as object, target as object)
     audio = audioStreamIndex(target.item, target.source, req.audio)
     if audio = invalid then audio = defaultAudioIndex(target.item, target.source)
     if audio <> invalid then body["AudioStreamIndex"] = audio
-    if req.subtitle = 0 then body["SubtitleStreamIndex"] = -1
+    ' The menu's subtitle choice: the Nth subtitle track, or none (0). Jellyfin then delivers a
+    ' text track as a separate file (the device profile's External method) or burns it in.
+    if req.subtitle <> invalid
+        m.playing.subtitleIndex = streamIndex(target.item, target.source, req.subtitle, "Subtitle")
+        body["SubtitleStreamIndex"] = -1
+        if m.playing.subtitleIndex <> invalid then body["SubtitleStreamIndex"] = m.playing.subtitleIndex
+    end if
     http(m.login.url + "/Items/" + target.item["Id"] + "/PlaybackInfo?userId=" + m.login.userId, "POST", FormatJson(body), "onPlaybackInfo")
 end sub
 
@@ -621,6 +632,14 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
     content.HttpHeaders = ["Authorization:" + authHeader(m.login.token)]
     content.PlayStart = req.start
     content.title = m.playing.item["Name"]
+    for each stream in msOr(source["MediaStreams"], [])
+        if stream["Index"] = m.playing.subtitleIndex and stream["Type"] = "Subtitle"
+            print "MenuStream: subtitle "; stream["Index"]; " delivered "; stream["DeliveryMethod"]
+            if stream["DeliveryMethod"] = "External" and stream["DeliveryUrl"] <> invalid
+                sideloadSubtitle(content, m.login.url + stream["DeliveryUrl"], stream["Language"], stream["DisplayTitle"])
+            end if
+        end if
+    end for
     openPlayer(content)
 end sub
 
@@ -635,6 +654,29 @@ sub openPlayer(content as object)
     m.top.appendChild(m.player)
     m.player.setFocus(true)
     m.player.control = "play"
+end sub
+
+' A subtitle file the server delivers separately (srt/ttml): offered to the player as a track.
+sub sideloadSubtitle(content as object, url as string, language as dynamic, label as dynamic)
+    content.SubtitleTracks = [{ Language: msOr(language, "und"), Description: msOr(label, "Subtitles"), TrackName: url }]
+    m.playing.subtitleTrack = url
+end sub
+
+' The menu's subtitle choice, on the player: a chosen track shown (captions on for this title), or
+' none (captions off). Without a choice the viewer's own setting stands. Burned-in subtitles need
+' nothing here.
+sub applySubtitles()
+    req = m.playing.req
+    if req.subtitle = invalid then return
+    if req.subtitle = 0
+        m.captionModeBefore = m.player.globalCaptionMode
+        m.player.globalCaptionMode = "Off"
+    else if m.playing.subtitleTrack <> invalid
+        m.captionModeBefore = m.player.globalCaptionMode
+        m.player.globalCaptionMode = "On"
+        m.player.subtitleTrack = m.playing.subtitleTrack
+        print "MenuStream: subtitles on: "; m.player.subtitleTrack
+    end if
 end sub
 
 function streamFormat(path as string) as string
@@ -659,6 +701,7 @@ sub onPlayerState()
     state = m.player.state
     if state = "playing" and not m.playing.started
         m.playing.started = true
+        applySubtitles()
         report("/Sessions/Playing")
         m.progressTimer.control = "start"
     else if (state = "paused" or state = "playing") and m.playing.started
@@ -703,6 +746,11 @@ end sub
 
 sub closePlayer()
     m.progressTimer.control = "stop"
+    ' Captions are a TV-wide setting: put back what the viewer had.
+    if m.captionModeBefore <> invalid
+        m.player.globalCaptionMode = m.captionModeBefore
+        m.captionModeBefore = invalid
+    end if
     m.player.control = "stop"
     m.top.removeChild(m.player)
     m.player = invalid
