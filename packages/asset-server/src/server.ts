@@ -96,11 +96,11 @@ export function createAssetServer({ catalog, auth, allowRemote = false, log = ()
         return json(res, 400, { error: "Bad path." });
       }
       await catalog.ready();
-      const file = catalog.resolveFile(Number(m[1]), rel);
+      const found = await catalog.resolveFile(Number(m[1]), rel).catch(() => undefined);
       // 404 for anything not allowlisted, so the server doesn't confirm which other files exist.
-      if (!file) return json(res, 404, { error: "Not found." });
+      if (!found) return json(res, 404, { error: "Not found." });
       try {
-        return sendFile(req, res, file, { "Cache-Control": "private, max-age=60" });
+        return sendFile(req, res, found.file, { "Cache-Control": "private, max-age=60" }, found.slice);
       } catch {
         return json(res, 404, { error: "Not found." });
       }

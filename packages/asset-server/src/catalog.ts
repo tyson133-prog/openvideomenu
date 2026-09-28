@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
-import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@openvideomenu/core";
+import { BUNDLE_MANIFEST_NAME, FORMAT_VERSION, isBundleFileName, MANIFEST_SUFFIX, BUNDLE_EXTENSION, menuAssets, parseManifest, type MediaRef } from "@openvideomenu/core";
+import { memberDataOffset, readBundle, readMember, type BundleMember } from "./bundle.js";
 import { scanManifests } from "./files.js";
-import { checkAssetFiles, checkIgnoreFiles, eachLimited } from "./media-check.js";
+import { checkAssetFiles, checkIgnoreFiles, eachLimited, isFaststart } from "./media-check.js";
 
 export interface CatalogMedia {
   id: string;
@@ -22,7 +23,7 @@ export interface CatalogEntry {
   /** Stable id for this manifest (hash of root + path). */
   id: string;
   root: number;
-  /** Manifest path relative to its media root, forward slashes. */
+  /** Manifest path relative to its media root, forward slashes; for a bundle, the bundle's own path. */
   path: string;
   /** URL path (under /v1/files/) the manifest is served at; relative asset paths resolve from it. */
   url: string;
@@ -35,7 +36,10 @@ export interface CatalogEntry {
   source?: { kind: string; generator?: string };
   hasMenus: boolean;
   media: CatalogMedia[];
-  /** Menu assets, relative to the media root. Kept on the server (it's the allowlist); not in the index. */
+  /**
+   * Menu assets, relative to the media root; a bundle's members appear under its path, as if it were
+   * a folder ("Movies/X/X.ovmz/menus/a.jpg"). Kept on the server (it's the allowlist); not in the index.
+   */
   assets: string[];
   modified: string;
 }
@@ -53,6 +57,8 @@ export interface IndexBody {
 interface Cached {
   mtimeMs: number;
   entry: CatalogEntry;
+  /** For a bundle: its members, by name. */
+  members?: Map<string, BundleMember>;
   /** Asset checks (files present, MP4s faststart) done for this version of the manifest. */
   checked?: boolean;
 }
@@ -68,6 +74,8 @@ export class Catalog {
   private cache = new Map<string, Cached>();
   private list: CatalogEntry[] = [];
   private allowed = new Set<string>();
+  /** Bundles by "root:path": the file and its members, for serving members as files. */
+  private bundles = new Map<string, { file: string; members: Map<string, BundleMember> }>();
   private body?: IndexBody;
   private scanning?: Promise<void>;
   private firstScan?: Promise<void>;
@@ -122,18 +130,30 @@ export class Catalog {
     return this.body;
   }
 
-  /** Absolute path of an allowed file, or undefined. `path` is root-relative with forward slashes. */
-  resolveFile(root: number, path: string): string | undefined {
+  /**
+   * An allowed file, or undefined. `path` is root-relative with forward slashes. A bundle member
+   * ("…/X.ovmz/menus/a.jpg") comes back as the bundle file plus the slice holding the member.
+   */
+  async resolveFile(root: number, path: string): Promise<{ file: string; slice?: { name: string; start: number; size: number } } | undefined> {
     const normalized = posix.normalize(path);
     if (normalized.startsWith("../") || normalized === ".." || posix.isAbsolute(normalized)) return undefined;
     if (!this.allowed.has(`${root}:${normalized}`)) return undefined;
     const base = this.roots[root];
     if (base === undefined) return undefined;
-    const full = resolve(base, ...normalized.split("/"));
+    // Inside a bundle: the part up to the first ".ovmz/" segment that is a bundle in the catalog.
+    const segments = normalized.split("/");
+    for (let i = 0; i < segments.length - 1; i++) {
+      if (!isBundleFileName(segments[i]!)) continue;
+      const bundle = this.bundles.get(`${root}:${segments.slice(0, i + 1).join("/")}`);
+      const member = bundle?.members.get(segments.slice(i + 1).join("/"));
+      if (!bundle || !member) return undefined;
+      return { file: bundle.file, slice: { name: member.name, start: await memberDataOffset(bundle.file, member), size: member.size } };
+    }
+    const full = resolve(base, ...segments);
     // Containment via relative(): a plain prefix check breaks on roots that resolve with a trailing
     // separator, such as UNC shares ("\\server\share\") and drive roots ("D:\").
     const rel = relative(base, full);
-    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? full : undefined;
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? { file: full } : undefined;
   }
 
   /**
@@ -160,8 +180,13 @@ export class Catalog {
       }),
     );
     found.sort((a, b) => a.root - b.root || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    // A folder with both X.ovmz and X.openvideomenu.json: the bundle is the one to use (spec §2.1).
+    const bundlePaths = new Set(found.filter((f) => isBundleFileName(f.path)).map((f) => `${f.root}:${f.path.slice(0, -BUNDLE_EXTENSION.length).toLowerCase()}`));
+    const chosen = found.filter(
+      (f) => isBundleFileName(f.path) || !bundlePaths.has(`${f.root}:${f.path.slice(0, -MANIFEST_SUFFIX.length).toLowerCase()}`),
+    );
 
-    const loaded = await eachLimited(found, 16, async (f) => {
+    const loaded = await eachLimited(chosen, 16, async (f) => {
       let mtimeMs: number;
       try {
         mtimeMs = (await stat(f.file)).mtimeMs;
@@ -169,24 +194,31 @@ export class Catalog {
         return undefined;
       }
       const cached = this.cache.get(f.key);
-      if (cached && cached.mtimeMs === mtimeMs) return { key: f.key, root: f.root, cached };
-      return { key: f.key, root: f.root, cached: { mtimeMs, entry: await this.load(f.root, f.path, f.file, mtimeMs) } as Cached };
+      if (cached && cached.mtimeMs === mtimeMs) return { key: f.key, root: f.root, file: f.file, cached };
+      return { key: f.key, root: f.root, file: f.file, cached: await this.load(f.root, f.path, f.file, mtimeMs) };
     });
 
     const next: CatalogEntry[] = [];
     const allowed = new Set<string>();
     const cache = new Map<string, Cached>();
+    const bundles = new Map<string, { file: string; members: Map<string, BundleMember> }>();
     for (const l of loaded) {
       if (!l) continue;
       cache.set(l.key, l.cached);
       next.push(l.cached.entry);
-      allowed.add(l.key);
+      if (l.cached.members) {
+        bundles.set(l.key, { file: l.file, members: l.cached.members });
+        if (l.cached.entry.valid) allowed.add(`${l.key}/${BUNDLE_MANIFEST_NAME}`);
+      } else {
+        allowed.add(l.key);
+      }
       for (const asset of l.cached.entry.assets) allowed.add(`${l.root}:${asset}`);
     }
     const changed = next.length !== this.list.length || next.some((e, i) => e !== this.list[i]);
     this.cache = cache;
     this.list = next;
     this.allowed = allowed;
+    this.bundles = bundles;
     if (changed) this.body = undefined;
 
     // Asset checks for new or changed manifests; problems go to the log, not the index.
@@ -194,8 +226,23 @@ export class Catalog {
     const warned: CatalogEntry[] = [];
     await eachLimited(unchecked, 4, async (c) => {
       const e = c.entry;
-      const onDisk = e.assets.map((a) => ({ shown: a, file: join(this.roots[e.root]!, ...a.split("/")) }));
+      const bundle = c.members ? { file: join(this.roots[e.root]!, ...e.path.split("/")), members: c.members } : undefined;
+      const inBundle = (a: string) => bundle !== undefined && a.startsWith(`${e.path}/`);
+      const onDisk = e.assets.filter((a) => !inBundle(a)).map((a) => ({ shown: a, file: join(this.roots[e.root]!, ...a.split("/")) }));
       const problems = [...(await checkAssetFiles(onDisk)), ...(await checkIgnoreFiles(onDisk))];
+      // Bundle members: present, and MP4s with their index first (media servers never see inside a
+      // bundle, so no ignore files are needed).
+      for (const a of e.assets.filter(inBundle)) {
+        const member = bundle!.members.get(a.slice(e.path.length + 1));
+        if (!member) {
+          problems.push(`Menu asset not in the bundle: ${a}`);
+          continue;
+        }
+        const slice = { name: member.name, start: await memberDataOffset(bundle!.file, member), size: member.size };
+        if ((await isFaststart(bundle!.file, slice)) === false) {
+          problems.push(`${a} has its index at the end of the file, so some TV players stall on it. Fix it (ffmpeg -movflags +faststart) and pack the bundle again.`);
+        }
+      }
       e.warnings = [...(e.warnings ?? []), ...problems];
       if (e.warnings.length === 0) delete e.warnings;
       else warned.push(e);
@@ -204,25 +251,47 @@ export class Catalog {
     if (warned.length) this.onWarnings?.(warned);
   }
 
-  private async load(root: number, path: string, file: string, mtimeMs: number): Promise<CatalogEntry> {
-    const id = createHash("sha1").update(`${root}:${path}`).digest("hex").slice(0, 16);
-    const base: CatalogEntry = {
-      id,
-      root,
-      path,
-      url: `/v1/files/${root}/${encodePath(path)}`,
-      valid: false,
-      hasMenus: false,
-      media: [],
-      assets: [],
-      modified: new Date(mtimeMs).toISOString(),
-    };
+  private async load(root: number, path: string, file: string, mtimeMs: number): Promise<Cached> {
+    if (isBundleFileName(path)) return this.loadBundle(root, path, file, mtimeMs);
     let text: string;
     try {
       text = await readFile(file, "utf8");
     } catch (e) {
-      return { ...base, errors: [`Unreadable: ${(e as Error).message}`] };
+      return { mtimeMs, entry: { ...this.blank(root, path, mtimeMs), errors: [`Unreadable: ${(e as Error).message}`] } };
     }
+    return { mtimeMs, entry: this.entryFor(root, path, text, mtimeMs) };
+  }
+
+  /** A bundle: its manifest.json, read from inside it; its members are served as its assets. */
+  private async loadBundle(root: number, path: string, file: string, mtimeMs: number): Promise<Cached> {
+    const blank = this.blank(root, path, mtimeMs);
+    try {
+      const bundle = await readBundle(file);
+      const manifest = bundle.members.get(BUNDLE_MANIFEST_NAME);
+      if (bundle.errors.length || !manifest || manifest.method !== 0) {
+        const errors = [...bundle.errors, ...(manifest ? [] : [`No ${BUNDLE_MANIFEST_NAME} at the bundle's root.`])];
+        return { mtimeMs, entry: { ...blank, errors }, members: bundle.members };
+      }
+      const text = (await readMember(file, manifest)).toString("utf8");
+      return { mtimeMs, entry: this.entryFor(root, path, text, mtimeMs), members: bundle.members };
+    } catch (e) {
+      return { mtimeMs, entry: { ...blank, errors: [`Unreadable bundle: ${(e as Error).message}`] } };
+    }
+  }
+
+  private blank(root: number, path: string, mtimeMs: number): CatalogEntry {
+    const id = createHash("sha1").update(`${root}:${path}`).digest("hex").slice(0, 16);
+    const url = isBundleFileName(path) ? `/v1/files/${root}/${encodePath(path)}/${BUNDLE_MANIFEST_NAME}` : `/v1/files/${root}/${encodePath(path)}`;
+    return { id, root, path, url, valid: false, hasMenus: false, media: [], assets: [], modified: new Date(mtimeMs).toISOString() };
+  }
+
+  /**
+   * The catalog entry for a manifest's text. Media refs resolve against the folder holding the
+   * manifest (or the bundle); assets against the manifest's own location, which for a bundle is
+   * inside it ("…/X.ovmz/menus/a.jpg"), as if the bundle were a folder.
+   */
+  private entryFor(root: number, path: string, text: string, mtimeMs: number): CatalogEntry {
+    const base = this.blank(root, path, mtimeMs);
     const result = parseManifest(text);
     if (!result.ok) return { ...base, errors: result.errors.map((e) => `${e.path || "/"}: ${e.message}`) };
     const m = result.manifest!;
@@ -232,7 +301,12 @@ export class Catalog {
       return p.startsWith("../") || p === ".." ? undefined : p;
     };
     const isRelative = (ref: string) => !/^[a-z][a-z0-9+.-]*:/i.test(ref) && !ref.startsWith("/");
-    const assets = menuAssets(m).map(inRoot).filter((p): p is string => p !== undefined);
+    const assetDir = isBundleFileName(path) ? path : dir;
+    const assetInRoot = (rel: string): string | undefined => {
+      const p = posix.normalize(assetDir === "." ? rel : `${assetDir}/${rel}`);
+      return p.startsWith("../") || p === ".." ? undefined : p;
+    };
+    const assets = menuAssets(m).map(assetInRoot).filter((p): p is string => p !== undefined);
     const warnings: string[] = [];
     if (m.version !== FORMAT_VERSION && Number(m.version.split(".")[1]) > Number(FORMAT_VERSION.split(".")[1]))
       warnings.unshift(`Written for ${m.version}; this server reads ${FORMAT_VERSION}. Newer fields are ignored.`);

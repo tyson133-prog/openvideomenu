@@ -4,6 +4,7 @@
   "description": "Open Video Menu command line: validate manifests and preview menus in a browser.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": { "node": ">=22.2" },
   "bin": {
     "openvideomenu": "dist/main.js",
     "ovm": "dist/main.js"

@@ -51,7 +51,7 @@ public sealed class MenuCatalog
     private readonly ILibraryManager _libraries;
     private readonly ILogger<MenuCatalog> _log;
     private readonly SemaphoreSlim _scanLock = new(1, 1);
-    private readonly Dictionary<string, (DateTime Modified, CatalogEntry Entry)> _cache = new();
+    private readonly Dictionary<string, (DateTime Modified, CatalogEntry Entry, Dictionary<string, BundleMember>? Members)> _cache = new();
 
     private volatile Snapshot? _snapshot;
     private Task? _background;
@@ -63,7 +63,17 @@ public sealed class MenuCatalog
     }
 
     /// <summary>What one scan found. Replaced as a whole, so readers never see a half-built catalog.</summary>
-    private sealed record Snapshot(string[] Roots, List<CatalogEntry> Entries, HashSet<string> Allowed, string Json, string ETag, DateTime ScannedAt);
+    private sealed record Snapshot(
+        string[] Roots,
+        List<CatalogEntry> Entries,
+        HashSet<string> Allowed,
+        Dictionary<string, (string File, Dictionary<string, BundleMember> Members)> Bundles,
+        string Json,
+        string ETag,
+        DateTime ScannedAt);
+
+    /// <summary>An allowed file: the whole of <see cref="File"/>, or for a bundle member the slice holding it.</summary>
+    public sealed record ResolvedFile(string File, string Name, long Start = 0, long? Length = null);
 
     /// <summary>
     /// The latest scan. The first call waits for a scan; later calls never wait, and a stale catalog is
@@ -83,8 +93,11 @@ public sealed class MenuCatalog
     /// <summary>Number of manifests found so far (0 before the first scan).</summary>
     public int Count => _snapshot?.Entries.Count ?? 0;
 
-    /// <summary>Absolute path of an allowed file, or null. <paramref name="path"/> is root-relative with forward slashes.</summary>
-    public async Task<string?> ResolveFile(int root, string path, CancellationToken cancel)
+    /// <summary>
+    /// An allowed file, or null. <paramref name="path"/> is root-relative with forward slashes. A bundle
+    /// member ("…/X.ovmz/menus/a.jpg") comes back as the bundle file plus the slice holding the member.
+    /// </summary>
+    public async Task<ResolvedFile?> ResolveFile(int root, string path, CancellationToken cancel)
     {
         var s = _snapshot ?? await ScanAsync(cancel).ConfigureAwait(false);
         var normalized = NormalizePosix(path);
@@ -93,10 +106,27 @@ public sealed class MenuCatalog
             return null;
         }
 
+        var segments = normalized.Split('/');
+        for (var i = 0; i < segments.Length - 1; i++)
+        {
+            if (!Bundle.IsBundle(segments[i]))
+            {
+                continue;
+            }
+
+            if (!s.Bundles.TryGetValue($"{root}:{string.Join('/', segments[..(i + 1)])}", out var bundle)
+                || !bundle.Members.TryGetValue(string.Join('/', segments[(i + 1)..]), out var member))
+            {
+                return null;
+            }
+
+            return new ResolvedFile(bundle.File, member.Name, Bundle.DataOffset(bundle.File, member), member.Size);
+        }
+
         var baseDir = s.Roots[root];
         var full = System.IO.Path.GetFullPath(System.IO.Path.Combine(baseDir, normalized.Replace('/', System.IO.Path.DirectorySeparatorChar)));
         var rel = System.IO.Path.GetRelativePath(baseDir, full);
-        return rel != "." && !rel.StartsWith("..", StringComparison.Ordinal) && !System.IO.Path.IsPathRooted(rel) ? full : null;
+        return rel != "." && !rel.StartsWith("..", StringComparison.Ordinal) && !System.IO.Path.IsPathRooted(rel) ? new ResolvedFile(full, full) : null;
     }
 
     /// <summary>Rescan now (e.g. after a Jellyfin library scan).</summary>
@@ -118,10 +148,14 @@ public sealed class MenuCatalog
 
             var entries = new List<CatalogEntry>();
             var allowed = new HashSet<string>(StringComparer.Ordinal);
+            var bundles = new Dictionary<string, (string File, Dictionary<string, BundleMember> Members)>(StringComparer.Ordinal);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             for (var r = 0; r < roots.Length; r++)
             {
-                foreach (var rel in FindManifests(roots[r]))
+                var found = FindManifests(roots[r]).ToList();
+                // A folder with both X.ovmz and X.openvideomenu.json: the bundle is the one to use (spec §2.1).
+                var bundleBases = found.Where(Bundle.IsBundle).Select(f => f[..^Bundle.Extension.Length]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var rel in found.Where(f => Bundle.IsBundle(f) || !bundleBases.Contains(f[..^ManifestSuffix.Length])))
                 {
                     var key = $"{r}:{roots[r]}:{rel}";
                     seen.Add(key);
@@ -136,10 +170,23 @@ public sealed class MenuCatalog
                         continue;
                     }
 
-                    var entry = _cache.TryGetValue(key, out var hit) && hit.Modified == modified ? hit.Entry : Load(r, rel, file, modified);
-                    _cache[key] = (modified, entry);
+                    var loaded = _cache.TryGetValue(key, out var hit) && hit.Modified == modified ? (hit.Entry, hit.Members) : Load(r, rel, file, modified);
+                    _cache[key] = (modified, loaded.Item1, loaded.Item2);
+                    var entry = loaded.Item1;
                     entries.Add(entry);
-                    allowed.Add($"{r}:{rel}");
+                    if (loaded.Item2 is { } members)
+                    {
+                        bundles[$"{r}:{rel}"] = (file, members);
+                        if (entry.Valid)
+                        {
+                            allowed.Add($"{r}:{rel}/{Bundle.ManifestName}");
+                        }
+                    }
+                    else
+                    {
+                        allowed.Add($"{r}:{rel}");
+                    }
+
                     foreach (var asset in entry.Assets)
                     {
                         allowed.Add($"{r}:{asset}");
@@ -154,7 +201,7 @@ public sealed class MenuCatalog
 
             var json = JsonSerializer.Serialize(new { api = "1", format = FormatVersion, roots = roots.Length, manifests = entries }, IndexJson);
             var etag = "\"" + Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(json)))[..20].ToLowerInvariant() + "\"";
-            var snapshot = new Snapshot(roots, entries, allowed, json, etag, DateTime.UtcNow);
+            var snapshot = new Snapshot(roots, entries, allowed, bundles, json, etag, DateTime.UtcNow);
             _snapshot = snapshot;
             _log.LogInformation("Open Video Menu: {Count} manifest(s) in {Roots} library folder(s)", entries.Count, roots.Length);
             return snapshot;
@@ -165,14 +212,16 @@ public sealed class MenuCatalog
         }
     }
 
-    /// <summary>Manifest files under <paramref name="root"/>, as forward-slash relative paths. Hidden folders are skipped.</summary>
+    /// <summary>Manifests and bundles under <paramref name="root"/>, as forward-slash relative paths. Hidden folders are skipped.</summary>
     private IEnumerable<string> FindManifests(string root)
     {
         var options = new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 6, IgnoreInaccessible = true, MatchCasing = MatchCasing.CaseInsensitive };
         IEnumerable<string> files;
         try
         {
-            files = Directory.EnumerateFiles(root, "*" + ManifestSuffix, options).ToList();
+            files = Directory.EnumerateFiles(root, "*" + ManifestSuffix, options)
+                .Concat(Directory.EnumerateFiles(root, "*" + Bundle.Extension, options))
+                .ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -192,20 +241,56 @@ public sealed class MenuCatalog
         }
     }
 
-    private CatalogEntry Load(int root, string path, string file, DateTime modified)
+    /// <summary>
+    /// A manifest's catalog entry, and for a bundle its members. Media refs resolve against the folder
+    /// holding the manifest (or the bundle); assets against the manifest's own location, which for a
+    /// bundle is inside it ("…/X.ovmz/menus/a.jpg"), as if the bundle were a folder.
+    /// </summary>
+    private (CatalogEntry Entry, Dictionary<string, BundleMember>? Members) Load(int root, string path, string file, DateTime modified)
     {
+        var isBundle = Bundle.IsBundle(path);
         var id = Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes($"{root}:{path}")))[..16].ToLowerInvariant();
-        var url = $"/v1/files/{root}/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}";
+        var url = $"/v1/files/{root}/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}" + (isBundle ? "/" + Bundle.ManifestName : string.Empty);
         CatalogEntry Invalid(params string[] errors) => new() { Id = id, Root = root, Path = path, Url = url, Valid = false, Errors = [.. errors], Modified = modified.ToString("O") };
+
+        Dictionary<string, BundleMember>? members = null;
+        string text;
+        try
+        {
+            if (isBundle)
+            {
+                var (found, bundleErrors) = Bundle.Read(file);
+                members = found;
+                if (!found.TryGetValue(Bundle.ManifestName, out var manifest))
+                {
+                    bundleErrors.Add($"No {Bundle.ManifestName} at the bundle's root.");
+                }
+
+                if (bundleErrors.Count > 0)
+                {
+                    return (Invalid([.. bundleErrors]), members);
+                }
+
+                text = Encoding.UTF8.GetString(Bundle.ReadMember(file, manifest!));
+            }
+            else
+            {
+                text = File.ReadAllText(file);
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return (Invalid($"/: Unreadable: {e.Message}"), members);
+        }
 
         JsonDocument doc;
         try
         {
-            doc = JsonDocument.Parse(File.ReadAllText(file));
+            doc = JsonDocument.Parse(text);
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (JsonException e)
         {
-            return Invalid($"/: Not valid JSON or unreadable: {e.Message}");
+            return (Invalid($"/: Not valid JSON: {e.Message}"), members);
         }
 
         using (doc)
@@ -214,7 +299,7 @@ public sealed class MenuCatalog
             var errors = new List<string>();
             if (m.ValueKind != JsonValueKind.Object)
             {
-                return Invalid("/: A manifest must be a JSON object.");
+                return (Invalid("/: A manifest must be a JSON object."), members);
             }
 
             if (Str(m, "format") != "openvideomenu")
@@ -240,14 +325,16 @@ public sealed class MenuCatalog
 
             if (errors.Count > 0)
             {
-                return Invalid([.. errors]);
+                return (Invalid([.. errors]), members);
             }
 
             var dir = path.Contains('/') ? path[..path.LastIndexOf('/')] : string.Empty;
             string? InRoot(string rel) => NormalizePosix(dir.Length == 0 ? rel : $"{dir}/{rel}");
+            var assetDir = isBundle ? path : dir;
+            string? AssetInRoot(string rel) => NormalizePosix(assetDir.Length == 0 ? rel : $"{assetDir}/{rel}");
 
             var hasMenus = m.TryGetProperty("menus", out var menus) && menus.ValueKind == JsonValueKind.Object && menus.EnumerateObject().Any();
-            return new CatalogEntry
+            return (new CatalogEntry
             {
                 Id = id,
                 Root = root,
@@ -264,9 +351,9 @@ public sealed class MenuCatalog
                     var relPath = r.ValueKind == JsonValueKind.String && IsRelative(r.GetString()!) ? InRoot(r.GetString()!) : null;
                     return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath);
                 }).ToList(),
-                Assets = MenuAssets(m).Select(InRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
+                Assets = MenuAssets(m).Select(AssetInRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
                 Modified = modified.ToString("O"),
-            };
+            }, members);
         }
     }
 

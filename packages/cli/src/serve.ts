@@ -2,8 +2,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { resolve, sep } from "node:path";
-import { FORMAT_NAME } from "@openvideomenu/core";
-import { CONTENT_TYPES, findManifests, sendFile } from "@openvideomenu/asset-server";
+import { BUNDLE_MANIFEST_NAME, FORMAT_NAME, isBundleFileName } from "@openvideomenu/core";
+import { CONTENT_TYPES, findManifests, memberDataOffset, readBundle, sendFile } from "@openvideomenu/asset-server";
 
 export interface PreviewOptions {
   root: string;
@@ -46,7 +46,9 @@ function playerPage(): string {
   toggle.href = "?" + other.toString();
   toggle.textContent = view === "fallback" ? "menu view" : "list view";
   setTimeout(() => (document.getElementById("help").style.opacity = "0.25"), 5000);
-  window.menuPlayer = OpenVideoMenuPlayer.loadPlayer(document.getElementById("player"), "/media/" + m.split("/").map(encodeURIComponent).join("/"), {
+  // A bundle is read as if it were a folder holding manifest.json (spec §2.1).
+  const manifestPath = /\.ovmz$/i.test(m) ? m + "/${BUNDLE_MANIFEST_NAME}" : m;
+  window.menuPlayer = OpenVideoMenuPlayer.loadPlayer(document.getElementById("player"), "/media/" + manifestPath.split("/").map(encodeURIComponent).join("/"), {
     view,
     showHidden: params.has("hidden"),
     onExit: () => { if (history.length > 1) history.back(); },
@@ -58,7 +60,7 @@ export function startPreview({ root, port, host }: PreviewOptions): Promise<stri
   const rootDir = resolve(root);
   const bundle = playerBundlePath();
 
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://localhost");
       const path = decodeURIComponent(url.pathname);
@@ -74,6 +76,8 @@ export function startPreview({ root, port, host }: PreviewOptions): Promise<stri
       if (path.startsWith("/media/")) {
         const file = resolve(rootDir, "." + path.slice("/media".length));
         if (file !== rootDir && !file.startsWith(rootDir + sep)) return void res.writeHead(403).end("Forbidden");
+        const member = await bundleMember(rootDir, path.slice("/media/".length));
+        if (member) return sendFile(req, res, member.file, {}, member.slice);
         if (!existsSync(file) || !statSync(file).isFile()) return void res.writeHead(404).end("Not found");
         return sendFile(req, res, file);
       }
@@ -87,6 +91,20 @@ export function startPreview({ root, port, host }: PreviewOptions): Promise<stri
     server.once("error", reject);
     server.listen(port, host, () => resolvePromise(`http://${host === "0.0.0.0" ? "localhost" : host}:${port}/`));
   });
+}
+
+/** A path through a bundle ("X/X.ovmz/menus/a.jpg"): the bundle file and the member's slice. */
+async function bundleMember(rootDir: string, rel: string) {
+  const segments = rel.split("/");
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (!isBundleFileName(segments[i]!)) continue;
+    const file = resolve(rootDir, ...segments.slice(0, i + 1));
+    if (!file.startsWith(rootDir + sep) || !existsSync(file) || !statSync(file).isFile()) return undefined;
+    const member = (await readBundle(file)).members.get(segments.slice(i + 1).join("/"));
+    if (!member) return undefined;
+    return { file, slice: { name: member.name, start: await memberDataOffset(file, member), size: member.size } };
+  }
+  return undefined;
 }
 
 export function readText(file: string): string {

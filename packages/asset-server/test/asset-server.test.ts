@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { AnyOf, Catalog, createAssetServer, isLocalAddress, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type Credential, type TokenCheck } from "../src/index.js";
+import { AnyOf, Catalog, createAssetServer, isLocalAddress, JellyfinTokenCheck, NoAuth, packBundle, PlexTokenCheck, readBundle, unpackBundle, type Credential, type TokenCheck } from "../src/index.js";
 import { legacyUnicastReply } from "../src/discovery.js";
 
 const plex = (token: string): Credential => ({ kind: "plex", token });
@@ -90,9 +90,9 @@ describe("Catalog roots", () => {
   it("serves files under roots given with a trailing separator (UNC shares and drive roots resolve that way)", async () => {
     const withSlash = new Catalog([root + "/"]);
     await withSlash.scan();
-    expect(withSlash.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
-    expect(withSlash.resolveFile(0, "Movie (2020)/Movie (2020).mp4")).toBeUndefined();
-    expect(withSlash.resolveFile(0, "../secrets.txt")).toBeUndefined();
+    expect(await withSlash.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
+    expect(await withSlash.resolveFile(0, "Movie (2020)/Movie (2020).mp4")).toBeUndefined();
+    expect(await withSlash.resolveFile(0, "../secrets.txt")).toBeUndefined();
   });
 
   it.runIf(process.platform === "win32")("serves files under a UNC-style root", async () => {
@@ -101,7 +101,7 @@ describe("Catalog roots", () => {
     const unc = new Catalog([`\\\\localhost\\${drive}$${root.slice(2)}`]);
     await unc.scan(); // an unreachable root (admin shares disabled) just yields no manifests
     if (unc.entries().length === 0) return;
-    expect(unc.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
+    expect(await unc.resolveFile(0, "Movie (2020)/menus/bg.jpg")).toBeDefined();
   });
 });
 
@@ -425,5 +425,87 @@ describe("legacyUnicastReply", () => {
 
   it("stays quiet for questions it can't answer", () => {
     expect(legacyUnicastReply({ questions: [{ name: "_googlecast._tcp.local", type: "PTR" }] }, records)).toBeUndefined();
+  });
+});
+
+describe("Bundles", () => {
+  let dir: string;
+  const at = (rel: string) => join(dir, ...rel.split("/"));
+  const put = (rel: string, content: string | Buffer) => {
+    mkdirSync(dirname(at(rel)), { recursive: true });
+    writeFileSync(at(rel), content);
+  };
+  let server: ReturnType<typeof createAssetServer>;
+  let base = "";
+  const get = (path: string, headers: Record<string, string> = {}) => fetch(base + path, { headers });
+
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), "ovm-bundle-"));
+    // An authoring folder, packed into a bundle next to the film.
+    put("src/Movie (2020).openvideomenu.json", JSON.stringify(MANIFEST));
+    put("src/menus/bg.jpg", "JPG");
+    put("src/menus/loop.mp4", Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 251)));
+    put("src/menus/sel.png", "PNG");
+    put("src/menus/whoosh.mp4", "WHOOSH");
+    put("lib/Movie (2020)/Movie (2020).mp4", "FILM");
+    const packed = await packBundle(at("src/Movie (2020).openvideomenu.json"), at("lib/Movie (2020)/Movie (2020).ovmz"));
+    expect(packed.problems).toEqual([]);
+    // A loose manifest beside it: the bundle wins (spec §2.1).
+    put("lib/Movie (2020)/Movie (2020).openvideomenu.json", JSON.stringify({ ...MANIFEST, title: { name: "Loose" } }));
+    server = createAssetServer({ catalog: new Catalog([at("lib")]), auth: new NoAuth(), allowRemote: false });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => {
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("indexes a bundle as its own path, its manifest inside it, media beside it", async () => {
+    const index = (await (await get("/v1/index")).json()) as { manifests: { path: string; url: string; title: { name: string }; media: { id: string; path?: string }[] }[] };
+    expect(index.manifests.map((m) => [m.path, m.title.name])).toEqual([["Movie (2020)/Movie (2020).ovmz", "Movie"]]);
+    expect(index.manifests[0]!.url).toBe("/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz/manifest.json");
+    expect(index.manifests[0]!.media.find((m) => m.id === "feature")!.path).toBe("Movie (2020)/Movie (2020).mp4");
+  });
+
+  it("serves the manifest and the members it names, as if the bundle were a folder", async () => {
+    const manifest = await get("/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz/manifest.json");
+    expect(manifest.status).toBe(200);
+    expect(((await manifest.json()) as { title: { name: string } }).title.name).toBe("Movie");
+    const bg = await get("/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz/menus/bg.jpg");
+    expect(bg.status).toBe(200);
+    expect(bg.headers.get("content-type")).toBe("image/jpeg");
+    expect(await bg.text()).toBe("JPG");
+  });
+
+  it("supports range requests on a member", async () => {
+    const res = await get("/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz/menus/loop.mp4", { Range: "bytes=10-19" });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-range")).toBe("bytes 10-19/1000");
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual(Array.from({ length: 10 }, (_, i) => (10 + i) % 251));
+  });
+
+  it("serves nothing else: not the bundle file, not the film, not unknown members, not the loose manifest", async () => {
+    for (const path of [
+      "/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz",
+      "/v1/files/0/Movie%20(2020)/Movie%20(2020).mp4",
+      "/v1/files/0/Movie%20(2020)/Movie%20(2020).ovmz/menus/nope.png",
+      "/v1/files/0/Movie%20(2020)/Movie%20(2020).openvideomenu.json",
+    ]) expect((await get(path)).status, path).toBe(404);
+  });
+
+  it("rejects bundles with compressed entries, and unpacks what it packs", async () => {
+    // Flip the first entry's method to deflate (8) in the central directory: readers must refuse it.
+    const bytes = readFileSync(at("lib/Movie (2020)/Movie (2020).ovmz"));
+    const cd = bytes.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    const bad = Buffer.from(bytes);
+    bad.writeUInt16LE(8, cd + 10);
+    writeFileSync(at("bad.ovmz"), bad);
+    expect((await readBundle(at("bad.ovmz"))).errors[0]).toMatch(/Compressed entry/);
+
+    const n = await unpackBundle(at("lib/Movie (2020)/Movie (2020).ovmz"), at("out"), "Movie (2020).openvideomenu.json");
+    expect(n).toBe(5);
+    expect(readFileSync(at("out/menus/loop.mp4"))).toEqual(readFileSync(at("src/menus/loop.mp4")));
+    expect(JSON.parse(readFileSync(at("out/Movie (2020).openvideomenu.json"), "utf8")).title.name).toBe("Movie");
   });
 });

@@ -208,10 +208,10 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
 
 private data class Quad(val title: String, val subtitle: String, val thumb: String?, val hasMenu: Boolean)
 
-/** "Season 01" etc. from where the disc's manifest sits, e.g. Show/Season 01/Disc 2.openvideomenu.json */
+/** "Season 01" etc. from where the disc's manifest or bundle sits, e.g. Show/Season 01/Disc 2.ovmz */
 private fun discLabel(disc: Tile.Disc): String {
     val parts = disc.entry.path.split('/')
-    val file = parts.last().removeSuffix(".openvideomenu.json")
+    val file = parts.last().removeSuffix(".openvideomenu.json").removeSuffix(".ovmz")
     val folder = parts.getOrNull(parts.size - 2) ?: ""
     return if (file.equals(disc.entry.title?.name, ignoreCase = true)) folder else file
 }

@@ -2,7 +2,7 @@ import { createReadStream, readdirSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, relative, sep } from "node:path";
-import { isManifestFileName } from "@openvideomenu/core";
+import { isBundleFileName, isManifestFileName } from "@openvideomenu/core";
 
 export const CONTENT_TYPES: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
@@ -50,7 +50,7 @@ export function findManifests(root: string, maxDepth = 6): string[] {
       if (skipped(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth < maxDepth) walk(full, depth + 1);
-      else if (entry.isFile() && isManifestFileName(entry.name)) found.push(full);
+      else if (entry.isFile() && (isManifestFileName(entry.name) || isBundleFileName(entry.name))) found.push(full);
     }
   };
   walk(root, 0);
@@ -78,7 +78,7 @@ export async function scanManifests(root: string, maxDepth = 6): Promise<string[
       if (skipped(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth < maxDepth) subdirs.push(walk(full, depth + 1));
-      else if (entry.isFile() && isManifestFileName(entry.name)) found.push(full);
+      else if (entry.isFile() && (isManifestFileName(entry.name) || isBundleFileName(entry.name))) found.push(full);
     }
     await Promise.all(subdirs);
   };
@@ -86,12 +86,22 @@ export async function scanManifests(root: string, maxDepth = 6): Promise<string[
   return found.sort().map((f) => relative(root, f).split(sep).join("/"));
 }
 
-/** Serve a file with HTTP Range support so seeking works. */
-export function sendFile(req: IncomingMessage, res: ServerResponse, file: string, extraHeaders: Record<string, string> = {}) {
-  const size = statSync(file).size;
+/**
+ * Serve a file with HTTP Range support so seeking works. [slice] serves part of the file instead: a
+ * stored bundle member (its bytes from `start`, `size` long; `name` gives its content type).
+ */
+export function sendFile(
+  req: IncomingMessage,
+  res: ServerResponse,
+  file: string,
+  extraHeaders: Record<string, string> = {},
+  slice?: { name: string; start: number; size: number },
+) {
+  const base = slice?.start ?? 0;
+  const size = slice?.size ?? statSync(file).size;
   const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
   const headers: Record<string, string | number> = {
-    "Content-Type": contentType(file),
+    "Content-Type": contentType(slice?.name ?? file),
     "Accept-Ranges": "bytes",
     "Cache-Control": "no-cache",
     ...extraHeaders,
@@ -107,10 +117,11 @@ export function sendFile(req: IncomingMessage, res: ServerResponse, file: string
     }
     res.writeHead(206, { ...headers, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
     if (req.method === "HEAD") return void res.end();
-    createReadStream(file, { start, end }).pipe(res);
+    createReadStream(file, { start: base + start, end: base + end }).pipe(res);
   } else {
     res.writeHead(200, { ...headers, "Content-Length": size });
     if (req.method === "HEAD") return void res.end();
-    createReadStream(file).pipe(res);
+    if (size === 0) return void res.end();
+    createReadStream(file, { start: base, end: base + size - 1 }).pipe(res);
   }
 }

@@ -7,3 +7,5 @@ export type { Credential, TokenCheck } from "./auth.js";
 export { advertise, localIPv4s, SERVICE_TYPE } from "./discovery.js";
 export { CONTENT_TYPES, contentType, findManifests, sendFile } from "./files.js";
 export { checkAssetFiles, checkIgnoreFiles, isFaststart } from "./media-check.js";
+export { memberDataOffset, packBundle, readBundle, readMember, unpackBundle } from "./bundle.js";
+export type { Bundle, BundleMember } from "./bundle.js";

@@ -4,6 +4,7 @@
   "description": "Proof-of-concept LAN server that hands menu manifests and menu art to TV apps. Read-only; serves only files a manifest names as menu art; never media.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": { "node": ">=22.2" },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

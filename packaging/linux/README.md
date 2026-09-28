@@ -5,7 +5,7 @@ No port is needed: the asset server is plain Node.js. Choose Docker (below, or
 
 ## As a systemd service
 
-Needs Node.js 22 or newer (`node --version`).
+Needs Node.js 22.2 or newer (`node --version`).
 
 ```sh
 # 1. Build it (from a checkout of this repository) and copy it into place.

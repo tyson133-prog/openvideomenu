@@ -15,7 +15,28 @@ A Open Video Menu manifest adds a disc-style menu to media that already exists: 
 - **Relative paths resolve against the manifest's own URL or location.** They use forward slashes, and they MAY contain spaces and other characters (readers percent-encode as needed).
 - Absolute URLs are allowed anywhere a path is.
 - **Keep menu art away from media scanners.** Put menu assets in their own folder (e.g. `menus/`). If it holds video or audio, include a `.plexignore` containing `*` and an empty `.ignore` (Jellyfin), or media servers will list the clips as titles or as extra versions of the film. `openvideomenu validate` warns when these are missing.
-- *(Reserved)* A bundle `<Title>.ovmz` is a zip archive containing `manifest.json` and its assets. Bundles are specified in a later draft.
+
+### 2.1 Bundles
+
+A menu set can ship as one file instead of a manifest plus a folder of art: a **bundle** named
+`<Title>.ovmz`, placed where the manifest would be (next to the main media file).
+
+- **Publishers SHOULD bundle manifests that have local assets** (menu images, clips, audio), so a title's
+  folder holds one menu file. A plain `<Title>.openvideomenu.json` with loose assets remains valid.
+  Manifests without local assets need no bundle.
+- **A bundle is a ZIP archive** holding `manifest.json` at its root and the manifest's assets at the
+  paths the manifest names (e.g. `menus/main.jpg`).
+- **Every entry MUST be stored uncompressed** (ZIP method 0), and entries MUST NOT be encrypted. Menu
+  art is already compressed (JPEG, PNG, video, audio), so compression would save almost nothing, while
+  stored entries let a server serve any member, including byte ranges of a video clip, without
+  unpacking. ZIP64 MAY be used for bundles over 4 GB.
+- **Entry names** use forward slashes and MUST NOT be absolute or contain `..` segments.
+- **Paths resolve as if the bundle were a folder** named `<Title>.ovmz` holding `manifest.json`: asset
+  paths resolve inside the bundle. **`media` refs resolve against the folder that contains the bundle**,
+  exactly as for a plain manifest, so the same manifest works in either form.
+- If a folder holds both `<Title>.ovmz` and `<Title>.openvideomenu.json`, readers SHOULD use the bundle.
+- Readers MUST support both forms. `openvideomenu pack` makes a bundle from a manifest and its assets;
+  `openvideomenu unpack` does the reverse.
 
 The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.schema.json). The schema checks structure only. Cross-references (§7) are checked by validators such as `openvideomenu validate`.
 

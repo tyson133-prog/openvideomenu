@@ -58,18 +58,25 @@ public class OpenVideoMenuController(MenuCatalog catalog, Microsoft.Extensions.L
     [Authorize]
     public async Task<IActionResult> Files([FromRoute] int root, [FromRoute] string path, CancellationToken cancel)
     {
-        var file = await catalog.ResolveFile(root, Uri.UnescapeDataString(path), cancel).ConfigureAwait(false);
+        var found = await catalog.ResolveFile(root, Uri.UnescapeDataString(path), cancel).ConfigureAwait(false);
         // 404 for anything not allowlisted, so the server doesn't confirm which other files exist.
-        if (file is null || !System.IO.File.Exists(file))
+        if (found is null || !System.IO.File.Exists(found.File))
         {
             Microsoft.Extensions.Logging.LoggerExtensions.LogDebug(log, "Open Video Menu: refused files/{Root}/{Path}", root, path);
             return NotFound();
         }
 
-        var type = file.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+        var type = found.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
             ? "application/json; charset=utf-8"
-            : ContentTypes.TryGetContentType(file, out var t) ? t : "application/octet-stream";
+            : ContentTypes.TryGetContentType(found.Name, out var t) ? t : "application/octet-stream";
         Response.Headers.CacheControl = "private, max-age=60";
-        return PhysicalFile(file, type, enableRangeProcessing: true);
+        if (found.Length is { } length)
+        {
+            // A bundle member: a seekable window onto the bundle file, so range requests work as for a file.
+            var stream = new FileStream(found.File, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true);
+            return File(new SliceStream(stream, found.Start, length), type, enableRangeProcessing: true);
+        }
+
+        return PhysicalFile(found.File, type, enableRangeProcessing: true);
     }
 }

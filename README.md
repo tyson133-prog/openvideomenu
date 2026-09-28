@@ -27,7 +27,7 @@ Folder names follow the Plex/Jellyfin conventions people already use, so there's
 
 ## Try it
 
-You'll need Node.js 20+ and ffmpeg.
+You'll need Node.js 22.2+ and ffmpeg.
 
 ```sh
 npm install

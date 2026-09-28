@@ -9,15 +9,17 @@ const MP4_FAMILY = new Set([".mp4", ".m4a", ".m4v", ".mov"]);
  * first. Walks only the top-level box headers, so it reads a few bytes even for large files.
  * Returns undefined for non-MP4 files or when neither box is found.
  */
-export async function isFaststart(file: string): Promise<boolean | undefined> {
-  if (!MP4_FAMILY.has(extname(file).toLowerCase())) return undefined;
+export async function isFaststart(file: string, slice?: { name: string; start: number; size: number }): Promise<boolean | undefined> {
+  if (!MP4_FAMILY.has(extname(slice?.name ?? file).toLowerCase())) return undefined;
   const fd = await open(file, "r");
   try {
-    const size = (await fd.stat()).size;
+    // A bundle member is a slice of the bundle file; box offsets count from its start.
+    const base = slice?.start ?? 0;
+    const size = slice?.size ?? (await fd.stat()).size;
     const header = Buffer.alloc(16);
     let offset = 0;
     for (let i = 0; i < 64 && offset + 8 <= size; i++) {
-      await fd.read(header, 0, 16, offset);
+      await fd.read(header, 0, 16, base + offset);
       let boxSize = header.readUInt32BE(0);
       const type = header.toString("latin1", 4, 8);
       if (type === "moov") return true;

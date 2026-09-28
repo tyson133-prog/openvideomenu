@@ -142,6 +142,13 @@ Signed in. One manifest, or one menu asset a manifest names.
 - **Range requests MUST be supported**, because players seek in motion menus and transitions.
 - `Content-Type` SHOULD match the file. Servers MAY let apps cache art briefly
   (`Cache-Control: private, max-age=60`).
+- **Bundles** (format spec §2.1) are served as if they were folders: the manifest at
+  `{path to bundle}/manifest.json` and each asset at `{path to bundle}/{asset path}`, for example
+  `/v1/files/0/Movies/The%20Matrix%20(1999)/The%20Matrix%20(1999).ovmz/menus/main.jpg`. Relative
+  asset URLs then resolve inside the bundle on their own. Range requests work the same way (members
+  are stored uncompressed, so a range maps straight onto the bundle file). The index lists a bundle
+  with `path` = the bundle's own path and `url` = its `manifest.json`; `media` paths are relative to
+  the folder that holds the bundle, as for a plain manifest.
 
 ## 5. Network
 
@@ -159,5 +166,4 @@ remote-access settings.
 
 - **Resolved media:** native servers know which of their items each `media[].path` is. They could
   return that directly (e.g. `"item": {"scheme": "jellyfin", "id": "…"}`), so apps skip path
-  matching. It would be an optional additive field.
-- **Bundles:** serving `.ovmz` bundles (see the format spec, §2) once bundles are specified.
+  matching. It would be an optional additive field. 

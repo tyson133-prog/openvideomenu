@@ -14,6 +14,11 @@ export function isManifestFileName(name: string): boolean {
   return name.toLowerCase().endsWith(MANIFEST_SUFFIX);
 }
 
+/** Whether a file name is a bundle's, `<Title>.ovmz` (any case). Spec §2.1. */
+export function isBundleFileName(name: string): boolean {
+  return name.toLowerCase().endsWith(BUNDLE_EXTENSION);
+}
+
 /** Whether a manifest's `format` value is this format. */
 export function isFormatId(value: unknown): boolean {
   return value === FORMAT_ID;
