@@ -435,6 +435,73 @@ function addTile(row as object, item as object, kind as string, badge as boolean
     return tile
 end function
 
+' --- where the viewer stopped, remembered by this app ---------------------------------------
+' Servers keep their own resume points, but skip short viewings and often extras, and don't know
+' which soundtrack a disc menu chose. So the app also keeps, per server and title, where the viewer
+' stopped and with which tracks (registry "stops": { key: { position, audio, subtitle, at } }).
+
+function stopKey(item as object) as string
+    return msOr(m.login.machineId, msOr(m.login.serverId, m.login.url)) + "|" + itemKey(item)
+end function
+
+function stopsRead() as object
+    stops = ParseJson(m.registry.Read("stops"))
+    if stops = invalid then stops = {}
+    return stops
+end function
+
+sub stopsWrite(stops as object)
+    m.registry.Write("stops", FormatJson(stops))
+    m.registry.Flush()
+end sub
+
+function stopOf(item as object) as dynamic
+    return stopsRead()[stopKey(item)]
+end function
+
+' A new resume point replaces the previous one only once the viewer has watched 10 seconds of this
+' playback; a brief or accidental play leaves the previous point as it was.
+sub rememberStop(item as object, position as float, req as object)
+    if position < 5 or m.playing = invalid or m.playing.startedAt = invalid then return
+    if UpTime(0) - m.playing.startedAt < 10 then return
+    stops = stopsRead()
+    now = CreateObject("roDateTime").AsSeconds()
+    stops[stopKey(item)] = { position: position, audio: req.audio, subtitle: req.subtitle, at: now, touchedAt: now }
+    ' Keep the 200 most recent.
+    if stops.Count() > 200
+        oldest = invalid
+        for each k in stops
+            if oldest = invalid or stops[k].at < stops[oldest].at then oldest = k
+        end for
+        stops.Delete(oldest)
+    end if
+    stopsWrite(stops)
+end sub
+
+' Playback of the title started here: note it, so the server's state changing because of this play
+' isn't mistaken for viewing elsewhere. With no record yet, keep the server's current resume point
+' as this app's own first, so a short play here (which may reset the server's) can't lose it.
+sub touchStop(item as object)
+    stops = stopsRead()
+    key = stopKey(item)
+    now = CreateObject("roDateTime").AsSeconds()
+    mine = stops[key]
+    if mine <> invalid and not changedElsewhere(item, mine)
+        mine.touchedAt = now
+    else if resumeOf(item) > 0
+        stops[key] = { position: resumeOf(item), audio: 1, subtitle: 0, at: playedAtOf(item), touchedAt: now }
+    else
+        if mine <> invalid then stops.Delete(key)
+        return
+    end if
+    stopsWrite(stops)
+end sub
+
+sub forgetStop(item as object)
+    stops = stopsRead()
+    if stops.Delete(stopKey(item)) then stopsWrite(stops)
+end sub
+
 ' --- a show: its discs, then its seasons ------------------------------------------------------
 
 sub openShow(tile as object)
@@ -541,7 +608,11 @@ sub playDirect(item as object, tile as object, screen as string, list as object)
         return
     end if
     m.direct = { item: item, tile: tile, screen: screen, list: list }
-    startTitle({ start: resumeOf(item) }, files[0])
+    ' Where this app last stopped it (with those tracks) when that's the newest; else the server's.
+    req = { start: resumeOf(item) }
+    mine = stopOf(item)
+    if mine <> invalid and not changedElsewhere(item, mine) then req = { start: mine.position, audio: mine.audio, subtitle: mine.subtitle }
+    startTitle(req, files[0])
 end sub
 
 sub backFromTitle(position as float, watched as boolean)

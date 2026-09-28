@@ -124,7 +124,7 @@ fun App(vm: AppViewModel) {
                     androidx.activity.compose.BackHandler { vm.back() }
                     com.ovmplayer.tv.ui.ResumeScreen(s.open.title, s.resumes, s.justTheFilm, onChoose = vm::resumeChosen)
                 }
-                is Screen.Play -> PlayScreen(s.request, onDone = vm::back)
+                is Screen.Play -> PlayScreen(s.request, onProgress = vm::directProgress, onDone = vm::playFinished)
                 is Screen.Failed -> FailedScreen(s.message, onRetry = { vm.start() }, onSignOut = vm::signOut)
             }
         }

@@ -476,12 +476,16 @@ sub openWhenReady()
     if m.opening.movie = invalid then files = discEpisodeFiles(m.opening.entry["id"]) ' a TV disc: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
     ' Stopped partway last time: ask first, like a Blu-ray player. Every title the disc plays that
-    ' has a resume point (the film, an extra, an episode), most recently played first. The menu's
-    ' own Resume button gets the newest either way.
-    m.opening.resumes = discResumes(m.opening.manifest, m.menuMedia)
+    ' was stopped partway (the film, an extra, an episode), most recently played first; on a movie
+    ' disc the film always leads the list ("Play …" when it wasn't started), so it's one press away.
+    ' The menu's own Resume button gets the newest.
+    m.opening.resumes = discResumes(m.opening.manifest, m.menuMedia, m.opening.movie)
     m.opening.lastStop = invalid
-    if m.opening.resumes.Count() > 0
-        newest = m.opening.resumes[0]
+    newest = invalid
+    for each r in m.opening.resumes
+        if r.position > 0 and (newest = invalid or r.playedAt > newest.playedAt) then newest = r
+    end for
+    if newest <> invalid
         m.opening.lastStop = { media: newest.media, position: newest.position }
         askResume()
     else
@@ -489,25 +493,55 @@ sub openWhenReady()
     end if
 end sub
 
-' [{ media, item, position, label, playedAt }] newest first, at most four.
-function discResumes(manifest as object, media as object) as object
+' The prompt's titles: [{ media, item, position, audio, subtitle, label, playedAt }]. Titles stopped
+' partway, newest first; on a movie disc the film first, with position 0 when it wasn't started.
+' At most four. Empty when nothing was stopped partway.
+function discResumes(manifest as object, media as object, film as dynamic) as object
     seen = {}
     list = []
+    filmEntry = invalid
     for each id in media
         item = media[id].item
         key = itemKey(item)
-        if resumeOf(item) > 0 and not seen.DoesExist(key)
+        if not seen.DoesExist(key)
             seen[key] = true
             label = invalid
             if manifest["media"] <> invalid and manifest["media"][id] <> invalid then label = manifest["media"][id]["label"]
-            list.push({ media: id, item: item, position: resumeOf(item), label: msOr(label, titleOf(item)), playedAt: playedAtOf(item) })
+            r = resumePointOf(item)
+            r.media = id
+            r.item = item
+            r.label = msOr(label, titleOf(item))
+            if film <> invalid and key = itemKey(film)
+                filmEntry = r
+            else if r.position > 0
+                list.push(r)
+            end if
         end if
     end for
     list.SortBy("playedAt", "r")
+    if filmEntry <> invalid and (filmEntry.position > 0 or list.Count() > 0) then list.Unshift(filmEntry)
     while list.Count() > 4
         list.Pop()
     end while
     return list
+end function
+
+' Where to pick a title up, and with which tracks: this app's own record of where the viewer
+' stopped (with the soundtrack and subtitles they had), or the server's resume point when that's
+' newer (watched elsewhere; tracks then default to the first soundtrack, subtitles off).
+function resumePointOf(item as object) as object
+    mine = stopOf(item)
+    if mine <> invalid and not changedElsewhere(item, mine)
+        return { position: mine.position, audio: msOr(mine.audio, 1), subtitle: msOr(mine.subtitle, 0), playedAt: mine.at }
+    end if
+    return { position: resumeOf(item), audio: 1, subtitle: 0, playedAt: playedAtOf(item) }
+end function
+
+' Whether the server's state for the title comes from viewing somewhere else (another device or
+' app) after this app last played it. Otherwise this app's record stands, even when the server
+' reset its resume point because of a short play here.
+function changedElsewhere(item as object, mine as object) as boolean
+    return playedAtOf(item) > msOr(mine.touchedAt, mine.at) + 60
 end function
 
 sub askResume()
@@ -522,7 +556,11 @@ sub askResume()
     else
         dialog.message = ["Pick up where you left off:"]
         for each r in resumes
-            buttons.push("Resume " + r.label + " from " + clockOf(r.position))
+            if r.position > 0
+                buttons.push("Resume " + r.label + " from " + clockOf(r.position))
+            else
+                buttons.push("Play " + r.label)
+            end if
         end for
     end if
     buttons.push("Disc menu")
@@ -543,7 +581,7 @@ sub onResumeChosen()
         if m.opening.movie <> invalid and itemKey(r.item) = itemKey(m.opening.movie) then tile = m.menuFrom.tile
         m.direct = { item: r.item, tile: tile, screen: m.menuFrom.screen, list: m.menuFrom.list }
         m.opening = invalid
-        startTitle({ start: r.position }, m.menuMedia[r.media])
+        startTitle({ start: r.position, audio: r.audio, subtitle: r.subtitle }, m.menuMedia[r.media])
     else
         startMenu()
     end if
@@ -807,6 +845,8 @@ sub onPlayerState()
     state = m.player.state
     if state = "playing" and not m.playing.started
         m.playing.started = true
+        m.playing.startedAt = UpTime(0)
+        touchStop(m.playing.item)
         applySubtitles()
         report("/Sessions/Playing")
         m.progressTimer.control = "start"
@@ -814,6 +854,7 @@ sub onPlayerState()
         reportProgress()
     else if state = "finished"
         report("/Sessions/Playing/Stopped")
+        forgetStop(m.playing.item)
         m.playing = invalid
         closePlayer()
         titleEnded()
@@ -827,6 +868,7 @@ end sub
 
 sub stopTitle()
     position = playerPosition()
+    if m.playing <> invalid then rememberStop(m.playing.item, position, m.playing.req)
     report("/Sessions/Playing/Stopped")
     closePlayer()
     titleStopped(position)
@@ -892,7 +934,10 @@ function playerPosition() as float
 end function
 
 sub reportProgress()
-    if m.playing <> invalid and m.player <> invalid then report("/Sessions/Playing/Progress")
+    if m.playing = invalid or m.player = invalid then return
+    report("/Sessions/Playing/Progress")
+    ' Home closes the app without warning, so where the viewer is gets saved as they watch.
+    rememberStop(m.playing.item, playerPosition(), m.playing.req)
 end sub
 
 sub onReported(res as object, ctx as dynamic)

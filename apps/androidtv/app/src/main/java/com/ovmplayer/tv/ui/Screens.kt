@@ -83,7 +83,11 @@ fun ResumeScreen(
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val focus = remember { FocusRequester() }
         resumes.forEachIndexed { i, r ->
-            val label = if (justTheFilm) "Resume from ${clock(r.position)}" else "Resume ${r.label} from ${clock(r.position)}"
+            val label = when {
+                justTheFilm -> "Resume from ${clock(r.position)}"
+                r.position > 0 -> "Resume ${r.label} from ${clock(r.position)}"
+                else -> "Play ${r.label}"
+            }
             Button(onClick = { onChoose(r) }, modifier = if (i == 0) Modifier.focusRequester(focus) else Modifier) { Text(label) }
         }
         Button(onClick = { onChoose(null) }) { Text("Disc menu") }
@@ -250,6 +254,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     val context = LocalContext.current
     val assets = vm.assets ?: return onExit()
     var playing by remember { mutableStateOf<PlayRequest?>(null) }
+    var playingMsg by remember { mutableStateOf<PageMessage.Play?>(null) }
     var handle by remember { mutableStateOf<PlayerHandle?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -260,7 +265,10 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
                 is PageMessage.Play -> scope.launch {
                     val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle)
-                    if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else playing = request
+                    if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else {
+                        playingMsg = msg
+                        playing = request
+                    }
                 }
                 PageMessage.Exit -> onExit()
                 is PageMessage.Error -> failure = msg.message
@@ -269,13 +277,28 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     }
     // Remote keys belong to the player while a title plays, never to the menu page behind it.
     LaunchedEffect(playing) { web.setBehindPlayer(playing != null) }
+    // Where the viewer is gets saved as they watch: Home leaves the app without a stop.
+    fun saveMenuPosition() {
+        val msg = playingMsg ?: return
+        val position = handle?.positionSeconds() ?: return
+        if (playing != null) vm.menuTitleFinished(open, msg.mediaId, position, ended = false, msg.audio, msg.subtitle)
+    }
+    LaunchedEffect(playing) {
+        while (playing != null) {
+            kotlinx.coroutines.delay(10_000)
+            saveMenuPosition()
+        }
+    }
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(web, lifecycle) {
         web.open()
         // Home/other apps: pause the page (its menu music and motion stop), resume on return.
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
-                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> web.onPause()
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    saveMenuPosition()
+                    web.onPause()
+                }
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> web.onResume()
                 else -> {}
             }
@@ -290,6 +313,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
         val p = playing
         if (p != null) {
             val position = handle?.positionSeconds() ?: 0.0
+            playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, position, ended = false, it.audio, it.subtitle) }
             playing = null
             web.stopped(position)
             web.requestFocus()
@@ -306,6 +330,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 request = request,
                 onReady = { handle = it },
                 onEnded = {
+                    playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, null, ended = true, it.audio, it.subtitle) }
                     playing = null
                     web.ended()
                     web.requestFocus()
@@ -352,11 +377,27 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
 
 /** Direct playback of a title without a menu. */
 @Composable
-fun PlayScreen(request: PlayRequest, onDone: () -> Unit) {
+fun PlayScreen(request: PlayRequest, onProgress: (Double) -> Unit, onDone: (position: Double?, ended: Boolean) -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
-    BackHandler { onDone() }
+    var handle by remember { mutableStateOf<com.ovmplayer.tv.player.PlayerHandle?>(null) }
+    BackHandler { onDone(handle?.positionSeconds(), false) }
+    // Where the viewer is gets saved as they watch: Home leaves the app without a stop.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(10_000)
+            handle?.positionSeconds()?.let(onProgress)
+        }
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) handle?.positionSeconds()?.let(onProgress)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (error == null) VideoPlayer(request, onReady = {}, onEnded = onDone, onError = { error = it }, modifier = Modifier.fillMaxSize())
+        if (error == null) VideoPlayer(request, onReady = { handle = it }, onEnded = { onDone(null, true) }, onError = { error = it }, modifier = Modifier.fillMaxSize())
         else Centered { Text(error!!, style = MaterialTheme.typography.headlineSmall) }
     }
 }

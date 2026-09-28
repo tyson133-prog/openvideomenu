@@ -1,5 +1,7 @@
 package com.ovmplayer.tv.store
 
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -49,8 +51,41 @@ class Settings(context: Context) {
         get() = prefs.getString("jellyfin", null)?.let { runCatching { com.ovmplayer.tv.net.json.decodeFromString(JellyfinLogin.serializer(), Secrets.decrypt(it)) }.getOrNull() }
         set(value) = prefs.edit().putString("jellyfin", value?.let { Secrets.encrypt(com.ovmplayer.tv.net.json.encodeToString(JellyfinLogin.serializer(), it)) }).apply()
 
+    /**
+     * Where the viewer stopped each title this app played, with the tracks they had, keyed by server
+     * and item ([stopKey]). Servers keep their own resume points, but skip short viewings and often
+     * extras, and don't know which soundtrack a disc menu chose.
+     */
+    fun stopOf(key: String): Stop? = stops()[key]
+
+    fun rememberStop(key: String, stop: Stop) {
+        val all = stops().toMutableMap()
+        all[key] = stop
+        // Keep the 200 most recent.
+        val kept = all.entries.sortedByDescending { it.value.atMs }.take(200).associate { it.key to it.value }
+        prefs.edit().putString("stops", com.ovmplayer.tv.net.json.encodeToString(STOPS, kept)).apply()
+    }
+
+    fun forgetStop(key: String) {
+        val all = stops()
+        if (key in all) prefs.edit().putString("stops", com.ovmplayer.tv.net.json.encodeToString(STOPS, all - key)).apply()
+    }
+
+    private fun stops(): Map<String, Stop> =
+        prefs.getString("stops", null)?.let { runCatching { com.ovmplayer.tv.net.json.decodeFromString(STOPS, it) }.getOrNull() } ?: emptyMap()
+
     fun signOut() = prefs.edit().remove("plexToken").remove("serverId").remove("lastServer").remove("jellyfin").remove("sourceKind").apply()
 }
+
+/**
+ * Where the viewer stopped a title, with its soundtrack and subtitles (null = not chosen), and when.
+ * [touchedAtMs]: when this app last started playing it, so the server's state changing because of
+ * that play isn't mistaken for viewing elsewhere.
+ */
+@kotlinx.serialization.Serializable
+data class Stop(val position: Double, val audio: Int? = null, val subtitle: Int? = null, val atMs: Long, val touchedAtMs: Long = atMs)
+
+private val STOPS = MapSerializer(String.serializer(), Stop.serializer())
 
 @kotlinx.serialization.Serializable
 data class JellyfinLogin(val url: String, val serverId: String, val name: String, val userId: String, val token: String)

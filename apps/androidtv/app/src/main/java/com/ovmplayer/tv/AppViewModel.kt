@@ -45,6 +45,7 @@ import com.ovmplayer.tv.plex.PlexServer
 import com.ovmplayer.tv.plex.PlexSource
 import com.ovmplayer.tv.store.JellyfinLogin
 import com.ovmplayer.tv.store.Settings
+import com.ovmplayer.tv.store.Stop
 
 /** Something on screen you can pick: a movie, show or episode, or a disc (a TV disc manifest). */
 sealed interface Tile {
@@ -64,8 +65,19 @@ sealed interface Tile {
 data class TileRow(val title: String, val tiles: List<Tile>)
 
 /** A title opened into its disc menu: manifest media ids resolved to the server's files. */
-/** A title a disc plays that the viewer stopped partway: [label] is the disc's own name for it. */
-data class Resume(val mediaId: String, val item: Item, val position: Double, val label: String)
+/**
+ * A title offered when a disc opens: [label] is the disc's own name for it. [position] 0 means "Play"
+ * (the film when it wasn't started). [audio] and [subtitle] are the tracks to use.
+ */
+data class Resume(
+    val mediaId: String,
+    val item: Item,
+    val position: Double,
+    val label: String,
+    val audio: Int?,
+    val subtitle: Int?,
+    val playedAtMs: Long,
+)
 
 data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, Playable>, val lastStop: LastStop?)
 
@@ -573,8 +585,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             is Tile.Disc -> openDisc(tile)
             is Tile.Media -> when (tile.item.type) {
                 ItemType.SHOW -> openShow(tile.item)
-                ItemType.MOVIE -> if (tile.menu != null) openMovieMenu(tile.item, tile.menu) else play(tile.item, tile.item.resumeSeconds)
-                else -> play(tile.item, tile.item.resumeSeconds)
+                ItemType.MOVIE -> if (tile.menu != null) openMovieMenu(tile.item, tile.menu) else playFromLibrary(tile.item)
+                else -> playFromLibrary(tile.item)
             }
         }
     }
@@ -598,21 +610,67 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * own Resume button gets the newest either way.
      */
     private fun openAsking(title: String, entry: CatalogEntry, media: Map<String, Playable>, film: Item?) {
-        val resumes = media.entries
-            .filter { it.value.item.resumeSeconds > 0 }
-            .distinctBy { it.value.item.id }
-            .sortedByDescending { it.value.item.lastPlayedMs ?: 0 }
-            .take(4)
-            .map { (id, p) -> Resume(id, p.item, p.item.resumeSeconds, entry.media.firstOrNull { it.id == id }?.label ?: p.item.title) }
-        val open = OpenMenu(title, entry, media, resumes.firstOrNull()?.let { LastStop(it.mediaId, it.position) })
-        val justTheFilm = resumes.size == 1 && film != null && resumes[0].item.id == film.id
-        go(if (resumes.isNotEmpty()) Screen.ResumeAsk(open, resumes, justTheFilm) else Screen.Menu(open))
+        val all = media.entries.distinctBy { it.value.item.id }.map { (id, p) ->
+            val point = resumePointOf(p.item)
+            Resume(id, p.item, point.position, entry.media.firstOrNull { it.id == id }?.label ?: p.item.title, point.audio, point.subtitle, point.atMs)
+        }
+        // Titles stopped partway, newest first; on a movie disc the film leads ("Play …" when it
+        // wasn't started), so it's always one press away.
+        val filmEntry = film?.let { f -> all.firstOrNull { it.item.id == f.id } }
+        val others = all.filter { it !== filmEntry && it.position > 0 }.sortedByDescending { it.playedAtMs }
+        val resumes = ((if (filmEntry != null && (filmEntry.position > 0 || others.isNotEmpty())) listOf(filmEntry) else emptyList()) + others).take(4)
+        val newest = resumes.filter { it.position > 0 }.maxByOrNull { it.playedAtMs }
+        val open = OpenMenu(title, entry, media, newest?.let { LastStop(it.mediaId, it.position) })
+        val justTheFilm = resumes.size == 1 && filmEntry != null && resumes[0] === filmEntry
+        go(if (newest != null) Screen.ResumeAsk(open, resumes, justTheFilm) else Screen.Menu(open))
+    }
+
+    /**
+     * Where to pick [item] up and with which tracks: this app's record of where the viewer stopped
+     * (with the soundtrack and subtitles they had), or the server's resume point when that's newer
+     * (watched elsewhere; tracks then default to the first soundtrack, subtitles off).
+     */
+    private fun resumePointOf(item: Item): Stop {
+        val mine = settings.stopOf(stopKey(item))
+        return if (mine != null && !changedElsewhere(item, mine)) mine.copy(audio = mine.audio ?: 1, subtitle = mine.subtitle ?: 0)
+        else Stop(item.resumeSeconds, 1, 0, item.lastPlayedMs ?: 0)
+    }
+
+    /**
+     * Whether the server's state for [item] comes from viewing somewhere else (another device or app)
+     * after this app last played it. Otherwise this app's record stands, even when the server reset
+     * its resume point because of a short play here.
+     */
+    private fun changedElsewhere(item: Item, mine: Stop) = (item.lastPlayedMs ?: 0) > maxOf(mine.atMs, mine.touchedAtMs) + 60_000
+
+    /** When each title's current playback started here, for the 10-second rule in [recordStop]. */
+    private val playStartedAt = HashMap<String, Long>()
+
+    /**
+     * Playback of [item] starts here: note it. With no record yet, keep the server's current resume
+     * point as this app's own first, so a short play here (which may reset the server's) can't lose it.
+     */
+    private fun touchStop(item: Item) {
+        val key = stopKey(item)
+        val now = System.currentTimeMillis()
+        playStartedAt[item.id] = now
+        val mine = settings.stopOf(key)
+        when {
+            mine != null && !changedElsewhere(item, mine) -> settings.rememberStop(key, mine.copy(touchedAtMs = now))
+            item.resumeSeconds > 0 -> settings.rememberStop(key, Stop(item.resumeSeconds, 1, 0, item.lastPlayedMs ?: now, touchedAtMs = now))
+            mine != null -> settings.forgetStop(key)
+        }
+    }
+
+    private fun stopKey(item: Item): String {
+        val server = if (settings.sourceKind == "jellyfin") settings.jellyfin?.serverId else settings.serverId
+        return "${server ?: "server"}|${item.id}"
     }
 
     /** The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the disc menu. */
     fun resumeChosen(resume: Resume?) {
         val ask = _screen.value as? Screen.ResumeAsk ?: return
-        if (resume != null) play(resume.item, resume.position) else _screen.value = Screen.Menu(ask.open)
+        if (resume != null) play(resume.item, resume.position, resume.audio, resume.subtitle) else _screen.value = Screen.Menu(ask.open)
     }
 
     private suspend fun openShow(show: Item) {
@@ -664,23 +722,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         openAsking(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, film = null)
     }
 
-    fun play(item: Item, startSeconds: Double): Job = viewModelScope.launch {
+    /** What plays now outside a menu, so where it stops can be remembered. */
+    private var playingDirect: Triple<Item, Int?, Int?>? = null
+
+    fun play(item: Item, startSeconds: Double, audio: Int? = null, subtitle: Int? = null): Job = viewModelScope.launch {
         val src = source ?: return@launch
         // List entries can come without files (e.g. some "continue watching" lists): fetch the item.
         val full = if (item.files.isEmpty()) attempt { src.item(item.id) }.getOrNull() ?: item else item
         val file = full.files.firstOrNull() ?: return@launch
-        val request = attempt { src.playRequest(full, file, startSeconds) }.getOrElse {
+        playingDirect = Triple(full, audio, subtitle)
+        touchStop(full)
+        val request = attempt { src.playRequest(full, file, startSeconds, audio, subtitle) }.getOrElse {
             _screen.value = Screen.Failed("Couldn't play ${item.title}: ${it.message}")
             return@launch
         }
         go(Screen.Play(request))
     }
 
+    /** A library tile without a menu: from this app's last stop (with its tracks) when newest, else the server's. */
+    private fun playFromLibrary(item: Item) {
+        val mine = settings.stopOf(stopKey(item))
+        if (mine != null && !changedElsewhere(item, mine)) play(item, mine.position, mine.audio, mine.subtitle)
+        else play(item, item.resumeSeconds)
+    }
+
+    /** A title played outside a menu is done: stopped at [position], or [ended]. */
+    fun playFinished(position: Double?, ended: Boolean) {
+        playingDirect?.let { (item, audio, subtitle) -> recordStop(item, position, ended, audio, subtitle) }
+        playingDirect = null
+        back()
+    }
+
+    /** Where a title played outside a menu is now, saved as it plays (Home leaves without a stop). */
+    fun directProgress(position: Double) {
+        playingDirect?.let { (item, audio, subtitle) -> recordStop(item, position, ended = false, audio, subtitle) }
+    }
+
+    /** A title a menu played is done: remember where it stopped (or forget it once finished). */
+    fun menuTitleFinished(open: OpenMenu, mediaId: String, position: Double?, ended: Boolean, audio: Int?, subtitle: Int?) {
+        open.media[mediaId]?.let { recordStop(it.item, position, ended, audio, subtitle) }
+    }
+
+    /**
+     * A new resume point replaces the previous one only once the viewer has watched 10 seconds of this
+     * playback; a brief or accidental play leaves the previous point as it was. Finishing clears it.
+     */
+    private fun recordStop(item: Item, position: Double?, ended: Boolean, audio: Int?, subtitle: Int?) {
+        val key = stopKey(item)
+        val now = System.currentTimeMillis()
+        if (ended) settings.forgetStop(key)
+        else if (position != null && position >= 5 && now - (playStartedAt[item.id] ?: now) >= 10_000) {
+            settings.rememberStop(key, Stop(position, audio, subtitle, now, touchedAtMs = now))
+        }
+    }
+
     /** Resolve a menu button's media to something the native player can play. */
     suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
         val src = source ?: return null
         val (item, file) = open.media[mediaId] ?: return null
-        return attempt { src.playRequest(item, file, start, audio, subtitle) }.getOrNull()
+        return attempt { src.playRequest(item, file, start, audio, subtitle) }.getOrNull()?.also { touchStop(item) }
     }
 
     fun imageUrl(image: String?, width: Int, height: Int): String? = image?.let { source?.imageUrl(it, width, height) }
