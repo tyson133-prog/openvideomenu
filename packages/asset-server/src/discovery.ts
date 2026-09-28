@@ -24,8 +24,11 @@ export function localIPv4s(): string[] {
 export function advertise(port: number, name: string): () => Promise<void> {
   const addresses = localIPv4s();
   const responders = (addresses.length > 0 ? addresses : [undefined]).map((ip) => {
-    // bonjour-service passes these options to multicast-dns, whose `interface` option its types omit.
-    const bonjour = new Bonjour((ip ? { interface: ip } : {}) as ConstructorParameters<typeof Bonjour>[0]);
+    // bonjour-service passes these options to multicast-dns, whose `interface` and `bind` options its
+    // types omit. `interface` picks the adapter to join the group and send on; the socket itself binds
+    // to all addresses, because on Linux a socket bound to one address never receives multicast
+    // (queries go to 224.0.0.251). Windows accepts either.
+    const bonjour = new Bonjour((ip ? { interface: ip, bind: "0.0.0.0" } : {}) as ConstructorParameters<typeof Bonjour>[0]);
     const service = bonjour.publish({ name, type: SERVICE_TYPE, port, txt: { api: API_VERSION, path: "/v1" } });
     answerLegacyUnicast(bonjour, service);
     return { bonjour, service };

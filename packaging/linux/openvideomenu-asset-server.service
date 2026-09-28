@@ -1,0 +1,49 @@
+# Open Video Menu asset server (proof of concept) as a systemd service.
+# Install steps: packaging/linux/README.md. Settings: /etc/openvideomenu/asset-server.env
+[Unit]
+Description=Open Video Menu asset server (disc menus for Plex and Jellyfin)
+Documentation=https://openvideomenu.org
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=openvideomenu
+Group=openvideomenu
+EnvironmentFile=/etc/openvideomenu/asset-server.env
+ExecStart=/usr/bin/env node /opt/openvideomenu/packages/asset-server/dist/main.js
+Restart=on-failure
+RestartSec=5
+
+# The server only reads media and menu files; it writes nothing.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+# AF_NETLINK: Node lists the network adapters through it (for mDNS on each one).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+# No privileges at all: it listens on 8790 and 5353 (mDNS), both unprivileged ports.
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+DevicePolicy=closed
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+# Open Video Menu asset server (proof of concept), for Linux hosts (Unraid, Synology, a home server).
+#
+#   docker compose -f docker/compose.yaml up -d --build
+#
+# Host networking lets TV apps discover the server by itself (mDNS). Where host networking isn't
+# available (Docker Desktop on Windows or macOS), use `ports: ["8790:8790"]` instead and enter the
+# server's address in the TV app.
+services:
+  openvideomenu:
+    build:
+      context: ..
+      dockerfile: docker/asset-server.Dockerfile
+    image: openvideomenu-asset-server
+    container_name: openvideomenu
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # Your media server; sign-ins from the TV apps are checked against it. Give either or both.
+      PLEX_URL: http://127.0.0.1:32400
+      # JELLYFIN_URL: http://127.0.0.1:8096
+      MEDIA_ROOTS: /media/movies,/media/tv
+      SERVER_NAME: Open Video Menu
+    volumes:
+      # Read-only: the server never writes to your media.
+      - /mnt/media/movies:/media/movies:ro
+      - /mnt/media/tv:/media/tv:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

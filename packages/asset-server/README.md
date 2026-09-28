@@ -26,21 +26,13 @@ docker run -d --name openvideomenu --restart unless-stopped --network host \
 
 `--network host` lets the TV app discover the server automatically. Without it, publish the port (`-p 8790:8790`) and enter the address in the app by hand.
 
-Docker Compose:
+Docker Compose: [`docker/compose.yaml`](../../docker/compose.yaml) (edit the media folders and server address, then
+`docker compose -f docker/compose.yaml up -d --build`).
 
-```yaml
-services:
-  openvideomenu:
-    build: { context: ., dockerfile: docker/asset-server.Dockerfile }
-    network_mode: host
-    restart: unless-stopped
-    environment:
-      PLEX_URL: http://127.0.0.1:32400
-      MEDIA_ROOTS: /media/movies,/media/tv
-    volumes:
-      - /mnt/movies:/media/movies:ro
-      - /mnt/tv:/media/tv:ro
-```
+## Run as a Linux service (systemd)
+
+See [`packaging/linux`](../../packaging/linux): a locked-down unit that starts at boot, runs as its own user
+with read-only access to your media, and restarts on failure.
 
 ## Run with Node (e.g. Plex on Windows)
 
