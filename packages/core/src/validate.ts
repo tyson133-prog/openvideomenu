@@ -1,4 +1,4 @@
-import { FORMAT_ID, FORMAT_VERSION } from "./constants.js";
+import { FORMAT_ID, FORMAT_VERSION, isFormatId } from "./constants.js";
 import type { Action, Manifest, Menu, PlayItem } from "./types.js";
 
 export interface Issue {
@@ -93,7 +93,7 @@ class Validator {
     }
     this.unknownKeys(data, KNOWN_KEYS.manifest!, "");
 
-    if (data.format !== FORMAT_ID) {
+    if (!isFormatId(data.format)) {
       this.error("/format", `Must be "${FORMAT_ID}".`);
     }
     this.version(data.version);
@@ -356,7 +356,7 @@ class Validator {
     });
     if (value.defaultButton !== undefined && !(isNonEmptyString(value.defaultButton) && own.has(value.defaultButton)))
       this.error(`${path}/defaultButton`, `No button "${String(value.defaultButton)}" in this menu.`);
-    // v0.2: what the remote's Back does here; may press one of this menu's own buttons.
+    // What the remote's Back does here; may press one of this menu's own buttons.
     if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
   }
 

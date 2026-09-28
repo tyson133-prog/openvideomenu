@@ -1,5 +1,5 @@
 {
-  "description": "Invalid v0.2 fields: a looping background without src, a negative loopStart and buttonsAt, and an empty transition.",
+  "description": "Invalid motion fields: a looping background without src, a negative loopStart and buttonsAt, and an empty transition.",
   "level": 2,
   "valid": false,
   "schemaValid": false,
@@ -10,8 +10,8 @@
     "/menus/main/buttons/0/action/transition"
   ],
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Bad Motion" },
     "media": { "feature": { "ref": "a.mp4" } },
     "menus": {

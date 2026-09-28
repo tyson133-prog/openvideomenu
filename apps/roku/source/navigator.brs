@@ -1,4 +1,4 @@
-' MenuStream menu navigation for Roku: a port of packages/core/src/navigator.ts.
+' Open Video Menu navigation for Roku: a port of packages/core/src/navigator.ts.
 '
 ' A pure state machine, step(manifest, state, event) -> { state, effects }: no SceneGraph, no I/O.
 ' The player feeds it remote keys and playback events and carries out the effects. The conformance
@@ -28,7 +28,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         end if
 
     else if t = "press" or t = "select" or t = "activate"
-        ' v0.2: any key or click skips a transition or a menu intro; the viewer is always in control.
+        ' Any key or click skips a transition or a menu intro; the viewer is always in control.
         ' Pointer hover ("select") is ignored meanwhile, so moving the mouse doesn't skip anything.
         waiting = (s.mode = "transition" or (s.mode = "menu" and not s.buttonsReady))
         if waiting and t = "select"
@@ -170,7 +170,7 @@ sub msNavActivate(manifest as object, s as object, buttonId as string, effects a
     msNavRun(manifest, s, button["action"], effects, true)
 end sub
 
-' v0.2: the remote's Back key on a menu. A menu's back action says where Back goes (like a disc's
+' The remote's Back key on a menu. A menu's back action says where Back goes (like a disc's
 ' "Go Up"), run as a step up: no history is added, and a target already in history unwinds it.
 ' Without back, Back returns through history, except on the root menu, where it leaves the disc
 ' however the viewer got there. Back never traps: if back leaves the viewer on the same menu, they

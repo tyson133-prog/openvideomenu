@@ -1,5 +1,5 @@
-' MenuStream for Roku: the Plex parts of the app flow (see MainScene.brs for the shared parts).
-' Plex has no MenuStream plugin, so menus come from a MenuStream asset server (spec/server-api.md),
+' ovmplayer for Roku: the Plex parts of the app flow (see MainScene.brs for the shared parts).
+' Plex has no Open Video Menu plugin, so menus come from an Open Video Menu asset server (spec/server-api.md),
 ' which checks the viewer's Plex sign-in.
 
 ' --- requests -------------------------------------------------------------------------------
@@ -7,12 +7,12 @@
 function plexHeaders(token as dynamic) as object
     h = {
         "Accept": "application/json",
-        "X-Plex-Product": "MenuStream",
+        "X-Plex-Product": "ovmplayer",
         "X-Plex-Version": "0.1",
         "X-Plex-Client-Identifier": m.deviceId,
         "X-Plex-Platform": "Roku",
         "X-Plex-Device": "Roku",
-        "X-Plex-Device-Name": "MenuStream (Roku)"
+        "X-Plex-Device-Name": "ovmplayer (Roku)"
     }
     if token <> invalid then h["X-Plex-Token"] = token
     return h
@@ -140,7 +140,7 @@ end sub
 
 sub findAssetServers()
     m.searchedAssetServers = true
-    setStatus("Looking for a MenuStream menu server...")
+    setStatus("Looking for an Open Video Menu server...")
     m.mdns = CreateObject("roSGNode", "MdnsTask")
     m.mdns.observeField("servers", "onAssetServersFound")
     m.mdns.control = "RUN"
@@ -155,7 +155,7 @@ sub onAssetServersFound()
     else if servers.Count() > 1
         m.assetServers = servers
         dialog = CreateObject("roSGNode", "StandardMessageDialog")
-        dialog.title = "Choose a MenuStream menu server"
+        dialog.title = "Choose an Open Video Menu server"
         buttons = []
         for each s in servers
             buttons.Push(s.name + "  (" + Mid(s.url, 8) + ")")
@@ -183,8 +183,8 @@ end sub
 
 sub askAssetServer()
     dialog = CreateObject("roSGNode", "StandardKeyboardDialog")
-    dialog.title = "MenuStream menu server address"
-    dialog.message = ["The computer running the MenuStream asset server, e.g. 192.168.1.20:8790"]
+    dialog.title = "Open Video Menu server address"
+    dialog.message = ["The computer running the Open Video Menu asset server, e.g. 192.168.1.20:8790"]
     dialog.buttons = ["Connect", "Titles without menus"]
     dialog.observeField("buttonSelected", "onAssetServerEntered")
     m.top.dialog = dialog
@@ -337,7 +337,7 @@ sub plexDecide()
     audio = LCase(p.audioCodec)
     fits = m.decodable.video.DoesExist(video) and m.decodable.audio.DoesExist(audio) and (container = "mp4" or container = "mkv" or container = "mov" or container = "mpegts")
     if p.burnSubtitles = true then fits = false
-    print "MenuStream: Plex file "; container; " / "; video; " / "; audio; " -> "; fits
+    print "ovmplayer: Plex file "; container; " / "; video; " / "; audio; " -> "; fits
     if fits
         http(m.login.url + "/video/:/transcode/universal/decision?" + plexPlayParams() + "&directPlay=1&directStream=1&directStreamAudio=1&hasMDE=1", "GET", invalid, "onPlexDecision")
     else
@@ -352,7 +352,7 @@ sub onPlexDecision(res as object, ctx as dynamic)
     if ok
         startPlexPlayer()
     else
-        print "MenuStream: Plex declined direct play: "; FormatJson(c)
+        print "ovmplayer: Plex declined direct play: "; FormatJson(c)
         plexTranscode()
     end if
 end sub
@@ -372,7 +372,7 @@ sub plexTranscode()
 end sub
 
 sub onPlexTranscodeDecision(res as object, ctx as dynamic)
-    if res.code <> 200 then print "MenuStream: Plex transcode decision HTTP "; res.code
+    if res.code <> 200 then print "ovmplayer: Plex transcode decision HTTP "; res.code
     startPlexPlayer()
 end sub
 

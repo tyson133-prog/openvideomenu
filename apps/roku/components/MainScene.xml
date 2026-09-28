@@ -16,7 +16,7 @@
       <Label text="Where are your movies?" translation="[0, 330]" width="1920" horizAlign="center" color="0xE8E6E1FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="52" />
       </Label>
-      <Label text="MenuStream plays titles from your media server and adds their disc menus." translation="[0, 420]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+      <Label text="ovmplayer plays titles from your media server and adds their disc menus." translation="[0, 420]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
       <LabelList id="chooseList" translation="[760, 520]" itemSize="[400, 72]" color="0xE8E6E1FF" focusedColor="0x131418FF" focusBitmapBlendColor="0xFFD27AFF" />
     </Group>
 
@@ -39,7 +39,7 @@
     </Group>
 
     <Group id="browse" visible="false">
-      <Label id="browseTitle" text="MenuStream" translation="[96, 70]" color="0xE8E6E1FF">
+      <Label id="browseTitle" text="ovmplayer" translation="[96, 70]" color="0xE8E6E1FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="44" />
       </Label>
       <Label id="browseStatus" text="" translation="[96, 130]" width="1300" color="0x9BA0AAFF" />

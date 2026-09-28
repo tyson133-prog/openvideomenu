@@ -66,7 +66,7 @@ sub showBrowseStatus()
     if m.menuBase = invalid and isPlex()
         menus = "no disc menus (no menu server)"
     else if m.menuBase = invalid
-        menus = "no disc menus (the MenuStream plugin isn't installed)"
+        menus = "no disc menus (the Open Video Menu plugin isn't installed)"
     else if isPlex()
         menus = menus + " from " + m.menuBase
     else

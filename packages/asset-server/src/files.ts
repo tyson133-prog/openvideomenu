@@ -2,7 +2,7 @@ import { createReadStream, readdirSync, statSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, relative, sep } from "node:path";
-import { MANIFEST_SUFFIX } from "@menustream/core";
+import { isManifestFileName } from "@openvideomenu/core";
 
 export const CONTENT_TYPES: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
@@ -50,7 +50,7 @@ export function findManifests(root: string, maxDepth = 6): string[] {
       if (skipped(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth < maxDepth) walk(full, depth + 1);
-      else if (entry.isFile() && entry.name.toLowerCase().endsWith(MANIFEST_SUFFIX)) found.push(full);
+      else if (entry.isFile() && isManifestFileName(entry.name)) found.push(full);
     }
   };
   walk(root, 0);
@@ -78,7 +78,7 @@ export async function scanManifests(root: string, maxDepth = 6): Promise<string[
       if (skipped(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory() && depth < maxDepth) subdirs.push(walk(full, depth + 1));
-      else if (entry.isFile() && entry.name.toLowerCase().endsWith(MANIFEST_SUFFIX)) found.push(full);
+      else if (entry.isFile() && isManifestFileName(entry.name)) found.push(full);
     }
     await Promise.all(subdirs);
   };

@@ -5,7 +5,7 @@
   "schemaValid": true,
   "warnings": ["/version", "/menus/main/buttons/0/sparkle", "/menus/main/loopVideo"],
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "0.9",
     "title": { "name": "From The Future" },
     "media": { "feature": { "ref": "a.mp4" } },

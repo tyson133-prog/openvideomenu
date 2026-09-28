@@ -5,7 +5,7 @@
   "errors": ["/fallback"],
   "schemaValid": false,
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "0.1",
     "title": { "name": "No Fallback" },
     "media": { "feature": { "ref": "a.mp4" } }

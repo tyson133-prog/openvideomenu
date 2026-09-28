@@ -94,7 +94,7 @@ try {
 
 console.log(`Deploying to ${host}…`);
 // Replace in place (roku-deploy deletes the app first by default, which wipes its saved sign-in).
-await rokuDeploy.deploy({ host, password: devPassword(), rootDir: root, files, outDir: resolve(root, "out"), outFile: "menustream-roku", deleteInstalledChannel: false });
+await rokuDeploy.deploy({ host, password: devPassword(), rootDir: root, files, outDir: resolve(root, "out"), outFile: "ovmplayer-roku", deleteInstalledChannel: false });
 console.log("Installed.");
 
 if (conformance) {

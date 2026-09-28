@@ -1,4 +1,4 @@
-import { parseManifest } from "@menustream/core";
+import { parseManifest } from "@openvideomenu/core";
 import { MenuPlayer, type PlayerOptions } from "./player.js";
 import { injectStyles } from "./styles.js";
 
@@ -20,7 +20,7 @@ export async function loadPlayer(container: HTMLElement, manifestUrl: string, op
     return undefined;
   }
   const result = parseManifest(text);
-  for (const w of result.warnings) console.warn(`[menustream] ${w.path || "/"}: ${w.message}`);
+  for (const w of result.warnings) console.warn(`[openvideomenu] ${w.path || "/"}: ${w.message}`);
   if (!result.ok) {
     showProblems(container, "This menu file has problems", result.errors.map((e) => `${e.path || "/"}: ${e.message}`));
     return undefined;

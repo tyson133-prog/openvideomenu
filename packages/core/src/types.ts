@@ -1,6 +1,6 @@
 /**
- * MenuStream manifest v0.1 (draft) — TypeScript model.
- * The normative definition is spec/menustream-v0.1.md and spec/schema/manifest.schema.json.
+ * Open Video Menu manifest v0.1 (draft) — TypeScript model.
+ * The normative definition is spec/openvideomenu-v0.1.md and spec/schema/manifest.schema.json.
  *
  * Unknown properties are allowed everywhere (compatibility charter rule 3); vendor
  * extensions use keys that start with "x-".
@@ -84,9 +84,9 @@ export interface Background {
   image?: string;
   /** CSS-style colour used behind/without the image. */
   color?: string;
-  /** Motion background (v0.2): plays once from 0, then loops from `loopStart`. May carry its own audio. */
+  /** Motion background: plays once from 0, then loops from `loopStart`. May carry its own audio. */
   video?: LoopingMedia;
-  /** Menu audio (v0.2), looping the same way. */
+  /** Menu audio, looping the same way. */
   audio?: LoopingMedia;
 }
 
@@ -136,12 +136,12 @@ export interface Menu {
   autoNav?: boolean;
   buttons: Button[];
   /**
-   * v0.2: seconds into the menu's intro before buttons appear and respond (DVD menus often animate in).
+   * Seconds into the menu's intro before buttons appear and respond (DVD menus often animate in).
    * Measured on the background video when there is one. Any key skips straight to this point.
    */
   buttonsAt?: number;
   /**
-   * v0.2: what the remote's Back key does on this menu, like a disc's "Go Up" target. Any action,
+   * What the remote's Back key does on this menu, like a disc's "Go Up" target. Any action,
    * including `activate` (press one of this menu's buttons, e.g. its on-screen "Back"). Runs as a
    * step up: gotos don't add to history, and a target already in history unwinds it. Absent: Back
    * returns through history.
@@ -172,14 +172,14 @@ export type Action =
       type: "goto";
       menu: string;
       button?: string;
-      /** v0.2: clip played before the menu opens (skippable). */
+      /** Clip played before the menu opens (skippable). */
       transition?: string;
-      /** v0.2: "replace" = don't add this menu to Back's history (page turns); default "push". */
+      /** "replace" = don't add this menu to Back's history (page turns); default "push". */
       history?: "push" | "replace";
     }
   | { type: "back" }
   | { type: "resume" }
-  /** v0.2: press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
+  /** Press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
   | { type: "activate"; button: string }
   /** Level 2: set a variable, then (optionally) run another action — e.g. choose a soundtrack and return to the menu. */
   | { type: "set"; var: string; value: number; then?: Action };

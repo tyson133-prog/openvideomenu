@@ -2,7 +2,7 @@
 
 > Takes effect at **v1.0**. Until then the format is a v0.x draft and may change.
 
-MenuStream is meant to outlive any one player, tool or maintainer. These rules are permanent from v1.0 onward:
+Open Video Menu is meant to outlive any one player, tool or maintainer. These rules are permanent from v1.0 onward:
 
 1. **Old manifests keep working.** Every valid manifest from any earlier version MUST keep working in every later player.
 2. **Nothing is removed or redefined.** Fields are never removed or renamed, and never change meaning. Minor versions only add optional fields.
@@ -15,4 +15,4 @@ MenuStream is meant to outlive any one player, tool or maintainer. These rules a
 
 An implementation is compatible when it passes the conformance suite for the level it claims (0, 1 or 2). The name, and any "compatible" badge, is reserved for implementations that pass. (A trademark policy will say this formally before v1.0.)
 
-The code is Apache-2.0, so forks are welcome. A fork that breaks these rules just can't call itself MenuStream-compatible.
+The code is Apache-2.0, so forks are welcome. A fork that breaks these rules just can't call itself Open Video Menu compatible.

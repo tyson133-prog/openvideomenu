@@ -3,7 +3,7 @@
   "level": 0,
   "valid": true,
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "0.1",
     "title": { "name": "Minimal" },
     "media": { "feature": { "ref": "Minimal.mp4", "kind": "feature" } },

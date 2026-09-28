@@ -1,10 +1,10 @@
 {
-  "description": "v0.2: remote Back on the root menu leaves the disc, however the viewer got there. Walk: main → languages → a language button that sets a variable and returns to main (a goto, so it adds history); Back on main exits rather than retracing to languages. Other menus still return through history.",
+  "description": "Remote Back on the root menu leaves the disc, however the viewer got there. Walk: main → languages → a language button that sets a variable and returns to main (a goto, so it adds history); Back on main exits rather than retracing to languages. Other menus still return through history.",
   "level": 1,
   "valid": true,
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Root menu back" },
     "media": { "feature": { "ref": "Film.mp4" } },
     "vars": { "subs": 0 },

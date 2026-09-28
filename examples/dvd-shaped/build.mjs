@@ -94,7 +94,7 @@ const overlays = (name, b) => {
 
 // --- manifest ----------------------------------------------------------------------------------------
 const manifest = {
-  format: "menustream",
+  format: "openvideomenu",
   version: "0.1",
   title: { name: "Example Show", year: 1999 },
   source: { kind: "dvd", generator: "examples/dvd-shaped/build.mjs (synthetic)" },
@@ -149,5 +149,5 @@ const manifest = {
   ],
   "x-dvd": { note: "Synthetic example of what a disc importer writes; not taken from any real disc." },
 };
-writeFileSync(at("Example Show.menustream.json"), JSON.stringify(manifest, null, 2) + "\n");
+writeFileSync(at("Example Show.openvideomenu.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log("Done. Preview with:  npm run preview:dvd");

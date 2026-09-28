@@ -2,8 +2,8 @@ import { networkInterfaces } from "node:os";
 import { Bonjour, type Service } from "bonjour-service";
 import { API_VERSION } from "./server.js";
 
-/** DNS-SD service type TV apps browse for: _menustream._tcp */
-export const SERVICE_TYPE = "menustream";
+/** DNS-SD service type TV apps browse for: _openvideomenu._tcp */
+export const SERVICE_TYPE = "openvideomenu";
 
 /** Non-internal IPv4 addresses of this machine (LAN adapters, but also VPN/virtual ones). */
 export function localIPv4s(): string[] {

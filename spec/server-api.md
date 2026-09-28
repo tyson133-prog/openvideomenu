@@ -1,4 +1,4 @@
-# MenuStream server API — v1 (draft)
+# Open Video Menu server API — v1 (draft)
 
 > **Status: draft.** It follows the manifest format's versioning. After v1.0 the
 > [compatibility charter](COMPATIBILITY.md) applies to this API too: `v1` endpoints and fields are
@@ -16,21 +16,21 @@ Two kinds of server implement the same API:
 
 | Kind | Example | Base URL `B` |
 |---|---|---|
-| **Native**: the media server itself | Jellyfin with the MenuStream plugin ([`plugins/jellyfin`](../plugins/jellyfin)) | `{media server}/MenuStream` |
-| **Standalone asset server**, for media servers that don't support MenuStream yet | [`packages/asset-server`](../packages/asset-server) | `http://{host}:{port}` |
+| **Native**: the media server itself | Jellyfin with the Open Video Menu plugin ([`plugins/jellyfin`](../plugins/jellyfin)) | `{media server}/OpenVideoMenu` |
+| **Standalone asset server**, for media servers that don't support Open Video Menu yet | [`packages/asset-server`](../packages/asset-server) | `http://{host}:{port}` |
 
 An app written against this API works with both, and keeps working unchanged when a media server
-adopts MenuStream natively.
+adopts Open Video Menu natively.
 
 ## 2. Finding a server (client behaviour)
 
 Apps SHOULD look in this order and use the first that answers:
 
-1. **The media server itself:** `GET {media server}/MenuStream/v1/health`. Native implementations
+1. **The media server itself:** `GET {media server}/OpenVideoMenu/v1/health`. Native implementations
    MUST serve the API under that base path, so this one request tells an app whether its server
    supports menus.
 2. **An asset server the viewer chose before** (a saved address).
-3. **An asset server on the network:** DNS-SD service type `_menustream._tcp`. The instance's
+3. **An asset server on the network:** DNS-SD service type `_openvideomenu._tcp`. The instance's
    address and port form `B` (`http://{address}:{port}`). A host may advertise several addresses;
    apps SHOULD use the first whose `/v1/health` answers. If a saved address stops answering, apps
    SHOULD look on the network again before asking the viewer (the host may have a new address).
@@ -46,7 +46,7 @@ If none answers, titles MUST still play, just without menus.
 
 ## 3. Sign-in
 
-The API uses the viewer's existing media-server sign-in. There are no MenuStream accounts.
+The API uses the viewer's existing media-server sign-in. There are no Open Video Menu accounts.
 
 - **Native servers** use their own authentication, exactly as for their other endpoints (e.g.
   Jellyfin's `Authorization: MediaBrowser …, Token="…"` header).
@@ -69,7 +69,7 @@ The API uses the viewer's existing media-server sign-in. There are no MenuStream
 No sign-in. Tells apps the server is there and what it speaks.
 
 ```json
-{ "ok": true, "name": "MenuStream for Jellyfin", "api": "1", "format": "0.2", "manifests": 3, "auth": "jellyfin" }
+{ "ok": true, "name": "Open Video Menu for Jellyfin", "api": "1", "format": "0.1", "manifests": 3, "auth": "jellyfin" }
 ```
 
 | Field | Meaning |
@@ -88,16 +88,16 @@ Signed in. Every manifest the server found, and the media each one references.
 ```json
 {
   "api": "1",
-  "format": "0.2",
+  "format": "0.1",
   "roots": 2,
   "manifests": [
     {
       "id": "3f1c0d9a8b7e6f50",
       "root": 0,
-      "path": "The Matrix (1999)/The Matrix (1999).menustream.json",
-      "url": "/v1/files/0/The%20Matrix%20(1999)/The%20Matrix%20(1999).menustream.json",
+      "path": "The Matrix (1999)/The Matrix (1999).openvideomenu.json",
+      "url": "/v1/files/0/The%20Matrix%20(1999)/The%20Matrix%20(1999).openvideomenu.json",
       "valid": true,
-      "version": "0.2",
+      "version": "0.1",
       "title": { "name": "The Matrix", "year": 1999 },
       "source": { "kind": "dvd" },
       "hasMenus": true,
@@ -160,4 +160,4 @@ remote-access settings.
 - **Resolved media:** native servers know which of their items each `media[].path` is. They could
   return that directly (e.g. `"item": {"scheme": "jellyfin", "id": "…"}`), so apps skip path
   matching. It would be an optional additive field.
-- **Bundles:** serving `.msz` bundles (see the format spec, §2) once bundles are specified.
+- **Bundles:** serving `.ovmz` bundles (see the format spec, §2) once bundles are specified.

@@ -2,15 +2,15 @@
 import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { FORMAT_NAME, FORMAT_VERSION, menuAssets, parseManifest } from "@menustream/core";
-import { checkAssetFiles, checkIgnoreFiles, findManifests } from "@menustream/asset-server";
+import { FORMAT_NAME, FORMAT_VERSION, menuAssets, parseManifest } from "@openvideomenu/core";
+import { checkAssetFiles, checkIgnoreFiles, findManifests } from "@openvideomenu/asset-server";
 import { startPreview } from "./serve.js";
 
 const USAGE = `${FORMAT_NAME} ${FORMAT_VERSION} (draft)
 
 Usage:
-  menustream validate <file-or-folder>     Check manifests; exits 1 when any has errors
-  menustream preview <folder> [options]    Serve the folder and play its menus in a browser
+  openvideomenu validate <file-or-folder>     Check manifests; exits 1 when any has errors
+  openvideomenu preview <folder> [options]    Serve the folder and play its menus in a browser
       --port <n>     Port (default 8765)
       --host <addr>  Address to listen on (default 127.0.0.1; use 0.0.0.0 to test from a TV)
       --open         Open the browser

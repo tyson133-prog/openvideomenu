@@ -1,11 +1,11 @@
 {
-  "description": "v0.2: activate is only allowed in a menu's back and must name one of that menu's buttons; goto history must be push or replace.",
+  "description": "Activate is only allowed in a menu's back and must name one of that menu's buttons; goto history must be push or replace.",
   "level": 1,
   "valid": false,
   "errors": ["/menus/main/back/button", "/menus/main/buttons/0/action/type", "/menus/main/buttons/1/action/history"],
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Bad back" },
     "media": { "feature": { "ref": "Film.mp4" } },
     "menus": {

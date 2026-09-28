@@ -1,7 +1,7 @@
 {
-  "name": "menustream-monorepo",
+  "name": "openvideomenu-monorepo",
   "private": true,
-  "description": "MenuStream (working name): an open, royalty-free format for disc-style menus over existing media files.",
+  "description": "Open Video Menu: an open, royalty-free format for disc-style menus over existing media files.",
   "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
@@ -11,7 +11,7 @@
     "packages/cli"
   ],
   "scripts": {
-    "build": "npm run build -w @menustream/core && npm run build -w @menustream/renderer-web && npm run build -w @menustream/asset-server && npm run build -w @menustream/cli",
+    "build": "npm run build -w @openvideomenu/core && npm run build -w @openvideomenu/renderer-web && npm run build -w @openvideomenu/asset-server && npm run build -w @openvideomenu/cli",
     "test": "vitest run",
     "typecheck": "tsc -b packages/core packages/renderer-web packages/asset-server packages/cli",
     "preview:sintel": "node packages/cli/dist/main.js preview examples/sintel",

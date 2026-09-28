@@ -1,4 +1,4 @@
-import type { Key, MediaRef } from "@menustream/core";
+import type { Key, MediaRef } from "@openvideomenu/core";
 
 /** What the renderer asks a playback adapter to play. */
 export interface PlayRequest {

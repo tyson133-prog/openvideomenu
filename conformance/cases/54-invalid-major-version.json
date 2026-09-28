@@ -5,7 +5,7 @@
   "schemaValid": false,
   "errors": ["/version"],
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "1.0",
     "title": { "name": "Next Major" },
     "media": { "feature": { "ref": "a.mp4" } },

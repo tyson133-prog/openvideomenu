@@ -10,8 +10,8 @@ const plex = (token: string): Credential => ({ kind: "plex", token });
 const jellyfin = (token: string): Credential => ({ kind: "jellyfin", token });
 
 const MANIFEST = {
-  format: "menustream",
-  version: "0.2",
+  format: "openvideomenu",
+  version: "0.1",
   title: { name: "Movie", year: 2020 },
   media: {
     feature: { ref: "Movie (2020).mp4", kind: "feature" },
@@ -45,7 +45,7 @@ const write = (rel: string, content: string | Buffer = "x") => {
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), "ms-assets-"));
-  write("Movie (2020)/Movie (2020).menustream.json", JSON.stringify(MANIFEST));
+  write("Movie (2020)/Movie (2020).openvideomenu.json", JSON.stringify(MANIFEST));
   write("Movie (2020)/Movie (2020).mp4", "FILM");
   write("Movie (2020)/Trailers/Trailer.mp4", "TRAILER");
   write("Movie (2020)/menus/bg.jpg", "JPG");
@@ -53,7 +53,7 @@ beforeAll(() => {
   write("Movie (2020)/menus/sel.png", "PNG");
   write("Movie (2020)/menus/whoosh.mp4", "WHOOSH");
   write("Movie (2020)/menus/secret.png", "NOT REFERENCED");
-  write("Broken/Broken.menustream.json", "{ nope");
+  write("Broken/Broken.openvideomenu.json", "{ nope");
   write("secrets.txt", "top secret");
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -64,13 +64,13 @@ describe("Catalog", () => {
     await catalog.scan();
     const entries = catalog.entries();
     expect(entries.map((e) => [e.path, e.valid])).toEqual([
-      ["Broken/Broken.menustream.json", false],
-      ["Movie (2020)/Movie (2020).menustream.json", true],
+      ["Broken/Broken.openvideomenu.json", false],
+      ["Movie (2020)/Movie (2020).openvideomenu.json", true],
     ]);
     const movie = entries[1]!;
     expect(movie.title?.name).toBe("Movie");
     expect(movie.hasMenus).toBe(true);
-    expect(movie.url).toBe("/v1/files/0/Movie%20(2020)/Movie%20(2020).menustream.json");
+    expect(movie.url).toBe("/v1/files/0/Movie%20(2020)/Movie%20(2020).openvideomenu.json");
     expect(movie.media).toEqual([
       { id: "feature", kind: "feature", label: undefined, ref: "Movie (2020).mp4", path: "Movie (2020)/Movie (2020).mp4" },
       { id: "trailer", kind: "trailer", label: undefined, ref: "Trailers/Trailer.mp4", path: "Movie (2020)/Trailers/Trailer.mp4" },
@@ -156,16 +156,16 @@ describe("server", () => {
     expect((await get("/v1/index", { "X-Plex-Token": "bad" })).status).toBe(401);
     expect((await get("/v1/index", { Authorization: "Bearer good" })).status).toBe(200);
     // Jellyfin clients send their own Authorization header; the token is read from it.
-    const jf = (token: string) => ({ Authorization: `MediaBrowser Client="MenuStream", Device="TV", DeviceId="d1", Version="1", Token="${token}"` });
+    const jf = (token: string) => ({ Authorization: `MediaBrowser Client="ovmplayer", Device="TV", DeviceId="d1", Version="1", Token="${token}"` });
     expect((await get("/v1/index", jf("good"))).status).toBe(200);
     expect((await get("/v1/index", jf("bad"))).status).toBe(401);
-    expect((await get("/v1/index", { Authorization: 'MediaBrowser Client="MenuStream", DeviceId="d1"' })).status).toBe(401);
+    expect((await get("/v1/index", { Authorization: 'MediaBrowser Client="ovmplayer", DeviceId="d1"' })).status).toBe(401);
     const index = (await (await get("/v1/index")).json()) as { manifests: unknown[] };
     expect(index.manifests).toHaveLength(2);
   });
 
   it("serves manifests and the menu art they name", async () => {
-    const manifest = await get("/v1/files/0/Movie%20(2020)/Movie%20(2020).menustream.json");
+    const manifest = await get("/v1/files/0/Movie%20(2020)/Movie%20(2020).openvideomenu.json");
     expect(manifest.status).toBe(200);
     expect(((await manifest.json()) as { title: { name: string } }).title.name).toBe("Movie");
     for (const asset of ["menus/bg.jpg", "menus/sel.png", "menus/whoosh.mp4", "menus/loop.mp4"])
@@ -189,7 +189,7 @@ describe("server", () => {
       "/v1/files/0/Movie%20(2020)/%2e%2e/secrets.txt",
       "/v1/files/0/..%2fsecrets.txt",
       "/v1/files/1/Movie%20(2020)/menus/bg.jpg", // no such root
-      "/v1/files/0/Broken/Broken.menustream.json/../../secrets.txt",
+      "/v1/files/0/Broken/Broken.openvideomenu.json/../../secrets.txt",
     ])
       expect((await get(path)).status, path).toBe(404);
   });
@@ -399,15 +399,15 @@ describe("NoAuth", () => {
 
 describe("legacyUnicastReply", () => {
   const records = [
-    { name: "_services._dns-sd._udp.local", type: "PTR", ttl: 120, data: "_menustream._tcp.local" },
-    { name: "_menustream._tcp.local", type: "PTR", ttl: 28800, data: "Den._menustream._tcp.local" },
-    { name: "Den._menustream._tcp.local", type: "SRV", ttl: 120, data: { port: 8790, target: "pc.local" } },
-    { name: "Den._menustream._tcp.local", type: "TXT", ttl: 4500, data: ["api=1"] },
+    { name: "_services._dns-sd._udp.local", type: "PTR", ttl: 120, data: "_openvideomenu._tcp.local" },
+    { name: "_openvideomenu._tcp.local", type: "PTR", ttl: 28800, data: "Den._openvideomenu._tcp.local" },
+    { name: "Den._openvideomenu._tcp.local", type: "SRV", ttl: 120, data: { port: 8790, target: "pc.local" } },
+    { name: "Den._openvideomenu._tcp.local", type: "TXT", ttl: 4500, data: ["api=1"] },
     { name: "pc.local", type: "A", ttl: 120, flush: true, data: "192.168.1.20" },
   ];
 
   it("answers a PTR browse with the service's SRV, TXT and address, echoing ID and question", () => {
-    const query = { id: 4242, questions: [{ name: "_menustream._tcp.local", type: "PTR" }] };
+    const query = { id: 4242, questions: [{ name: "_openvideomenu._tcp.local", type: "PTR" }] };
     const reply = legacyUnicastReply(query, records)!;
     expect(reply.id).toBe(4242);
     expect(reply.questions).toEqual(query.questions);
@@ -416,7 +416,7 @@ describe("legacyUnicastReply", () => {
   });
 
   it("caps TTLs at 10 s and clears the cache-flush bit", () => {
-    const reply = legacyUnicastReply({ questions: [{ name: "_MENUSTREAM._tcp.local", type: "PTR" }] }, records)!;
+    const reply = legacyUnicastReply({ questions: [{ name: "_OPENVIDEOMENU._tcp.local", type: "PTR" }] }, records)!;
     for (const r of [...reply.answers, ...reply.additionals]) {
       expect(r.ttl).toBeLessThanOrEqual(10);
       expect(r.flush).toBe(false);

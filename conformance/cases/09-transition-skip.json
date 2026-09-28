@@ -1,10 +1,10 @@
 {
-  "description": "Level 2 (v0.2 transitions): goto with a transition plays the clip first; its end, or any key/click, opens the target menu with its intro; hover during a transition is ignored; back returns without a transition or intro.",
+  "description": "Level 2 (transitions): goto with a transition plays the clip first; its end, or any key/click, opens the target menu with its intro; hover during a transition is ignored; back returns without a transition or intro.",
   "level": 2,
   "valid": true,
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Transitions" },
     "media": { "trailer": { "ref": "Trailers/trailer.mp4", "kind": "trailer" } },
     "menus": {

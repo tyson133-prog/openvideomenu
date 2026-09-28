@@ -1,19 +1,20 @@
 {
-  "name": "@menustream/cli",
+  "name": "@openvideomenu/cli",
   "version": "0.1.0",
-  "description": "MenuStream command line: validate manifests and preview menus in a browser.",
+  "description": "Open Video Menu command line: validate manifests and preview menus in a browser.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "menustream": "dist/main.js"
+    "openvideomenu": "dist/main.js",
+    "ovm": "dist/main.js"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
-    "@menustream/core": "0.1.0",
-    "@menustream/renderer-web": "0.1.0",
-    "@menustream/asset-server": "0.1.0"
+    "@openvideomenu/core": "0.1.0",
+    "@openvideomenu/renderer-web": "0.1.0",
+    "@openvideomenu/asset-server": "0.1.0"
   },
   "scripts": {
     "build": "tsc -b"

@@ -1,4 +1,4 @@
-' Runs the MenuStream conformance cases (conformance/cases, bundled at pkg:/conformance) against
+' Runs the Open Video Menu conformance cases (conformance/cases, bundled at pkg:/conformance) against
 ' navigator.brs, like conformance/conformance.test.ts does for the TypeScript reference.
 ' Results go to the debug console (telnet <roku> 8085), one line per case:
 '   MSCONF PASS 03-autonav.json

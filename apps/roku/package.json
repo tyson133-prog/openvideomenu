@@ -1,7 +1,7 @@
 {
-  "name": "@menustream/roku",
+  "name": "@ovmplayer/roku",
   "private": true,
-  "description": "MenuStream for Roku (proof of concept): BrightScript/SceneGraph player",
+  "description": "ovmplayer for Roku (proof of concept): a BrightScript/SceneGraph player for Open Video Menu",
   "type": "module",
   "scripts": {
     "check": "bsc --create-package false",

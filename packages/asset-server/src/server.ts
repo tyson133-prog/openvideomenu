@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { FORMAT_NAME, FORMAT_VERSION } from "@menustream/core";
+import { FORMAT_NAME, FORMAT_VERSION } from "@openvideomenu/core";
 import { isLocalAddress, type Credential, type TokenCheck } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { sendFile } from "./files.js";

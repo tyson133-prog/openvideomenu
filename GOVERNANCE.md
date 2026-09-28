@@ -1,6 +1,6 @@
 # Governance
 
-Open Video Menu (working name during development: MenuStream) is an open format for disc-style menus over
+Open Video Menu is an open format for disc-style menus over
 existing video files. This document says who decides what, and how that will change as the project grows.
 There is no foundation or company behind it; it doesn't need one yet.
 
@@ -9,7 +9,7 @@ There is no foundation or company behind it; it doesn't need one yet.
 **Editor.** Tyson Treasure, who created the format, is its editor. The editor:
 
 - decides which proposals go into the specification,
-- publishes each numbered version of the specification (0.2, 0.3, … 1.0) at
+- publishes each numbered version of the specification (0.1, 0.2, … 1.0) at
   [openvideomenu.org](https://openvideomenu.org), the canonical home of the spec,
 - maintains the conformance suite, which defines what "compatible" means (see [NAMING.md](NAMING.md)),
 - keeps the [compatibility charter](spec/COMPATIBILITY.md), which binds the editor too.

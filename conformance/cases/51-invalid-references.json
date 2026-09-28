@@ -13,7 +13,7 @@
     "/fallback/0/items/0/action/media"
   ],
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "0.1",
     "title": { "name": "Broken" },
     "media": { "feature": { "ref": "a.mp4", "chapters": [{ "time": 0 }] } },

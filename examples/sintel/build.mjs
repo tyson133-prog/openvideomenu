@@ -103,7 +103,7 @@ menuFrame(38, at("menus", "main.jpg"), [
 underlineHighlight(420, 64, gold).save(at("menus", "item-selected.png"));
 underlineHighlight(420, 64, white, { glow: 1.6 }).save(at("menus", "item-activated.png"));
 
-// v0.2 motion: the dunes drift behind the menu (slowed 2x). The title and items fade in during a
+// Motion: the dunes drift behind the menu (slowed 2x). The title and items fade in during a
 // 2.5 s intro (buttonsAt), then the clip loops from 2.5 s. The still main.jpg stays as the poster.
 // The music is in the clip, not a separate background.audio: some players (Roku) play one stream
 // at a time, so music that plays with a motion loop belongs in the loop (spec §5.1).
@@ -197,8 +197,8 @@ const listButton = (item, x, nav, action, w = 420) => ({
 const chapterLabel = (n) => `Chapter ${n}`;
 
 const manifest = {
-  format: "menustream",
-  version: "0.2",
+  format: "openvideomenu",
+  version: "0.1",
   title: { name: "Sintel", year: 2010, ids: { imdb: "tt1727587", tmdb: "45745" } },
   source: { kind: "authored", generator: "examples/sintel/build.mjs" },
   media: {
@@ -281,5 +281,5 @@ const manifest = {
     },
   ],
 };
-writeFileSync(at("Sintel (2010).menustream.json"), JSON.stringify(manifest, null, 2) + "\n");
+writeFileSync(at("Sintel (2010).openvideomenu.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Done. Preview with:  npm run preview:sintel${existsSync(standInMarker) ? "\n(The film is a stand-in; run with --film for the real one.)" : ""}`);

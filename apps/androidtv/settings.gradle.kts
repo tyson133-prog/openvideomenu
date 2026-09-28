@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "menustream-androidtv"
+rootProject.name = "ovmplayer-androidtv"
 include(":app")

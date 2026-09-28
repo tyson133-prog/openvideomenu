@@ -12,8 +12,8 @@
     "/fallback/0/items/0/action/type"
   ],
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Bad Vars" },
     "vars": { "audio": 1, "half": 0.5 },
     "media": { "feature": { "ref": "a.mp4" } },

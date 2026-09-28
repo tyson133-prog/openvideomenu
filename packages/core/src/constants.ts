@@ -1,11 +1,20 @@
 /**
- * Every place the (working) format name appears is defined here, so a rename is one edit.
- * "MenuStream" is a placeholder; the final name is chosen before v1.0.
+ * Every place the format's name appears is defined here, so names change in one edit.
  */
-export const FORMAT_NAME = "MenuStream";
-export const FORMAT_ID = "menustream";
-export const FORMAT_VERSION = "0.2";
-export const MANIFEST_SUFFIX = ".menustream.json";
-export const BUNDLE_EXTENSION = ".msz";
+export const FORMAT_NAME = "Open Video Menu";
+export const FORMAT_ID = "openvideomenu";
+export const FORMAT_VERSION = "0.1";
+export const MANIFEST_SUFFIX = ".openvideomenu.json";
+export const BUNDLE_EXTENSION = ".ovmz";
 export const BUNDLE_MANIFEST_NAME = "manifest.json";
-export const SCHEMA_ID = "urn:menustream:schema:manifest:0.2";
+export const SCHEMA_ID = "urn:openvideomenu:schema:manifest:0.1";
+
+/** Whether a file name is a manifest's (any case). */
+export function isManifestFileName(name: string): boolean {
+  return name.toLowerCase().endsWith(MANIFEST_SUFFIX);
+}
+
+/** Whether a manifest's `format` value is this format. */
+export function isFormatId(value: unknown): boolean {
+  return value === FORMAT_ID;
+}

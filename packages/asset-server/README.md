@@ -1,27 +1,27 @@
-# MenuStream asset server (proof of concept)
+# Open Video Menu asset server (proof of concept)
 
-A small, **read-only** server that runs next to your Plex server and hands menu manifests and menu art to the MenuStream TV app over your home network.
+A small, **read-only** server that runs next to your Plex server and hands menu manifests and menu art to the ovmplayer TV app over your home network.
 
 > **This is a stopgap, not the product.** It exists only because Plex and Jellyfin can't serve menu files themselves yet. If media servers support the format natively, this goes away.
 
 ## What it does and doesn't do
 
-- Scans your media folders for `*.menustream.json` manifests.
+- Scans your media folders for `*.openvideomenu.json` manifests.
 - Serves **only** those manifests and the menu art they name: backgrounds, highlights, menu music, transitions, chapter thumbnails.
 - **Never serves your media.** Films, episodes and extras are refused. Any file no manifest names as menu art can't be reached at all.
 - **Never writes anything.** Mount your media read-only.
 - **Home network only.** It answers only local and VPN addresses: 10.x, 172.16–31.x, 192.168.x, and 100.64.x (Tailscale).
 - **Checks your Plex or Jellyfin login.** The TV app sends its sign-in. For Plex, the server asks plex.tv whether that token can access *your* Plex server. For Jellyfin, it asks your Jellyfin server whether it accepts the token (`GET /Users/Me`). Answers are cached briefly in memory. It stores no credentials.
-- **Announces itself** on the network (`_menustream._tcp`), so the TV app finds it without typing an address. It also answers legacy unicast mDNS queries (RFC 6762 §6.7), which is how the Roku app browses.
+- **Announces itself** on the network (`_openvideomenu._tcp`), so the TV app finds it without typing an address. It also answers legacy unicast mDNS queries (RFC 6762 §6.7), which is how the Roku app browses.
 
 ## Run with Docker (Linux, Unraid, Synology)
 
 ```sh
-docker build -f docker/asset-server.Dockerfile -t menustream-asset-server .
-docker run -d --name menustream --restart unless-stopped --network host \
+docker build -f docker/asset-server.Dockerfile -t openvideomenu-asset-server .
+docker run -d --name openvideomenu --restart unless-stopped --network host \
   -v /path/to/media:/media:ro \
   -e PLEX_URL=http://127.0.0.1:32400 \
-  menustream-asset-server
+  openvideomenu-asset-server
 ```
 
 `--network host` lets the TV app discover the server automatically. Without it, publish the port (`-p 8790:8790`) and enter the address in the app by hand.
@@ -30,7 +30,7 @@ Docker Compose:
 
 ```yaml
 services:
-  menustream:
+  openvideomenu:
     build: { context: ., dockerfile: docker/asset-server.Dockerfile }
     network_mode: host
     restart: unless-stopped
@@ -57,7 +57,7 @@ node packages/asset-server/dist/main.js --media "D:\Movies" --media "D:\TV" --pl
 | `--plex-url <url>` | `PLEX_URL` | — | Your Plex server; Plex sign-ins are checked against it |
 | `--jellyfin-url <url>` | `JELLYFIN_URL` | — | Your Jellyfin server; Jellyfin sign-ins are checked against it. Give either or both. |
 | `--port <n>` | `PORT` | 8790 | |
-| `--name <text>` | `SERVER_NAME` | "MenuStream on &lt;host&gt;" | Name shown in the TV app |
+| `--name <text>` | `SERVER_NAME` | "Open Video Menu on &lt;host&gt;" | Name shown in the TV app |
 | `--no-discovery` | `DISCOVERY=off` | on | Don't announce on the network |
 | `--allow-remote` | `ALLOW_REMOTE=1` | off | Answer non-local addresses (not recommended) |
 | `--no-auth` | `AUTH=none` | off | Skip token checks. **Local testing only.** |

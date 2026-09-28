@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { isAbsolute, join, posix, relative, resolve } from "node:path";
-import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@menustream/core";
+import { FORMAT_VERSION, menuAssets, parseManifest, type MediaRef } from "@openvideomenu/core";
 import { scanManifests } from "./files.js";
 import { checkAssetFiles, checkIgnoreFiles, eachLimited } from "./media-check.js";
 

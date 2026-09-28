@@ -8,10 +8,10 @@
 </head>
 <body>
 <div id="player"></div>
-<script src="menustream-player.js"></script>
+<script src="openvideomenu-player.js"></script>
 <script>
-  // The native app injects `menustreamHost` (a message port) before this page loads.
-  if (window.menustreamHost) MenuStreamPlayer.runInHost(window.menustreamHost, document.getElementById("player"));
+  // The native app injects `openVideoMenuHost` (a message port) before this page loads.
+  if (window.openVideoMenuHost) OpenVideoMenuPlayer.runInHost(window.openVideoMenuHost, document.getElementById("player"));
   else document.body.insertAdjacentHTML("beforeend", "<p style='color:#fff;font:20px sans-serif;padding:2em'>No native host.</p>");
 </script>
 </body>

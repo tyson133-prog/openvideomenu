@@ -14,7 +14,7 @@ sub execute()
     target = CreateObject("roSocketAddress")
     target.SetAddress("224.0.0.251:5353")
     socket.SetSendToAddress(target)
-    query = browseQuery("_menustream._tcp.local")
+    query = browseQuery("_openvideomenu._tcp.local")
     found = {}
     list = []
     deadline = CreateObject("roTimespan")
@@ -82,7 +82,7 @@ function parseServices(b as object, n as integer) as object
         rtype = u16(b, at)
         rdlen = u16(b, at + 8)
         rdata = at + 10
-        if rtype = 12 and LCase(owner.name) = "_menustream._tcp.local"
+        if rtype = 12 and LCase(owner.name) = "_openvideomenu._tcp.local"
             instances.Push(readName(b, rdata, n).name)
         else if rtype = 33
             ports[LCase(owner.name)] = u16(b, rdata + 4) ' SRV: priority, weight, port, target
@@ -92,7 +92,7 @@ function parseServices(b as object, n as integer) as object
     out = []
     for each fqdn in instances
         p = ports[LCase(fqdn)]
-        if p <> invalid then out.Push({ name: Left(fqdn, Instr(1, fqdn, "._menustream.") - 1), port: p })
+        if p <> invalid then out.Push({ name: Left(fqdn, Instr(1, fqdn, "._openvideomenu.") - 1), port: p })
     end for
     return out
 end function

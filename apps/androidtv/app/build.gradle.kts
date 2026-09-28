@@ -6,8 +6,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// The working name lives here (and in strings.xml) so a rename is cheap.
-val appId = "org.menustream.tv"
+// The app's id lives here (and its name in strings.xml), so both change in one place.
+val appId = "com.ovmplayer.tv"
 
 android {
     namespace = appId
@@ -61,7 +61,7 @@ abstract class CopyRendererTask @Inject constructor(private val fs: FileSystemOp
 
 val rendererDist = rootProject.file("../../packages/renderer-web/dist")
 val copyRenderer = tasks.register<CopyRendererTask>("copyRenderer") {
-    bundle.from(rendererDist.resolve("menustream-player.js"), rendererDist.resolve("host.html"))
+    bundle.from(rendererDist.resolve("openvideomenu-player.js"), rendererDist.resolve("host.html"))
     outputDir.set(layout.buildDirectory.dir("generated/renderer-assets"))
 }
 androidComponents {

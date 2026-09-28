@@ -77,7 +77,7 @@ export class PlexTokenCheck implements TokenCheck {
   readonly description: string;
   private machineId?: string;
   private readonly verdicts: Verdicts;
-  private readonly clientId = `menustream-asset-server-${randomUUID()}`;
+  private readonly clientId = `openvideomenu-asset-server-${randomUUID()}`;
 
   constructor(
     private readonly plexUrl: string,
@@ -91,7 +91,7 @@ export class PlexTokenCheck implements TokenCheck {
   private headers(token?: string): Record<string, string> {
     return {
       Accept: "application/json",
-      "X-Plex-Product": "MenuStream Asset Server",
+      "X-Plex-Product": "Open Video Menu Asset Server",
       "X-Plex-Version": "0.1",
       "X-Plex-Client-Identifier": this.clientId,
       ...(token ? { "X-Plex-Token": token } : {}),
@@ -132,7 +132,7 @@ export class PlexTokenCheck implements TokenCheck {
 export class JellyfinTokenCheck implements TokenCheck {
   readonly description: string;
   private readonly verdicts: Verdicts;
-  private readonly deviceId = `menustream-asset-server-${randomUUID()}`;
+  private readonly deviceId = `openvideomenu-asset-server-${randomUUID()}`;
 
   constructor(
     private readonly jellyfinUrl: string,
@@ -147,7 +147,7 @@ export class JellyfinTokenCheck implements TokenCheck {
     if (credential?.kind !== "jellyfin" || !credential.token) return false;
     const token = credential.token.replace(/"/g, "");
     return this.verdicts.get(token, async () => {
-      const auth = `MediaBrowser Client="MenuStream Asset Server", Device="asset-server", DeviceId="${this.deviceId}", Version="0.1", Token="${token}"`;
+      const auth = `MediaBrowser Client="Open Video Menu Asset Server", Device="asset-server", DeviceId="${this.deviceId}", Version="0.1", Token="${token}"`;
       const res = await this.fetchImpl(new URL("/Users/Me", this.jellyfinUrl), { headers: { Authorization: auth, Accept: "application/json" } });
       if (!res.ok) return false;
       const user = (await res.json()) as { Id?: string };

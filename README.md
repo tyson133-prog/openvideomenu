@@ -1,14 +1,14 @@
-# MenuStream (working name)
+# Open Video Menu
 
 **An open, royalty-free format that brings disc-style menus to the media you already have.**
 
-> v0.2 **draft**. Names and fields may change before v1.0.
+> v0.1 **draft**. Names and fields may change before v1.0.
 
 ## Why
 
 When movies moved from discs to streaming, bonus features mostly disappeared. It wasn't that people stopped caring. The **menu** was gone, and the menu was what tied the extras to the film. Without it, extras became loose files next to the movie (easy to forget) or were dropped entirely.
 
-MenuStream brings the menu back as a small JSON file that sits next to your movie:
+Open Video Menu brings the menu back as a small JSON file that sits next to your movie:
 
 - a **disc-style menu**: background art, buttons with highlight states, remote-control navigation, submenus, scene selection
 - where every button just **points to** files you already have: the film, trailers, featurettes, episodes
@@ -17,7 +17,7 @@ MenuStream brings the menu back as a small JSON file that sits next to your movi
 ```
 Sintel (2010)/
   Sintel (2010).mp4
-  Sintel (2010).menustream.json   ← the menu
+  Sintel (2010).openvideomenu.json   ← the menu
   menus/                          ← its art
   Trailers/Sintel Trailer.mp4
   Other/Music and Effects Track.mp4
@@ -51,7 +51,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 
 | Path | What it is |
 |---|---|
-| [`spec/menustream-v0.2.md`](spec/menustream-v0.2.md) | The format (draft) |
+| [`spec/openvideomenu-v0.1.md`](spec/openvideomenu-v0.1.md) | The format (draft) |
 | [`spec/schema/manifest.schema.json`](spec/schema/manifest.schema.json) | JSON Schema |
 | [`spec/server-api.md`](spec/server-api.md) | The API servers use to hand manifests and menu art to apps (draft) |
 | [`spec/COMPATIBILITY.md`](spec/COMPATIBILITY.md) | The backward-compatibility charter |
@@ -59,7 +59,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 | [`conformance/`](conformance) | Language-neutral test cases: manifests, input events, expected results |
 | [`packages/core`](packages/core) | Validator and navigation state machine (TypeScript, no dependencies) |
 | [`packages/renderer-web`](packages/renderer-web) | Reference web player: 10-foot UI, remote keys, pluggable playback |
-| [`packages/cli`](packages/cli) | `menustream validate` and `menustream preview` |
+| [`packages/cli`](packages/cli) | `openvideomenu validate` and `openvideomenu preview` |
 | [`examples/`](examples) | Sintel (Blender open movie) and a synthetic DVD-shaped title |
 
 ## For player developers
@@ -82,15 +82,14 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 - **Level 2:** motion menus, menu music, timeouts, disc-style variables, and audio/subtitle setup menus
 - **Jellyfin plugin:** menus inside Jellyfin's web, TV and mobile apps
 - **.NET library:** so C# tools, such as disc importers and the Jellyfin plugin, can read and write manifests
-- **Tools:** `menustream init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
+- **Tools:** `openvideomenu init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
 - **v1.0:** a final name, a frozen format, the compatibility charter in force
 
 Plex removed third-party plugins, so a Plex integration is up to Plex. The format is designed so adding it is easy.
 
 ## License and governance
 
-The format's final name is **Open Video Menu** ([openvideomenu.org](https://openvideomenu.org)); MenuStream is
-the working name used in this repository until the rename. Created and edited by Tyson Treasure.
+**Open Video Menu** ([openvideomenu.org](https://openvideomenu.org)) was created and is edited by Tyson Treasure.
 
 - **Code:** [Apache-2.0](LICENSE)
 - **Specification:** [CC BY 4.0](spec/LICENSE.md), with a royalty-free patent pledge (OWFa 1.0). Free to implement.

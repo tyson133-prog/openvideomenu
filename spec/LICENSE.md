@@ -2,7 +2,7 @@
 
 Copyright © 2026 Tyson Treasure and the Open Video Menu contributors.
 
-The Open Video Menu (working name MenuStream) specification documents, JSON Schema and profiles in this
+The Open Video Menu specification documents, JSON Schema and profiles in this
 `spec/` folder are licensed under the
 [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 Credit: "Open Video Menu specification, by Tyson Treasure and contributors, openvideomenu.org".

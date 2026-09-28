@@ -1,7 +1,7 @@
 {
-  "name": "@menustream/core",
+  "name": "@openvideomenu/core",
   "version": "0.1.0",
-  "description": "Parse, validate, resolve and navigate MenuStream manifests. No dependencies; runs in browsers and Node.",
+  "description": "Parse, validate, resolve and navigate Open Video Menu manifests. No dependencies; runs in browsers and Node.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",

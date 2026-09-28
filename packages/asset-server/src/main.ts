@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { hostname } from "node:os";
-import { FORMAT_NAME } from "@menustream/core";
+import { FORMAT_NAME } from "@openvideomenu/core";
 import { AnyOf, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type TokenCheck } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { advertise } from "./discovery.js";
@@ -12,8 +12,8 @@ Serves menu manifests and menu art from your media folders to TV apps on your ho
 Read-only. Serves only manifests and the menu art they name, never your media.
 
 Usage:
-  menustream-asset-server --media <folder> [--media <folder> ...] --plex-url <url> [options]
-  menustream-asset-server --media <folder> [--media <folder> ...] --jellyfin-url <url> [options]
+  openvideomenu-asset-server --media <folder> [--media <folder> ...] --plex-url <url> [options]
+  openvideomenu-asset-server --media <folder> [--media <folder> ...] --jellyfin-url <url> [options]
 
 Options (or environment variables):
   --media <folder>     MEDIA_ROOTS  (comma-separated)   Media folders to scan (mount them read-only)
@@ -103,7 +103,7 @@ async function main() {
   console.log(`Listening on port ${o.port} (auth: ${auth.description}${o.allowRemote ? ", remote allowed" : ", local network only"})`);
 
   const stopAdvertising = o.discovery ? advertise(o.port, o.name) : undefined;
-  if (stopAdvertising) console.log(`Announcing "${o.name}" as _menustream._tcp`);
+  if (stopAdvertising) console.log(`Announcing "${o.name}" as _openvideomenu._tcp`);
 
   const shutdown = async () => {
     await stopAdvertising?.();

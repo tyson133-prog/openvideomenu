@@ -22,9 +22,9 @@ export type NavEvent =
   | { type: "ended" }
   /** The viewer stopped playback early; position (seconds) is remembered for "resume". */
   | { type: "stopped"; position: number }
-  /** v0.2: the menu intro reached `buttonsAt`; buttons appear and respond. */
+  /** The menu intro reached `buttonsAt`; buttons appear and respond. */
   | { type: "buttonsReady" }
-  /** v0.2: a transition clip finished playing. */
+  /** A transition clip finished playing. */
   | { type: "transitionEnded" };
 
 export type Effect =
@@ -34,9 +34,9 @@ export type Effect =
   | { type: "activated"; menu: string; button: string }
   /** "back" was pressed at the top of the menu history; the host may close the player. */
   | { type: "exit" }
-  /** v0.2: play a transition clip; report "transitionEnded" when it finishes. */
+  /** Play a transition clip; report "transitionEnded" when it finishes. */
   | { type: "transition"; src: string }
-  /** v0.2: the viewer skipped the menu intro; jump the background to `buttonsAt`. */
+  /** The viewer skipped the menu intro; jump the background to `buttonsAt`. */
   | { type: "skipIntro"; menu: string };
 
 export interface MenuPosition {
@@ -49,13 +49,13 @@ export interface NavState {
   menu?: string;
   focus?: string;
   /**
-   * v0.2: true when the current menu was entered fresh (start or goto), so its background plays its
+   * True when the current menu was entered fresh (start or goto), so its background plays its
    * intro from 0. False when returning to it (back, end of playback): the intro is not replayed.
    */
   intro: boolean;
-  /** v0.2: false while a menu intro runs before `buttonsAt`; buttons are hidden and inactive. */
+  /** False while a menu intro runs before `buttonsAt`; buttons are hidden and inactive. */
   buttonsReady: boolean;
-  /** v0.2: the menu a running transition leads to. */
+  /** The menu a running transition leads to. */
   transitionTo?: { menu: string; button?: string };
   /** Menus to return to with "back". */
   history: MenuPosition[];
@@ -90,7 +90,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "press":
     case "select":
     case "activate":
-      // v0.2: any key or click skips a transition or a menu intro; the viewer is always in control.
+      // Any key or click skips a transition or a menu intro; the viewer is always in control.
       // Pointer hover ("select") is ignored meanwhile, so moving the mouse doesn't skip anything.
       if ((s.mode === "transition" || (s.mode === "menu" && !s.buttonsReady)) && event.type === "select") break;
       if (s.mode === "transition") {
@@ -226,7 +226,7 @@ function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Ef
 }
 
 /**
- * v0.2: the remote's Back key on a menu. A menu's `back` action says where Back goes (like a disc's
+ * The remote's Back key on a menu. A menu's `back` action says where Back goes (like a disc's
  * "Go Up"), run as a step up: no history is added, and a target already in history unwinds it, so
  * paging through ten bios never means ten presses. Without `back`, Back returns through history,
  * except on the root menu, where it leaves the disc however the viewer got there (a "return to the

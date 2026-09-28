@@ -1,6 +1,6 @@
-' MenuStream for Roku: the app flow. Choose Plex or Jellyfin, sign in (plex.tv PIN, or Jellyfin
+' ovmplayer for Roku: the app flow. Choose Plex or Jellyfin, sign in (plex.tv PIN, or Jellyfin
 ' Quick Connect), list titles with disc menus, and open one in MenuView. Menus come from the
-' Jellyfin MenuStream plugin, or for Plex from a MenuStream asset server. Plex specifics are in
+' Jellyfin Open Video Menu plugin, or for Plex from an Open Video Menu asset server. Plex specifics are in
 ' MainScene.plex.brs; m.login.kind says which server this is ("plex", else Jellyfin).
 
 sub init()
@@ -8,7 +8,7 @@ sub init()
     m.taskSeq = 0
     m.deviceId = CreateObject("roDeviceInfo").GetChannelClientId()
     m.profile = deviceProfile()
-    m.registry = CreateObject("roRegistrySection", "menustream")
+    m.registry = CreateObject("roRegistrySection", "ovmplayer")
     m.catalog = []
     m.servers = []
 
@@ -102,7 +102,7 @@ end sub
 ' older X-Emby-Token header and api_key parameter off by default).
 function authHeader(token as dynamic) as string
     q = Chr(34)
-    h = "MediaBrowser Client=" + q + "MenuStream" + q + ", Device=" + q + "Roku" + q + ", DeviceId=" + q + m.deviceId + q + ", Version=" + q + "0.1" + q
+    h = "MediaBrowser Client=" + q + "ovmplayer" + q + ", Device=" + q + "Roku" + q + ", DeviceId=" + q + m.deviceId + q + ", Version=" + q + "0.1" + q
     if token <> invalid then h = h + ", Token=" + q + token + q
     return h
 end function
@@ -288,7 +288,7 @@ end sub
 
 ' --- browsing -----------------------------------------------------------------------------
 
-' Menus come from the Jellyfin server itself (the MenuStream plugin, spec/server-api.md).
+' Menus come from the Jellyfin server itself (the Open Video Menu plugin, spec/server-api.md).
 sub loadBrowse()
     show("browse")
     m.top.findNode("browseStatus").text = "Loading from " + m.login.name + "…"
@@ -298,7 +298,7 @@ sub loadBrowse()
     end if
     ' The server's name can change after sign-in (it's a server setting): show the current one.
     http(m.login.url + "/System/Info/Public", "GET", invalid, "onServerName")
-    http(m.login.url + "/MenuStream/v1/health", "GET", invalid, "onHealth")
+    http(m.login.url + "/OpenVideoMenu/v1/health", "GET", invalid, "onHealth")
 end sub
 
 sub onServerName(res as object, ctx as dynamic)
@@ -321,7 +321,7 @@ sub onHealth(res as object, ctx as dynamic)
         onIndex({ code: 200, json: { manifests: [] } }, invalid)
         return
     end if
-    m.menuBase = m.login.url + "/MenuStream"
+    m.menuBase = m.login.url + "/OpenVideoMenu"
     http(m.menuBase + "/v1/index", "GET", invalid, "onIndex")
 end sub
 
@@ -618,7 +618,7 @@ function deviceProfile() as object
     end for
     v = video.Join(",")
     a = audio.Join(",")
-    print "MenuStream: this Roku plays video "; v; "; audio "; a
+    print "ovmplayer: this Roku plays video "; v; "; audio "; a
     return {
         "MaxStreamingBitrate": 40000000,
         "DirectPlayProfiles": [
@@ -723,14 +723,14 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
         titleStopped(req.start)
         return
     end if
-    print "MenuStream: PlaybackInfo directPlay="; source["SupportsDirectPlay"]; " directStream="; source["SupportsDirectStream"]; " transcode="; source["SupportsTranscoding"]; " url="; source["TranscodingUrl"] <> invalid; " reasons="; FormatJson(msOr(source["TranscodeReasons"], [])); " container="; source["Container"]
+    print "ovmplayer: PlaybackInfo directPlay="; source["SupportsDirectPlay"]; " directStream="; source["SupportsDirectStream"]; " transcode="; source["SupportsTranscoding"]; " url="; source["TranscodingUrl"] <> invalid; " reasons="; FormatJson(msOr(source["TranscodeReasons"], [])); " container="; source["Container"]
     m.playing.session = msOr(res.json["PlaySessionId"], CreateObject("roDeviceInfo").GetRandomUUID().Replace("-", ""))
     content = CreateObject("roSGNode", "ContentNode")
     if source["TranscodingUrl"] <> invalid and source["SupportsDirectPlay"] <> true
         m.playing.method = "Transcode"
         content.url = m.login.url + source["TranscodingUrl"]
         content.StreamFormat = "hls"
-        print "MenuStream: transcoding ("; msOr(source["TranscodeReasons"], []).Join(", "); ")"
+        print "ovmplayer: transcoding ("; msOr(source["TranscodeReasons"], []).Join(", "); ")"
     else
         content.url = m.login.url + "/Videos/" + m.playing.item["Id"] + "/stream?static=true&mediaSourceId=" + m.playing.source + "&playSessionId=" + m.playing.session
         content.StreamFormat = streamFormat(m.playing.path)
@@ -740,7 +740,7 @@ sub onPlaybackInfo(res as object, ctx as dynamic)
     content.title = m.playing.item["Name"]
     for each stream in msOr(source["MediaStreams"], [])
         if stream["Index"] = m.playing.subtitleIndex and stream["Type"] = "Subtitle"
-            print "MenuStream: subtitle "; stream["Index"]; " delivered "; stream["DeliveryMethod"]
+            print "ovmplayer: subtitle "; stream["Index"]; " delivered "; stream["DeliveryMethod"]
             if stream["DeliveryMethod"] = "External" and stream["DeliveryUrl"] <> invalid
                 sideloadSubtitle(content, m.login.url + stream["DeliveryUrl"], stream["Language"], stream["DisplayTitle"])
             end if
@@ -781,7 +781,7 @@ sub applySubtitles()
         m.captionModeBefore = m.player.globalCaptionMode
         m.player.globalCaptionMode = "On"
         m.player.subtitleTrack = m.playing.subtitleTrack
-        print "MenuStream: subtitles on: "; m.player.subtitleTrack
+        print "ovmplayer: subtitles on: "; m.player.subtitleTrack
     end if
 end sub
 
@@ -818,7 +818,7 @@ sub onPlayerState()
         closePlayer()
         titleEnded()
     else if state = "error"
-        print "MenuStream: playback error "; m.player.errorCode; " msg "; m.player.errorMsg; " info "; FormatJson(m.player.errorInfo)
+        print "ovmplayer: playback error "; m.player.errorCode; " msg "; m.player.errorMsg; " info "; FormatJson(m.player.errorInfo)
         setStatus("Couldn't play this title: " + m.player.errorMsg)
         closePlayer()
         titleStopped(m.playing.req.start)

@@ -1,10 +1,10 @@
 {
-  "description": "Level 2 (v0.2 motion): a menu entered fresh plays its intro with buttons hidden until buttonsAt; any key or click skips the intro (without acting), pointer hover does not; returning to the menu (back, end of playback) does not replay the intro.",
+  "description": "Level 2 (motion): a menu entered fresh plays its intro with buttons hidden until buttonsAt; any key or click skips the intro (without acting), pointer hover does not; returning to the menu (back, end of playback) does not replay the intro.",
   "level": 2,
   "valid": true,
   "manifest": {
-    "format": "menustream",
-    "version": "0.2",
+    "format": "openvideomenu",
+    "version": "0.1",
     "title": { "name": "Motion" },
     "media": { "feature": { "ref": "Motion.mp4" } },
     "menus": {

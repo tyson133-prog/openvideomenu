@@ -1,6 +1,6 @@
 # Authors
 
-**Open Video Menu** (working name MenuStream) was created by **Tyson Treasure**, who is the editor of the
+**Open Video Menu** was created by **Tyson Treasure**, who is the editor of the
 specification (see [GOVERNANCE.md](GOVERNANCE.md)).
 
 Copyright in the specification and code belongs to their authors: Tyson Treasure, and each contributor for their

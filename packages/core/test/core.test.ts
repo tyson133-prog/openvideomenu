@@ -19,7 +19,7 @@ describe("parseAspect", () => {
 });
 
 describe("resolve", () => {
-  const manifestUrl = "http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).menustream.json";
+  const manifestUrl = "http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).openvideomenu.json";
 
   it("resolves relative paths with spaces against the manifest", () => {
     expect(resolvePath("Trailers/Sintel (2010)-trailer.mp4", manifestUrl)).toBe(
@@ -63,7 +63,7 @@ describe("menuAssets", () => {
   it("follows set actions to the transition their then-action plays", async () => {
     const { menuAssets } = await import("../src/index.js");
     const manifest = {
-      format: "menustream", version: "0.2", title: { name: "T" }, vars: { audio: 1 },
+      format: "openvideomenu", version: "0.1", title: { name: "T" }, vars: { audio: 1 },
       media: { feature: { ref: "f.mp4" } },
       menus: {
         main: { canvas: { width: 720, height: 480 }, buttons: [{ id: "b", rect: [0, 0, 1, 1], action: { type: "goto", menu: "lang" } }] },

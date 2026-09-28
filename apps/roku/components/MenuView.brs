@@ -308,7 +308,7 @@ sub onMotionState()
             playVideo(menu["background"]["video"]["src"], loopFrom, "background", loopFrom)
         end if
     else if state = "error"
-        print "MenuStream: menu video error "; m.motion.errorMsg
+        print "ovmplayer: menu video error "; m.motion.errorMsg
         if m.videoRole = "transition" then stepWith({ type: "transitionEnded" })
     end if
 end sub
@@ -407,7 +407,7 @@ sub onDownloaded(event as object)
     m.downloads.Delete(task.file)
     if pending = invalid then return
     if task.response.code <> 200
-        print "MenuStream: couldn't load "; pending.url; " (HTTP "; task.response.code; ")"
+        print "ovmplayer: couldn't load "; pending.url; " (HTTP "; task.response.code; ")"
         return
     end if
     m.images[pending.url] = task.file

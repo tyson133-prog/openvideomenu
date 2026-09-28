@@ -2,8 +2,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { resolve, sep } from "node:path";
-import { FORMAT_NAME } from "@menustream/core";
-import { CONTENT_TYPES, findManifests, sendFile } from "@menustream/asset-server";
+import { FORMAT_NAME } from "@openvideomenu/core";
+import { CONTENT_TYPES, findManifests, sendFile } from "@openvideomenu/asset-server";
 
 export interface PreviewOptions {
   root: string;
@@ -13,7 +13,7 @@ export interface PreviewOptions {
 
 function playerBundlePath(): string {
   const require = createRequire(import.meta.url);
-  return require.resolve("@menustream/renderer-web/bundle");
+  return require.resolve("@openvideomenu/renderer-web/bundle");
 }
 
 const escapeHtml = (s: string) =>
@@ -36,7 +36,7 @@ function playerPage(): string {
 #help{position:fixed;right:12px;bottom:10px;z-index:50;font:13px system-ui,sans-serif;color:#aaa;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:6px;transition:opacity 1s}</style>
 </head><body><div id="player"></div>
 <div id="help">Arrows move · Enter selects · Esc/Backspace goes back or stops · <a style="color:#ffd54a" id="toggle" href="#">list view</a></div>
-<script src="/_player/menustream-player.js"></script>
+<script src="/_player/openvideomenu-player.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const m = params.get("m");
@@ -46,7 +46,7 @@ function playerPage(): string {
   toggle.href = "?" + other.toString();
   toggle.textContent = view === "fallback" ? "menu view" : "list view";
   setTimeout(() => (document.getElementById("help").style.opacity = "0.25"), 5000);
-  window.menuPlayer = MenuStreamPlayer.loadPlayer(document.getElementById("player"), "/media/" + m.split("/").map(encodeURIComponent).join("/"), {
+  window.menuPlayer = OpenVideoMenuPlayer.loadPlayer(document.getElementById("player"), "/media/" + m.split("/").map(encodeURIComponent).join("/"), {
     view,
     showHidden: params.has("hidden"),
     onExit: () => { if (history.length > 1) history.back(); },
@@ -68,9 +68,9 @@ export function startPreview({ root, port, host }: PreviewOptions): Promise<stri
         return void res.writeHead(200, { "Content-Type": CONTENT_TYPES[".html"]! }).end(indexPage(manifests));
       }
       if (path === "/play") return void res.writeHead(200, { "Content-Type": CONTENT_TYPES[".html"]! }).end(playerPage());
-      if (path === "/_player/menustream-player.js") return sendFile(req, res, bundle);
-      if (path === "/_player/host.html") return sendFile(req, res, bundle.replace(/menustream-player.js$/, "host.html"));
-      if (path === "/_player/menustream-player.js.map" && existsSync(bundle + ".map")) return sendFile(req, res, bundle + ".map");
+      if (path === "/_player/openvideomenu-player.js") return sendFile(req, res, bundle);
+      if (path === "/_player/host.html") return sendFile(req, res, bundle.replace(/openvideomenu-player.js$/, "host.html"));
+      if (path === "/_player/openvideomenu-player.js.map" && existsSync(bundle + ".map")) return sendFile(req, res, bundle + ".map");
       if (path.startsWith("/media/")) {
         const file = resolve(rootDir, "." + path.slice("/media".length));
         if (file !== rootDir && !file.startsWith(rootDir + sep)) return void res.writeHead(403).end("Forbidden");

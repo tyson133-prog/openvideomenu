@@ -10,7 +10,7 @@ They're about clarity, not permission: you never need to ask.
 - Writing about the format, teaching it, or linking to it.
 - Naming files with the format's suffix (`.openvideomenu.json`) and using its schema.
 
-**"Compatible"** means passing the [conformance suite](conformance/) for a stated version: "Open Video Menu 0.2
+**"Compatible"** means passing the [conformance suite](conformance/) for a stated version: "Open Video Menu 0.1
 compatible — conformance passed". Run the cases; if they pass, say so. Please don't claim compatibility you
 haven't tested.
 

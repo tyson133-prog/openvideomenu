@@ -16,7 +16,7 @@ import {
   type NavEvent,
   type NavState,
   type PlayItem,
-} from "@menustream/core";
+} from "@openvideomenu/core";
 import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
 import { injectStyles } from "./styles.js";
 
@@ -264,7 +264,7 @@ export class MenuPlayer {
     this.updateButtons();
   }
 
-  // --- v0.2 motion: background loops, intro timing, transitions -----------------------------------
+  // --- Motion: background loops, intro timing, transitions -----------------------------------
 
   private startBackground(menu: Menu, fromIntro: boolean) {
     const bg = menu.background;

@@ -1,0 +1,377 @@
+package com.ovmplayer.tv.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.tv.material3.Button
+import androidx.tv.material3.Card
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import com.ovmplayer.tv.AppViewModel
+import com.ovmplayer.tv.OpenMenu
+import com.ovmplayer.tv.menu.MenuWebView
+import com.ovmplayer.tv.menu.PageMessage
+import com.ovmplayer.tv.player.PlayRequest
+import com.ovmplayer.tv.player.PlayerHandle
+import com.ovmplayer.tv.player.VideoPlayer
+import com.ovmplayer.tv.plex.PlexResource
+
+private val Gold = Color(0xFFFFCF6A)
+
+@Composable
+fun Centered(content: @Composable () -> Unit) =
+    Column(Modifier.fillMaxSize().padding(64.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        content()
+    }
+
+@Composable
+fun BusyScreen(message: String) = Centered { Text(message, style = MaterialTheme.typography.headlineSmall) }
+
+@Composable
+fun ResumeScreen(
+    title: String,
+    resumes: List<com.ovmplayer.tv.Resume>,
+    justTheFilm: Boolean,
+    onChoose: (com.ovmplayer.tv.Resume?) -> Unit,
+) = Centered {
+    Text(title, style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(12.dp))
+    val prompt = if (justTheFilm) "You stopped at ${clock(resumes[0].position)}." else "Pick up where you left off:"
+    Text(prompt, style = MaterialTheme.typography.titleLarge)
+    Spacer(Modifier.height(32.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val focus = remember { FocusRequester() }
+        resumes.forEachIndexed { i, r ->
+            val label = if (justTheFilm) "Resume from ${clock(r.position)}" else "Resume ${r.label} from ${clock(r.position)}"
+            Button(onClick = { onChoose(r) }, modifier = if (i == 0) Modifier.focusRequester(focus) else Modifier) { Text(label) }
+        }
+        Button(onClick = { onChoose(null) }) { Text("Disc menu") }
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    }
+}
+
+/** Seconds as h:mm:ss (m:ss under an hour). */
+private fun clock(seconds: Double): String {
+    val t = seconds.toLong()
+    val (h, m, s) = Triple(t / 3600, t % 3600 / 60, t % 60)
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+@Composable
+fun FailedScreen(message: String, onRetry: () -> Unit, onSignOut: () -> Unit) = Centered {
+    Text(message, style = MaterialTheme.typography.headlineSmall)
+    Spacer(Modifier.height(24.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val focus = remember { FocusRequester() }
+        Button(onClick = onRetry, modifier = Modifier.focusRequester(focus)) { Text("Try again") }
+        Button(onClick = onSignOut) { Text("Sign out") }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+@Composable
+fun SignInScreen(code: String?, error: String?, onRetry: () -> Unit) = Centered {
+    Text("Sign in with Plex", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(32.dp))
+    if (code != null) {
+        Text("On your phone or computer, go to", style = MaterialTheme.typography.titleLarge)
+        Text("plex.tv/link", style = MaterialTheme.typography.displayMedium.copy(color = Gold))
+        Spacer(Modifier.height(16.dp))
+        Text("and enter", style = MaterialTheme.typography.titleLarge)
+        Text(code, style = TextStyle(fontSize = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = 12.sp, color = Color.White))
+    } else if (error != null) {
+        Text(error, style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry) { Text("Try again") }
+    } else {
+        Text("Getting a code…", style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit) = Centered {
+    Text("Choose your Plex server", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(24.dp))
+    servers.forEachIndexed { i, s ->
+        val focus = remember { FocusRequester() }
+        Button(onClick = { onPick(s) }, modifier = Modifier.padding(6.dp).width(420.dp).focusRequester(focus)) { Text(s.name) }
+        if (i == 0) LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+/** First run: which kind of media server to use. */
+@Composable
+fun ChooseSourceScreen(onChoose: (String) -> Unit) = Centered {
+    Text("Where are your movies?", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(12.dp))
+    Text("ovmplayer plays titles from your media server and adds their disc menus.", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+    Spacer(Modifier.height(32.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        val focus = remember { FocusRequester() }
+        Button(onClick = { onChoose("plex") }, modifier = Modifier.width(240.dp).focusRequester(focus)) { Text("Plex") }
+        Button(onClick = { onChoose("jellyfin") }, modifier = Modifier.width(240.dp)) { Text("Jellyfin") }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+    }
+}
+
+/** Jellyfin servers found on the network, or type an address. */
+@Composable
+fun FindJellyfinScreen(
+    servers: List<com.ovmplayer.tv.jellyfin.FoundJellyfin>,
+    searching: Boolean,
+    error: String?,
+    onPick: (String) -> Unit,
+    onSearch: () -> Unit,
+    onBack: () -> Unit,
+) = Centered {
+    Text("Choose your Jellyfin server", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(16.dp))
+    if (error != null) {
+        Text(error, style = MaterialTheme.typography.titleMedium, color = Gold)
+        Spacer(Modifier.height(12.dp))
+    }
+    val first = remember { FocusRequester() }
+    when {
+        searching -> Text("Looking on your network…", style = MaterialTheme.typography.titleMedium)
+        servers.isEmpty() -> Text("No Jellyfin server answered on your network. Type its address below.", style = MaterialTheme.typography.titleMedium)
+        else -> servers.forEachIndexed { i, s ->
+            Button(onClick = { onPick(s.url) }, modifier = Modifier.padding(6.dp).width(520.dp).let { if (i == 0) it.focusRequester(first) else it }) {
+                Text("${s.name}  ·  ${s.url.removePrefix("http://")}")
+            }
+        }
+    }
+    Spacer(Modifier.height(24.dp))
+    var address by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        BasicTextField(
+            value = address,
+            onValueChange = { address = it },
+            singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
+            // The on-screen keyboard's ✓ connects straight away.
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (address.text.isNotBlank()) onPick(address.text) }),
+            decorationBox = { inner ->
+                Box(Modifier.width(360.dp).background(Color(0xFF333333), RoundedCornerShape(6.dp)).padding(10.dp)) {
+                    if (address.text.isEmpty()) Text("e.g. 192.168.1.20:8096", color = Color.Gray)
+                    inner()
+                }
+            },
+            modifier = (if (servers.isEmpty() && !searching) Modifier.focusRequester(first) else Modifier)
+                // On a remote, right/down at the end of the text moves on to the buttons instead of
+                // being swallowed by the text cursor.
+                .onPreviewKeyEvent { e ->
+                    val atEnd = address.selection.collapsed && address.selection.end == address.text.length
+                    val key = e.nativeKeyEvent.keyCode
+                    if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN && atEnd &&
+                        (key == android.view.KeyEvent.KEYCODE_DPAD_RIGHT || key == android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                    ) {
+                        focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+                    } else {
+                        false
+                    }
+                },
+        )
+        Button(onClick = { if (address.text.isNotBlank()) onPick(address.text) }) { Text("Connect") }
+        Button(onClick = onSearch) { Text("Search again") }
+        Button(onClick = onBack) { Text("Back") }
+    }
+    LaunchedEffect(searching, servers.size) { if (!searching) runCatching { first.requestFocus() } }
+}
+
+/** Jellyfin Quick Connect: approve this code in another Jellyfin app. */
+@Composable
+fun QuickConnectScreen(server: String, code: String?, error: String?, onBack: () -> Unit) = Centered {
+    Text("Sign in to $server", style = MaterialTheme.typography.displaySmall)
+    Spacer(Modifier.height(32.dp))
+    when {
+        error != null -> {
+            Text(error, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(16.dp))
+        }
+        code != null -> {
+            Text("In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+            Text(code, style = TextStyle(fontSize = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = 12.sp, color = Color.White))
+            Spacer(Modifier.height(16.dp))
+        }
+        else -> Text("Connecting…", style = MaterialTheme.typography.titleMedium)
+    }
+    val focus = remember { FocusRequester() }
+    Button(onClick = onBack, modifier = Modifier.focusRequester(focus)) { Text("Back") }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+/** A title's disc menu, with native playback layered on top when a button plays something. */
+@Composable
+fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
+    val context = LocalContext.current
+    val assets = vm.assets ?: return onExit()
+    var playing by remember { mutableStateOf<PlayRequest?>(null) }
+    var handle by remember { mutableStateOf<PlayerHandle?>(null) }
+    var failure by remember { mutableStateOf<String?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    lateinit var web: MenuWebView
+    web = remember {
+        MenuWebView(context, assets) { msg ->
+            when (msg) {
+                PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
+                is PageMessage.Play -> scope.launch {
+                    val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle)
+                    if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else playing = request
+                }
+                PageMessage.Exit -> onExit()
+                is PageMessage.Error -> failure = msg.message
+            }
+        }
+    }
+    // Remote keys belong to the player while a title plays, never to the menu page behind it.
+    LaunchedEffect(playing) { web.setBehindPlayer(playing != null) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(web, lifecycle) {
+        web.open()
+        // Home/other apps: pause the page (its menu music and motion stop), resume on return.
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> web.onPause()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> web.onResume()
+                else -> {}
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            web.destroy()
+        }
+    }
+    BackHandler {
+        val p = playing
+        if (p != null) {
+            val position = handle?.positionSeconds() ?: 0.0
+            playing = null
+            web.stopped(position)
+            web.requestFocus()
+        } else if (failure != null) {
+            onExit() // the page is gone or never loaded: Back leaves the menu
+        } else {
+            web.back()
+        }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(factory = { web.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+        playing?.let { request ->
+            VideoPlayer(
+                request = request,
+                onReady = { handle = it },
+                onEnded = {
+                    playing = null
+                    web.ended()
+                    web.requestFocus()
+                },
+                onError = { message ->
+                    playing = null
+                    web.playError(message)
+                    web.requestFocus()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        failure?.let { message ->
+            val main = open.entry.media.firstOrNull { it.kind == "feature" && open.media.containsKey(it.id) }
+                ?: open.entry.media.firstOrNull { open.media.containsKey(it.id) }
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                Centered {
+                    Text("This disc menu couldn't be shown", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(8.dp))
+                    // The page reports raw URLs; viewers get plain words (debug builds keep the detail).
+                    val loadFailed = message.startsWith("Couldn't load")
+                    val shown = if (loadFailed) "The menu file couldn't be loaded. The menu server may be off or unreachable." else message
+                    Text(shown, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+                    if (com.ovmplayer.tv.BuildConfig.DEBUG && shown != message) Text(message, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                    Spacer(Modifier.height(24.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        val focus = remember { FocusRequester() }
+                        if (main != null) {
+                            Button(onClick = {
+                                scope.launch {
+                                    failure = null
+                                    vm.requestFor(open, main.id, 0.0)?.let { playing = it }
+                                }
+                            }, modifier = Modifier.focusRequester(focus)) { Text("Play without menu") }
+                        }
+                        Button(onClick = onExit, modifier = if (main == null) Modifier.focusRequester(focus) else Modifier) { Text("Back") }
+                        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Direct playback of a title without a menu. */
+@Composable
+fun PlayScreen(request: PlayRequest, onDone: () -> Unit) {
+    var error by remember { mutableStateOf<String?>(null) }
+    BackHandler { onDone() }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (error == null) VideoPlayer(request, onReady = {}, onEnded = onDone, onError = { error = it }, modifier = Modifier.fillMaxSize())
+        else Centered { Text(error!!, style = MaterialTheme.typography.headlineSmall) }
+    }
+}
+
+/** Shown on Android 17+ until the viewer allows access to the home network. */
+@Composable
+fun NetworkPermissionScreen(onAllow: () -> Unit) = Centered {
+    Text("Allow access to your home network", style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(16.dp))
+    Text(
+        "ovmplayer needs it to reach your Plex or Jellyfin server and the menu server on your network. It connects to nothing else there.",
+        style = MaterialTheme.typography.titleMedium,
+    )
+    Spacer(Modifier.height(24.dp))
+    val focus = remember { FocusRequester() }
+    Button(onClick = onAllow, modifier = Modifier.focusRequester(focus)) { Text("Allow") }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+}

@@ -29,7 +29,7 @@ let injected = false;
 export function injectStyles(doc: Document = document) {
   if (injected) return;
   const style = doc.createElement("style");
-  style.dataset.menustream = "";
+  style.dataset.openvideomenu = "";
   style.textContent = STYLES;
   doc.head.appendChild(style);
   injected = true;

@@ -3,7 +3,7 @@
   "level": 1,
   "valid": true,
   "manifest": {
-    "format": "menustream",
+    "format": "openvideomenu",
     "version": "0.1",
     "title": { "name": "Auto" },
     "media": { "a": { "ref": "a.mp4" } },

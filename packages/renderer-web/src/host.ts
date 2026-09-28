@@ -2,7 +2,7 @@
  * Running the renderer inside a native app (Android TV web view, and later others).
  *
  * The native side exposes a message port object (Android: WebViewCompat.addWebMessageListener named
- * "menustreamHost") with postMessage(string) and an onmessage handler. Everything is JSON strings.
+ * "openVideoMenuHost") with postMessage(string) and an onmessage handler. Everything is JSON strings.
  *
  * page → native
  *   {type:"ready"}                                       page loaded, send "init"
@@ -17,7 +17,7 @@
  *   {type:"playError", message}                          the item couldn't be played
  *   {type:"key", key}                                    a remote key the page didn't receive itself (e.g. Back)
  */
-import type { Key } from "@menustream/core";
+import type { Key } from "@openvideomenu/core";
 import { KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
 import { loadPlayer } from "./load.js";
 import type { MenuPlayer } from "./player.js";

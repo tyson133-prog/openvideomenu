@@ -92,8 +92,8 @@ for (let i = 0; i < count; i++) {
     };
   }
   const manifest = {
-    format: "menustream",
-    version: "0.2",
+    format: "openvideomenu",
+    version: "0.1",
     title: { name: film.title },
     source: { kind: "loadtest", generator: "scripts/loadtest-manifests.mjs" },
     media: { feature: { ref: film.file, kind: "feature", label: film.title } },
@@ -101,7 +101,7 @@ for (let i = 0; i < count; i++) {
     rootMenu: "menu0",
     fallback: [{ label: "Movie", items: [{ label: "Play Movie", action: { type: "play", media: "feature" } }] }],
   };
-  writeFileSync(join(dir, `${film.title}.menustream.json`), JSON.stringify(manifest, null, 2));
+  writeFileSync(join(dir, `${film.title}.openvideomenu.json`), JSON.stringify(manifest, null, 2));
   written++;
 }
 console.log(`Wrote ${written} manifests (${Math.min(real.length, count)} for real films) to ${out}`);
