@@ -87,8 +87,15 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 
 Plex removed third-party plugins, so a Plex integration is up to Plex. The format is designed so adding it is easy.
 
-## License
+## License and governance
+
+The format's final name is **Open Video Menu** ([openvideomenu.org](https://openvideomenu.org)); MenuStream is
+the working name used in this repository until the rename. Created and edited by Tyson Treasure.
 
 - **Code:** [Apache-2.0](LICENSE)
-- **Specification:** [CC BY 4.0](spec/LICENSE.md). Royalty-free to implement.
+- **Specification:** [CC BY 4.0](spec/LICENSE.md), with a royalty-free patent pledge (OWFa 1.0). Free to implement.
+- **Governance:** how the format changes and who decides, in [GOVERNANCE.md](GOVERNANCE.md).
+- **The name:** using "Open Video Menu" and claiming compatibility, in [NAMING.md](NAMING.md).
+- **Contributing:** sign-off (DCO) and licenses of contributions, in [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Authors:** [AUTHORS.md](AUTHORS.md).
 - **Sintel:** © Blender Foundation | durian.blender.org, used under CC BY 3.0. It's downloaded by the example script and not stored in this repository.
