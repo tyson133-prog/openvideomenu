@@ -93,6 +93,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - **`buttonsAt`**: see §5.1.
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
 - **`back`**: what the remote's Back key does on this menu (§6.2).
+- **`timeout`**: what happens when the menu is left alone (§5.2).
 - **`autoNav: true`** means that pressing a direction with no `nav` entry moves to the nearest button that way. The reference algorithm uses button centres: a candidate must lie in the direction of travel, and the score is the distance along the axis plus twice the sideways offset. With `autoNav` false or absent, a missing direction does nothing, which matches DVD behaviour.
 
 ### Buttons
@@ -132,6 +133,29 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - **Intros play only on a fresh entry:** at start, or via `goto`. Returning to a menu with `back` or at the end of playback starts the background at `loopStart` with buttons ready, so the intro is not replayed.
 - **Any key or click during an intro skips it.** Players jump the background to `buttonsAt` and show the buttons. That input does nothing else. Pointer *hover* does not skip. Players MUST NOT make intros unskippable.
 - **Keep menu assets small** (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC (in MP4/M4A) or Opus for audio. MP4/M4A files SHOULD be written with the index at the start ("faststart"), because some players, such as Android WebView, stall on files that must be read from the end first.
+
+### 5.2 Menu timeouts (Level 2)
+
+A menu can move on by itself when it's left alone, as DVD menus do when their video or still time runs
+out: an intro gives way to the main menu, or the film starts after a minute.
+
+```json
+"timeout": { "after": 30, "action": { "type": "play", "media": "feature" } }
+```
+
+- **`after`** is in seconds, counted from when the menu appears (intro included). It starts over every
+  time the menu appears, whether fresh or returned to.
+- **`restartOnInput`** (default `true`): a key press or click restarts the countdown, so nothing starts
+  while the viewer is choosing. Importers set it to `false` to match a disc whose timer runs regardless.
+- **`action`** runs when the time is up, as a *step up*, like a menu's `back` (§6.2): no history is
+  added, and a `goto` to a menu already in history unwinds it. Nobody chose it, so Back never returns to
+  an intro that moved on by itself. It MAY `activate` one of the menu's own buttons.
+- **A menu's own video looping is not a timeout.** An intro that runs into its loop with the same buttons
+  is one menu with `background.video.loopStart` (§5.1).
+- **Navigation model:** whenever a menu with a timeout appears, and after input when `restartOnInput`
+  applies (unless the viewer is leaving), the navigator emits `{ "type": "startTimer", "menu", "after" }`.
+  The player keeps the clock and reports `{ "type": "timeout", "menu" }` when it runs out. A timeout for a
+  menu that isn't showing any more is ignored. A new `startTimer` replaces the previous countdown.
 
 ## 6. Actions
 
@@ -203,7 +227,7 @@ On a DVD, the remote's Return key doesn't retrace every menu you visited: each m
 
 Validators MUST reject a manifest when:
 - a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button` or `nav` target doesn't exist, or
-- `activate` is used anywhere but a menu's `back`, or
+- `activate` is used anywhere but a menu's `back` or `timeout`, or
 - a `resume`'s `otherwise` is another `resume`, or
 - button ids are duplicated within a menu, or
 - a chapter number is out of range, or
@@ -235,6 +259,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables with audio/subtitle selection. *(Next drafts)* Conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

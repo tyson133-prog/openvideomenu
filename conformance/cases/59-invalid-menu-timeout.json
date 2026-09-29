@@ -1,0 +1,31 @@
+{
+  "description": "A menu timeout needs a positive after and a valid action (which may press one of the menu's own buttons, like back); restartOnInput is true or false.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/timeout/after", "/menus/main/timeout/restartOnInput", "/menus/other/timeout/action/button", "/menus/third/timeout"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Timeouts" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "timeout": { "after": 0, "action": { "type": "play", "media": "feature" }, "restartOnInput": "yes" },
+        "buttons": [{ "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "goto", "menu": "other" } }]
+      },
+      "other": {
+        "canvas": { "width": 1280, "height": 720 },
+        "timeout": { "after": 5, "action": { "type": "activate", "button": "missing" } },
+        "buttons": [{ "id": "b", "rect": [0, 0, 10, 10], "action": { "type": "back" } }]
+      },
+      "third": {
+        "canvas": { "width": 1280, "height": 720 },
+        "timeout": 30,
+        "buttons": [{ "id": "c", "rect": [0, 0, 10, 10], "action": { "type": "back" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

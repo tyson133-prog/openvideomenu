@@ -1,0 +1,49 @@
+{
+  "description": "Level 2: menu timeouts. The navigator asks the player to (re)start a countdown with a startTimer effect whenever a menu with a timeout appears, and after input unless restartOnInput is false; the player reports {type: timeout, menu}. A timeout for a menu no longer showing is ignored. The action runs as a step up (no history; a goto to a menu in history unwinds it). Walk: an intro moves on to main by itself; a key restarts main's countdown; a stale intro timeout is ignored; extras (restartOnInput false) times out back to main, unwinding history, so Back on main leaves; main's timeout plays the film; returning restarts the countdown.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Timeouts" },
+    "media": {
+      "feature": { "ref": "Film.mkv", "kind": "feature" },
+      "trailer": { "ref": "Trailer.mkv", "kind": "trailer" }
+    },
+    "menus": {
+      "intro": {
+        "canvas": { "width": 720, "height": 480 },
+        "timeout": { "after": 8, "action": { "type": "goto", "menu": "main" } },
+        "buttons": [{ "id": "skip", "rect": [0, 0, 720, 480], "action": { "type": "goto", "menu": "main" } }]
+      },
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "timeout": { "after": 30, "action": { "type": "play", "media": "feature" } },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "extras" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "extras", "rect": [100, 160, 200, 40], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "extras" } }
+        ]
+      },
+      "extras": {
+        "canvas": { "width": 720, "height": 480 },
+        "timeout": { "after": 20, "action": { "type": "goto", "menu": "main" }, "restartOnInput": false },
+        "buttons": [{ "id": "trailer", "rect": [100, 100, 200, 40], "action": { "type": "play", "media": "trailer" } }]
+      }
+    },
+    "rootMenu": "main",
+    "firstPlay": { "type": "goto", "menu": "intro" },
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "menu": "intro", "effects": [{ "type": "startTimer", "menu": "intro", "after": 8 }] } },
+    { "event": { "type": "timeout", "menu": "intro" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "effects": [{ "type": "startTimer", "menu": "main", "after": 30 }] } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "extras", "effects": [{ "type": "startTimer", "menu": "main", "after": 30 }] } },
+    { "event": { "type": "timeout", "menu": "intro" }, "expect": { "menu": "main", "focus": "extras", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "extras", "focus": "trailer", "effects": [{ "type": "activated", "menu": "main", "button": "extras" }, { "type": "startTimer", "menu": "extras", "after": 20 }] } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "menu": "extras", "effects": [] } },
+    { "event": { "type": "timeout", "menu": "extras" }, "expect": { "menu": "main", "focus": "play", "effects": [{ "type": "startTimer", "menu": "main", "after": 30 }] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "effects": [{ "type": "exit" }] } },
+    { "event": { "type": "timeout", "menu": "main" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "feature", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "effects": [{ "type": "startTimer", "menu": "main", "after": 30 }] } }
+  ]
+}

@@ -142,6 +142,7 @@ public sealed class ConformanceTests
         "stopped" => new NavEvent.Stopped(e.GetProperty("position").GetDouble()),
         "buttonsReady" => new NavEvent.ButtonsReady(),
         "transitionEnded" => new NavEvent.TransitionEnded(),
+        "timeout" => new NavEvent.Timeout(e.GetProperty("menu").GetString()!),
         var other => throw new InvalidDataException($"Unknown event {other}"),
     };
 
@@ -155,6 +156,7 @@ public sealed class ConformanceTests
             "exit" => new Effect.Exit(),
             "transition" => new Effect.Transition(e.GetProperty("src").GetString()!),
             "skipIntro" => new Effect.SkipIntro(e.GetProperty("menu").GetString()!),
+            "startTimer" => new Effect.StartTimer(e.GetProperty("menu").GetString()!, e.GetProperty("after").GetDouble()),
             var other => throw new InvalidDataException($"Unknown effect {other}"),
         };
     }

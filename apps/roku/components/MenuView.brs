@@ -21,6 +21,10 @@ sub init()
     m.flash.observeField("fire", "onFlashDone")
     m.buttonsTimer = CreateObject("roSGNode", "Timer")
     m.buttonsTimer.observeField("fire", "onButtonsTimer")
+    ' A menu's timeout countdown (Level 2), started by the navigator's startTimer effect.
+    m.menuTimer = CreateObject("roSGNode", "Timer")
+    m.menuTimer.observeField("fire", "onMenuTimer")
+    m.menuTimerMenu = invalid
 
     m.images = {}       ' asset URL -> local file, once downloaded
     m.wanted = {}       ' poster id -> the asset URL it should show now
@@ -69,12 +73,23 @@ sub apply(effect as object)
         m.top.exit = true
     else if t = "transition"
         playVideo(effect.src, 0, "transition")
+    else if t = "startTimer"
+        m.menuTimer.control = "stop"
+        m.menuTimerMenu = effect.menu
+        m.menuTimer.duration = effect.after
+        m.menuTimer.control = "start"
     else if t = "skipIntro"
         menu = m.manifest["menus"][effect.menu]
         at = msOr(menu["buttonsAt"], 0)
         if m.videoRole = "background" then m.motion.seek = at
         drawButtons()
     end if
+end sub
+
+' The countdown ran out: the navigator ignores it if that menu isn't showing any more.
+sub onMenuTimer()
+    if m.menuTimerMenu = invalid then return
+    stepWith({ type: "timeout", menu: m.menuTimerMenu })
 end sub
 
 sub onFlashDone()
@@ -106,6 +121,7 @@ end sub
 
 sub render(fresh as boolean)
     mode = m.nav.mode
+    if mode <> "menu" then m.menuTimer.control = "stop" ' the countdown belongs to a menu on screen
     if mode = "menu"
         menu = m.manifest["menus"][m.nav.menu]
         if fresh or m.shownMenu <> m.nav.menu then showMenu(menu)

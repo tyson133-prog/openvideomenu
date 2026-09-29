@@ -155,6 +155,25 @@ public sealed class Menu
     /// <summary>What the remote's Back key does on this menu (like a DVD's "Go Up").</summary>
     public MenuAction? Back { get; set; }
 
+    /// <summary>Level 2: what happens when the menu is left alone (spec §5.2).</summary>
+    public MenuTimeout? Timeout { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+}
+
+/// <summary>A menu that moves on by itself, like a DVD menu whose video or still time runs out.</summary>
+public sealed class MenuTimeout
+{
+    /// <summary>Seconds, from when the menu appears (or from the last key press, with <see cref="RestartOnInput"/>).</summary>
+    public double After { get; set; }
+
+    /// <summary>Runs when the time is up, as a step up like a menu's back (no history; a goto to a menu in history unwinds it).</summary>
+    public MenuAction Action { get; set; } = new BackAction();
+
+    /// <summary>Whether a key press or click restarts the countdown. Default (null) is true.</summary>
+    public bool? RestartOnInput { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

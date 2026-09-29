@@ -51,6 +51,7 @@ public sealed partial class Manifest
             Add(menu.Background?.Image);
             Add(menu.Background?.Video?.Src);
             Add(menu.Background?.Audio?.Src);
+            Walk(menu.Timeout?.Action);
             foreach (var button in menu.Buttons)
             {
                 Add(button.States?.Normal?.Image);

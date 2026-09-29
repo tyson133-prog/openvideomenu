@@ -18,7 +18,8 @@ internal sealed class Validator
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "label", "kind", "duration", "chapters"],
         ["chapter"] = ["time", "label", "thumbnail"],
-        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back"],
+        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
+        ["timeout"] = ["after", "action", "restartOnInput"],
         ["canvas"] = ["width", "height", "aspect"],
         ["background"] = ["image", "color", "video", "audio"],
         ["loopingMedia"] = ["src", "loopStart"],
@@ -611,6 +612,31 @@ internal sealed class Validator
         {
             Action(back, $"{path}/back", mediaIds, menus, own);
         }
+
+        if (menu["timeout"] is { } timeoutValue)
+        {
+            var tp = $"{path}/timeout";
+            if (!Obj.TryFrom(timeoutValue, out var t))
+            {
+                Error(tp, "Must be {after, action, restartOnInput?}.");
+            }
+            else
+            {
+                UnknownKeys(t, KnownKeys["timeout"], tp);
+                if (t["after"] is not { } after || !(IsFiniteNumber(after) && after.GetDouble() > 0))
+                {
+                    Error($"{tp}/after", "Must be a positive number of seconds.");
+                }
+
+                if (t["restartOnInput"] is { } restart && !IsBoolean(restart))
+                {
+                    Error($"{tp}/restartOnInput", "Must be true or false.");
+                }
+
+                // Like back, it may press one of this menu's own buttons.
+                Action(t["action"], $"{tp}/action", mediaIds, menus, own);
+            }
+        }
     }
 
     private void LoopingMedia(JsonElement value, string path)
@@ -769,7 +795,7 @@ internal sealed class Validator
             case "activate":
                 if (ownButtons is null)
                 {
-                    Error($"{path}/type", "\"activate\" is only allowed in a menu's back.");
+                    Error($"{path}/type", "\"activate\" is only allowed in a menu's back or timeout.");
                 }
                 else if (!IsNonEmptyString(action["button"]) || !ownButtons.Contains(action["button"]!.Value.GetString()!))
                 {

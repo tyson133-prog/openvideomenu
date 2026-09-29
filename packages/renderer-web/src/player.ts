@@ -69,6 +69,8 @@ export class MenuPlayer {
   private bgAudio?: HTMLAudioElement;
   private readonly transitionVideo: HTMLVideoElement;
   private introTimer?: ReturnType<typeof setTimeout>;
+  /** The countdown of a menu's timeout (Level 2), started by a startTimer effect. */
+  private menuTimer?: ReturnType<typeof setTimeout>;
   private introFrame?: number;
   /** Browsers block autoplay with sound until the first input; menus start muted and unmute then. */
   private soundUnlocked = false;
@@ -131,6 +133,7 @@ export class MenuPlayer {
     this.transitionVideo.pause();
     this.playback.destroy();
     clearTimeout(this.toastTimer);
+    clearTimeout(this.menuTimer);
     this.root.remove();
   }
 
@@ -147,6 +150,7 @@ export class MenuPlayer {
       const prev = this.state;
       this.state = state;
       this.render(prev);
+      if (state.mode !== "menu") clearTimeout(this.menuTimer); // the countdown belongs to a menu on screen
       for (const effect of effects) this.perform(effect);
       this.options.onStateChange?.(state);
     };
@@ -211,9 +215,22 @@ export class MenuPlayer {
       case "skipIntro":
         this.seekBackground(this.currentMenu()?.buttonsAt ?? 0);
         break;
+      case "startTimer":
+        this.startMenuTimer(effect.menu, effect.after);
+        break;
       case "activated":
         break;
     }
+  }
+
+  /** (Re)start a menu's countdown; when it runs out, tell the navigator (which ignores stale ones). */
+  private startMenuTimer(menu: string, after: number) {
+    clearTimeout(this.menuTimer);
+    const fire = () => {
+      // Busy for a moment (a button's activated flash): try again shortly rather than lose it.
+      if (!this.dispatch({ type: "timeout", menu })) this.menuTimer = setTimeout(fire, 200);
+    };
+    this.menuTimer = setTimeout(fire, after * 1000);
   }
 
   private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number) {
@@ -283,8 +300,13 @@ export class MenuPlayer {
     if (document.hidden) {
       this.stopBackground();
       if (!this.transitionVideo.hidden) this.transitionVideo.pause();
+      // Nothing may start while nobody's watching (the TV app in the background).
+      clearTimeout(this.menuTimer);
     } else if (this.state.mode === "menu") {
       for (const el of [this.bgVideo, this.bgAudio]) if (el) this.playWithAutoplayFallback(el);
+      // Back on screen: the countdown starts over, as if the menu had just appeared.
+      const timeout = this.currentMenu()?.timeout;
+      if (timeout && this.state.menu) this.startMenuTimer(this.state.menu, timeout.after);
     } else if (this.state.mode === "transition") {
       this.playWithAutoplayFallback(this.transitionVideo);
     }

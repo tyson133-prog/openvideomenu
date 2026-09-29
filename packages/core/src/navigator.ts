@@ -25,7 +25,9 @@ export type NavEvent =
   /** The menu intro reached `buttonsAt`; buttons appear and respond. */
   | { type: "buttonsReady" }
   /** A transition clip finished playing. */
-  | { type: "transitionEnded" };
+  | { type: "transitionEnded" }
+  /** Level 2: the countdown a "startTimer" effect asked for ran out on [menu]. */
+  | { type: "timeout"; menu: string };
 
 export type Effect =
   /** Start playing a media item from `start` seconds. */
@@ -37,7 +39,12 @@ export type Effect =
   /** Play a transition clip; report "transitionEnded" when it finishes. */
   | { type: "transition"; src: string }
   /** The viewer skipped the menu intro; jump the background to `buttonsAt`. */
-  | { type: "skipIntro"; menu: string };
+  | { type: "skipIntro"; menu: string }
+  /**
+   * Level 2: (re)start the countdown for [menu]'s timeout: report {type: "timeout", menu} after
+   * [after] seconds, unless another startTimer replaces it or the viewer leaves that menu first.
+   */
+  | { type: "startTimer"; menu: string; after: number };
 
 export interface MenuPosition {
   menu: string;
@@ -84,33 +91,51 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       s.playing = undefined;
       s.vars = { ...(manifest.vars ?? {}) };
       if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
-      else openRoot(manifest, s);
+      else openRoot(manifest, s, effects);
       break;
 
     case "press":
     case "select":
-    case "activate":
+    case "activate": {
       // Any key or click skips a transition or a menu intro; the viewer is always in control.
       // Pointer hover ("select") is ignored meanwhile, so moving the mouse doesn't skip anything.
       if ((s.mode === "transition" || (s.mode === "menu" && !s.buttonsReady)) && event.type === "select") break;
       if (s.mode === "transition") {
-        endTransition(manifest, s);
+        endTransition(manifest, s, effects);
         break;
       }
+      const inMenu = s.mode === "menu" ? s.menu : undefined;
       if (s.mode === "menu" && !s.buttonsReady) {
         s.buttonsReady = true;
         effects.push({ type: "skipIntro", menu: s.menu! });
-        break;
+      } else {
+        handleInput(manifest, s, event, effects);
       }
-      handleInput(manifest, s, event, effects);
+      // Input restarts the countdown of a menu still showing (unless it says restartOnInput: false),
+      // but not when the viewer is leaving (exit).
+      if (inMenu && s.mode === "menu" && s.menu === inMenu && !effects.some((e) => e.type === "startTimer" || e.type === "exit")) {
+        const timeout = menuOf(manifest, inMenu).timeout;
+        if (timeout && timeout.restartOnInput !== false) effects.push({ type: "startTimer", menu: inMenu, after: timeout.after });
+      }
       break;
+    }
+
+    case "timeout": {
+      // Only for the menu still showing: a countdown from a menu the viewer has left is stale.
+      if (s.mode !== "menu" || s.menu !== event.menu) break;
+      const timeout = menuOf(manifest, s.menu).timeout;
+      // Nobody chose this: it runs as a step up, like a menu's back. A goto adds no history, and one
+      // to a menu already in history unwinds it (a submenu timing out to main leaves nothing behind).
+      if (timeout) run(manifest, s, timeout.action, effects, { pushHistory: false, up: true });
+      break;
+    }
 
     case "buttonsReady":
       if (s.mode === "menu") s.buttonsReady = true;
       break;
 
     case "transitionEnded":
-      if (s.mode === "transition") endTransition(manifest, s);
+      if (s.mode === "transition") endTransition(manifest, s, effects);
       break;
 
     case "ended":
@@ -181,16 +206,16 @@ function findButton(menu: Menu, id: string): Button | undefined {
   return menu.buttons.find((b) => b.id === id);
 }
 
-function openRoot(manifest: Manifest, s: NavState) {
+function openRoot(manifest: Manifest, s: NavState, effects: Effect[]) {
   if (!manifest.rootMenu || !manifest.menus) {
     s.mode = "fallback";
     s.menu = s.focus = undefined;
     return;
   }
-  enterMenu(manifest, s, manifest.rootMenu, undefined, "intro");
+  enterMenu(manifest, s, manifest.rootMenu, undefined, "intro", effects);
 }
 
-function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: string | undefined, how: "intro" | "return") {
+function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: string | undefined, how: "intro" | "return", effects: Effect[]) {
   const menu = menuOf(manifest, menuId);
   s.mode = "menu";
   s.menu = menuId;
@@ -198,11 +223,13 @@ function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: st
   s.intro = how === "intro";
   s.buttonsReady = !(s.intro && (menu.buttonsAt ?? 0) > 0);
   s.transitionTo = undefined;
+  // Every time the menu appears (fresh or returned to), its countdown starts over.
+  if (menu.timeout) effects.push({ type: "startTimer", menu: menuId, after: menu.timeout.after });
 }
 
-function endTransition(manifest: Manifest, s: NavState) {
+function endTransition(manifest: Manifest, s: NavState, effects: Effect[]) {
   const to = s.transitionTo!;
-  enterMenu(manifest, s, to.menu, to.button, "intro");
+  enterMenu(manifest, s, to.menu, to.button, "intro", effects);
 }
 
 function focusButton(manifest: Manifest, s: NavState, button: Button, effects: Effect[]) {
@@ -255,7 +282,7 @@ function goBack(manifest: Manifest, s: NavState, effects: Effect[]) {
     effects.push({ type: "exit" });
     return;
   }
-  enterMenu(manifest, s, previous.menu, previous.focus, "return");
+  enterMenu(manifest, s, previous.menu, previous.focus, "return", effects);
 }
 
 function currentPosition(s: NavState): MenuPosition | undefined {
@@ -277,7 +304,7 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
         s.transitionTo = { menu: action.menu, button: action.button };
         effects.push({ type: "transition", src: action.transition });
       } else {
-        enterMenu(manifest, s, action.menu, action.button, "intro");
+        enterMenu(manifest, s, action.menu, action.button, "intro", effects);
       }
       break;
     }
@@ -335,9 +362,9 @@ function finishPlayback(
 
   // Go back to where playback was started from, then run the after-action from there.
   if (playing.returnTo) {
-    enterMenu(manifest, s, playing.returnTo.menu, playing.returnTo.focus, "return");
+    enterMenu(manifest, s, playing.returnTo.menu, playing.returnTo.focus, "return", effects);
   } else {
-    openRoot(manifest, s);
+    openRoot(manifest, s, effects);
   }
   if ("completed" in how && playing.after) run(manifest, s, playing.after, effects, { pushHistory: true });
 }

@@ -24,29 +24,51 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         if manifest["firstPlay"] <> invalid
             msNavRun(manifest, s, manifest["firstPlay"], effects, false)
         else
-            msNavOpenRoot(manifest, s)
+            msNavOpenRoot(manifest, s, effects)
         end if
 
     else if t = "press" or t = "select" or t = "activate"
         ' Any key or click skips a transition or a menu intro; the viewer is always in control.
         ' Pointer hover ("select") is ignored meanwhile, so moving the mouse doesn't skip anything.
         waiting = (s.mode = "transition" or (s.mode = "menu" and not s.buttonsReady))
+        inMenu = invalid
+        if s.mode = "menu" then inMenu = s.menu
         if waiting and t = "select"
             ' ignore
         else if s.mode = "transition"
-            msNavEndTransition(manifest, s)
+            msNavEndTransition(manifest, s, effects)
         else if s.mode = "menu" and not s.buttonsReady
             s.buttonsReady = true
             effects.push({ type: "skipIntro", menu: s.menu })
         else
             msNavHandleInput(manifest, s, event, effects)
         end if
+        ' Input restarts the countdown of a menu still showing (unless restartOnInput is false), but
+        ' not when the viewer is leaving (exit).
+        if inMenu <> invalid and s.mode = "menu" and s.menu = inMenu and not (waiting and t = "select")
+            timeout = msNavMenu(manifest, inMenu)["timeout"]
+            restarted = false
+            for each e in effects
+                if e.type = "startTimer" or e.type = "exit" then restarted = true
+            end for
+            if timeout <> invalid and not restarted and timeout["restartOnInput"] <> false
+                effects.push({ type: "startTimer", menu: inMenu, after: timeout["after"] })
+            end if
+        end if
+
+    else if t = "timeout"
+        ' Only for the menu still showing: a countdown from a menu the viewer has left is stale. Nobody
+        ' chose this, so it runs as a step up, like a menu's back.
+        if s.mode = "menu" and s.menu = event["menu"]
+            timeout = msNavMenu(manifest, s.menu)["timeout"]
+            if timeout <> invalid then msNavRunOpts(manifest, s, timeout["action"], effects, false, true)
+        end if
 
     else if t = "buttonsReady"
         if s.mode = "menu" then s.buttonsReady = true
 
     else if t = "transitionEnded"
-        if s.mode = "transition" then msNavEndTransition(manifest, s)
+        if s.mode = "transition" then msNavEndTransition(manifest, s, effects)
 
     else if t = "ended"
         if s.mode = "playing" and s.playing <> invalid
@@ -114,17 +136,17 @@ function msNavFindButton(menu as object, id as dynamic) as dynamic
     return invalid
 end function
 
-sub msNavOpenRoot(manifest as object, s as object)
+sub msNavOpenRoot(manifest as object, s as object, effects as object)
     if manifest["rootMenu"] = invalid or manifest["menus"] = invalid
         s.mode = "fallback"
         s.menu = invalid
         s.focus = invalid
         return
     end if
-    msNavEnterMenu(manifest, s, manifest["rootMenu"], invalid, true)
+    msNavEnterMenu(manifest, s, manifest["rootMenu"], invalid, true, effects)
 end sub
 
-sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId as dynamic, fresh as boolean)
+sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId as dynamic, fresh as boolean, effects as object)
     menu = msNavMenu(manifest, menuId)
     s.mode = "menu"
     s.menu = menuId
@@ -139,11 +161,13 @@ sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId a
     buttonsAt = msOr(menu["buttonsAt"], 0)
     s.buttonsReady = not (fresh and buttonsAt > 0)
     s.transitionTo = invalid
+    ' Every time the menu appears (fresh or returned to), its countdown starts over (Level 2).
+    if menu["timeout"] <> invalid then effects.push({ type: "startTimer", menu: menuId, after: menu["timeout"]["after"] })
 end sub
 
-sub msNavEndTransition(manifest as object, s as object)
+sub msNavEndTransition(manifest as object, s as object, effects as object)
     target = s.transitionTo
-    msNavEnterMenu(manifest, s, target.menu, target.button, true)
+    msNavEnterMenu(manifest, s, target.menu, target.button, true, effects)
 end sub
 
 sub msNavFocusButton(manifest as object, s as object, button as object, effects as object)
@@ -200,7 +224,7 @@ sub msNavGoBack(manifest as object, s as object, effects as object)
         return
     end if
     previous = s.history.pop()
-    msNavEnterMenu(manifest, s, previous.menu, previous.focus, false)
+    msNavEnterMenu(manifest, s, previous.menu, previous.focus, false, effects)
 end sub
 
 function msNavCurrentPosition(s as object) as dynamic
@@ -238,7 +262,7 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
             s.transitionTo = { menu: action["menu"], button: action["button"] }
             effects.push({ type: "transition", src: action["transition"] })
         else
-            msNavEnterMenu(manifest, s, action["menu"], action["button"], true)
+            msNavEnterMenu(manifest, s, action["menu"], action["button"], true, effects)
         end if
     else if t = "back"
         msNavGoBack(manifest, s, effects)
@@ -290,9 +314,9 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
 
     ' Go back to where playback was started from, then run the after-action from there.
     if playing.returnTo <> invalid
-        msNavEnterMenu(manifest, s, playing.returnTo.menu, playing.returnTo.focus, false)
+        msNavEnterMenu(manifest, s, playing.returnTo.menu, playing.returnTo.focus, false, effects)
     else
-        msNavOpenRoot(manifest, s)
+        msNavOpenRoot(manifest, s, effects)
     end if
     if completed and playing.after <> invalid then msNavRun(manifest, s, playing.after, effects, true)
 end sub

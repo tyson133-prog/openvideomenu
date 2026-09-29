@@ -22,7 +22,8 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   source: ["kind", "generator"],
   media: ["ref", "label", "kind", "duration", "chapters"],
   chapter: ["time", "label", "thumbnail"],
-  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back"],
+  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
+  timeout: ["after", "action", "restartOnInput"],
   canvas: ["width", "height", "aspect"],
   background: ["image", "color", "video", "audio"],
   loopingMedia: ["src", "loopStart"],
@@ -358,6 +359,18 @@ class Validator {
       this.error(`${path}/defaultButton`, `No button "${String(value.defaultButton)}" in this menu.`);
     // What the remote's Back does here; may press one of this menu's own buttons.
     if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
+    if (value.timeout !== undefined) {
+      const t = value.timeout;
+      const tp = `${path}/timeout`;
+      if (!isObject(t)) this.error(tp, "Must be {after, action, restartOnInput?}.");
+      else {
+        this.unknownKeys(t, KNOWN_KEYS.timeout!, tp);
+        if (!(isFiniteNumber(t.after) && t.after > 0)) this.error(`${tp}/after`, "Must be a positive number of seconds.");
+        if (t.restartOnInput !== undefined && typeof t.restartOnInput !== "boolean") this.error(`${tp}/restartOnInput`, "Must be true or false.");
+        // Like back, it may press one of this menu's own buttons.
+        this.action(t.action, `${tp}/action`, mediaIds, menus, own);
+      }
+    }
   }
 
   private loopingMedia(value: unknown, path: string) {
@@ -435,7 +448,7 @@ class Validator {
         }
         break;
       case "activate":
-        if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back.`);
+        if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back or timeout.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
           this.error(`${path}/button`, `No button "${String(value.button)}" in this menu.`);
         break;

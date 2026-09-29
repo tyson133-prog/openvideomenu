@@ -391,6 +391,28 @@
         "back": {
           "$ref": "#/$defs/action",
           "description": "What the remote's Back key does on this menu (any action, incl. activate)."
+        },
+        "timeout": {
+          "type": "object",
+          "description": "Level 2: what happens when the menu is left alone. Counted from when the menu appears; a key press restarts it unless restartOnInput is false.",
+          "required": [
+            "after",
+            "action"
+          ],
+          "properties": {
+            "after": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Seconds."
+            },
+            "action": {
+              "$ref": "#/$defs/action"
+            },
+            "restartOnInput": {
+              "type": "boolean",
+              "default": true
+            }
+          }
         }
       }
     },

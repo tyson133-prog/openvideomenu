@@ -42,6 +42,9 @@ public abstract record NavEvent
 
     /// <summary>A transition clip finished playing.</summary>
     public sealed record TransitionEnded : NavEvent;
+
+    /// <summary>Level 2: the countdown a <see cref="Effect.StartTimer"/> asked for ran out on <paramref name="Menu"/>.</summary>
+    public sealed record Timeout(string Menu) : NavEvent;
 }
 
 /// <summary>Something the player must do.</summary>
@@ -61,6 +64,13 @@ public abstract record Effect
 
     /// <summary>The viewer skipped the menu intro; jump the background to buttonsAt.</summary>
     public sealed record SkipIntro(string Menu) : Effect;
+
+    /// <summary>
+    /// Level 2: (re)start the countdown for <paramref name="Menu"/>'s timeout: report
+    /// <see cref="NavEvent.Timeout"/> after <paramref name="After"/> seconds, unless another StartTimer
+    /// replaces it or the viewer leaves that menu first.
+    /// </summary>
+    public sealed record StartTimer(string Menu, double After) : Effect;
 }
 
 public enum NavMode
@@ -134,7 +144,7 @@ public static class Navigator
                 }
                 else
                 {
-                    OpenRoot(manifest, s);
+                    OpenRoot(manifest, s, effects);
                 }
 
                 break;
@@ -149,18 +159,40 @@ public static class Navigator
 
                 if (s.Mode == NavMode.Transition)
                 {
-                    EndTransition(manifest, s);
+                    EndTransition(manifest, s, effects);
                     break;
                 }
 
+                var inMenu = s.Mode == NavMode.Menu ? s.Menu : null;
                 if (s.Mode == NavMode.Menu && !s.ButtonsReady)
                 {
                     s.ButtonsReady = true;
                     effects.Add(new Effect.SkipIntro(s.Menu!));
-                    break;
+                }
+                else
+                {
+                    HandleInput(manifest, s, navEvent, effects);
                 }
 
-                HandleInput(manifest, s, navEvent, effects);
+                // Input restarts the countdown of a menu still showing (unless it says
+                // restartOnInput: false), but not when the viewer is leaving (exit).
+                if (inMenu is not null && s.Mode == NavMode.Menu && s.Menu == inMenu &&
+                    !effects.Any(e => e is Effect.StartTimer or Effect.Exit) &&
+                    MenuOf(manifest, inMenu).Timeout is { } restart && restart.RestartOnInput != false)
+                {
+                    effects.Add(new Effect.StartTimer(inMenu, restart.After));
+                }
+
+                break;
+
+            case NavEvent.Timeout timeout:
+                // Only for the menu still showing: a countdown from a menu the viewer has left is stale.
+                // Nobody chose this, so it runs as a step up, like a menu's back.
+                if (s.Mode == NavMode.Menu && s.Menu == timeout.Menu && MenuOf(manifest, s.Menu).Timeout is { } t)
+                {
+                    Run(manifest, s, t.Action, effects, pushHistory: false, up: true);
+                }
+
                 break;
 
             case NavEvent.ButtonsReady:
@@ -174,7 +206,7 @@ public static class Navigator
             case NavEvent.TransitionEnded:
                 if (s.Mode == NavMode.Transition)
                 {
-                    EndTransition(manifest, s);
+                    EndTransition(manifest, s, effects);
                 }
 
                 break;
@@ -330,7 +362,7 @@ public static class Navigator
 
     private static Button? FindButton(Menu menu, string id) => menu.Buttons.FirstOrDefault(b => b.Id == id);
 
-    private static void OpenRoot(Manifest manifest, Working s)
+    private static void OpenRoot(Manifest manifest, Working s, List<Effect> effects)
     {
         if (manifest.RootMenu is null || manifest.Menus is null)
         {
@@ -339,10 +371,10 @@ public static class Navigator
             return;
         }
 
-        EnterMenu(manifest, s, manifest.RootMenu, null, intro: true);
+        EnterMenu(manifest, s, manifest.RootMenu, null, intro: true, effects);
     }
 
-    private static void EnterMenu(Manifest manifest, Working s, string menuId, string? buttonId, bool intro)
+    private static void EnterMenu(Manifest manifest, Working s, string menuId, string? buttonId, bool intro, List<Effect> effects)
     {
         var menu = MenuOf(manifest, menuId);
         s.Mode = NavMode.Menu;
@@ -351,12 +383,18 @@ public static class Navigator
         s.Intro = intro;
         s.ButtonsReady = !(intro && (menu.ButtonsAt ?? 0) > 0);
         s.TransitionTo = null;
+
+        // Every time the menu appears (fresh or returned to), its countdown starts over.
+        if (menu.Timeout is { } timeout)
+        {
+            effects.Add(new Effect.StartTimer(menuId, timeout.After));
+        }
     }
 
-    private static void EndTransition(Manifest manifest, Working s)
+    private static void EndTransition(Manifest manifest, Working s, List<Effect> effects)
     {
         var to = s.TransitionTo!.Value;
-        EnterMenu(manifest, s, to.Menu, to.Button, intro: true);
+        EnterMenu(manifest, s, to.Menu, to.Button, intro: true, effects);
     }
 
     private static void FocusButton(Manifest manifest, Working s, Button button, List<Effect> effects)
@@ -438,7 +476,7 @@ public static class Navigator
 
         var previous = s.History[^1];
         s.History.RemoveAt(s.History.Count - 1);
-        EnterMenu(manifest, s, previous.Menu, previous.Focus, intro: false);
+        EnterMenu(manifest, s, previous.Menu, previous.Focus, intro: false, effects);
     }
 
     private static MenuPosition? CurrentPosition(Working s) =>
@@ -474,7 +512,7 @@ public static class Navigator
                 }
                 else
                 {
-                    EnterMenu(manifest, s, g.Menu, g.Button, intro: true);
+                    EnterMenu(manifest, s, g.Menu, g.Button, intro: true, effects);
                 }
 
                 break;
@@ -552,11 +590,11 @@ public static class Navigator
         // Go back to where playback was started from, then run the after-action from there.
         if (playing.ReturnTo is { } returnTo)
         {
-            EnterMenu(manifest, s, returnTo.Menu, returnTo.Focus, intro: false);
+            EnterMenu(manifest, s, returnTo.Menu, returnTo.Focus, intro: false, effects);
         }
         else
         {
-            OpenRoot(manifest, s);
+            OpenRoot(manifest, s, effects);
         }
 
         if (completed && playing.After is not null)

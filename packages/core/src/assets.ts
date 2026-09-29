@@ -23,6 +23,7 @@ export function menuAssets(manifest: Manifest): string[] {
     add(menu.background?.image);
     add(menu.background?.video?.src);
     add(menu.background?.audio?.src);
+    walkAction(menu.timeout?.action);
     for (const button of menu.buttons ?? []) {
       for (const state of Object.values(button.states ?? {})) add(state?.image);
       walkAction(button.action);

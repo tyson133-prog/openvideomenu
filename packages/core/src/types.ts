@@ -147,7 +147,21 @@ export interface Menu {
    * returns through history.
    */
   back?: Action;
+  /**
+   * Level 2: what happens when the menu is left alone, like a DVD menu whose video or still time runs
+   * out. Counted from when the menu appears (its intro included).
+   */
+  timeout?: MenuTimeout;
   [extension: `x-${string}`]: unknown;
+}
+
+export interface MenuTimeout {
+  /** Seconds, from when the menu appears (or from the last key press, with restartOnInput). */
+  after: number;
+  /** Runs when the time is up, as a step up like a menu's back: no history added; a goto to a menu in history unwinds it. */
+  action: Action;
+  /** Whether a key press or click restarts the countdown. Default true. */
+  restartOnInput?: boolean;
 }
 
 /** A number, or the current value of a variable. */
