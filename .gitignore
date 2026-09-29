@@ -22,3 +22,6 @@ private/
 # Jellyfin plugin build output
 plugins/jellyfin/**/bin/
 plugins/jellyfin/**/obj/
+# .NET SDK build output
+sdk/dotnet/**/bin/
+sdk/dotnet/**/obj/

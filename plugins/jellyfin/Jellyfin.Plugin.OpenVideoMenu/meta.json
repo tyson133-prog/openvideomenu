@@ -11,5 +11,5 @@
   "version": "0.1.0.0",
   "status": "Active",
   "autoUpdate": false,
-  "assemblies": ["Jellyfin.Plugin.OpenVideoMenu.dll"]
+  "assemblies": ["OpenVideoMenu.dll", "Jellyfin.Plugin.OpenVideoMenu.dll"]
 }

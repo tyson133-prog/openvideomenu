@@ -1,0 +1,603 @@
+namespace OpenVideoMenu;
+
+// Menu navigation as a pure state machine: Navigator.Step(manifest, state, event) → (state, effects).
+// Players feed it input and playback events and carry out the effects. The conformance suite
+// describes expected behaviour in exactly these terms, so every implementation is checked against
+// the same cases. A port of packages/core/src/navigator.ts.
+
+/// <summary>A remote key.</summary>
+public enum Key
+{
+    Up,
+    Down,
+    Left,
+    Right,
+    Enter,
+    Back,
+}
+
+/// <summary>Something that happened: input, or playback reaching a point.</summary>
+public abstract record NavEvent
+{
+    /// <summary>Begin: run firstPlay, or open the root menu.</summary>
+    public sealed record Start : NavEvent;
+
+    /// <summary>Remote or keyboard input. While playing, only Back is handled (it stops playback).</summary>
+    public sealed record Press(Key Key) : NavEvent;
+
+    /// <summary>A pointer or touch moved onto a button.</summary>
+    public sealed record Select(string Button) : NavEvent;
+
+    /// <summary>A pointer or touch clicked a button.</summary>
+    public sealed record Activate(string Button) : NavEvent;
+
+    /// <summary>The current playback item finished on its own.</summary>
+    public sealed record Ended : NavEvent;
+
+    /// <summary>The viewer stopped playback early; the position (seconds) is remembered for resume.</summary>
+    public sealed record Stopped(double Position) : NavEvent;
+
+    /// <summary>The menu intro reached buttonsAt; buttons appear and respond.</summary>
+    public sealed record ButtonsReady : NavEvent;
+
+    /// <summary>A transition clip finished playing.</summary>
+    public sealed record TransitionEnded : NavEvent;
+}
+
+/// <summary>Something the player must do.</summary>
+public abstract record Effect
+{
+    /// <summary>Start playing a media entry from <paramref name="Start"/> seconds, with tracks when given (Level 2).</summary>
+    public sealed record Play(string Media, double Start, int? Audio = null, int? Subtitle = null) : Effect;
+
+    /// <summary>Briefly show the button's activated state.</summary>
+    public sealed record Activated(string Menu, string Button) : Effect;
+
+    /// <summary>Back was pressed at the top of the menus; the host may leave the disc.</summary>
+    public sealed record Exit : Effect;
+
+    /// <summary>Play a transition clip, then report <see cref="NavEvent.TransitionEnded"/>.</summary>
+    public sealed record Transition(string Src) : Effect;
+
+    /// <summary>The viewer skipped the menu intro; jump the background to buttonsAt.</summary>
+    public sealed record SkipIntro(string Menu) : Effect;
+}
+
+public enum NavMode
+{
+    Idle,
+    Menu,
+    Playing,
+    Fallback,
+    Transition,
+}
+
+/// <summary>A menu and the button focused on it.</summary>
+public sealed record MenuPosition(string Menu, string Focus);
+
+/// <summary>Playback in progress: the item playing now and those still queued.</summary>
+public sealed record Playback(PlayItem Item, IReadOnlyList<PlayItem> Queue, MenuAction? After, MenuPosition? ReturnTo);
+
+/// <summary>Where the viewer stopped, for resume.</summary>
+public sealed record LastStop(string Media, double Position);
+
+/// <summary>Navigation state. Treat as a value: <see cref="Navigator.Step"/> returns a new one.</summary>
+public sealed record NavState
+{
+    public NavMode Mode { get; init; } = NavMode.Idle;
+
+    public string? Menu { get; init; }
+
+    public string? Focus { get; init; }
+
+    /// <summary>
+    /// True when the menu was entered fresh (start or goto), so its background plays its intro from
+    /// 0; false when returning to it (Back, end of playback): the intro isn't replayed.
+    /// </summary>
+    public bool Intro { get; init; }
+
+    /// <summary>False while a menu intro runs before buttonsAt; buttons are hidden and inactive.</summary>
+    public bool ButtonsReady { get; init; } = true;
+
+    /// <summary>The menu (and button) a running transition leads to.</summary>
+    public (string Menu, string? Button)? TransitionTo { get; init; }
+
+    /// <summary>Menus to return to with Back.</summary>
+    public IReadOnlyList<MenuPosition> History { get; init; } = [];
+
+    public Playback? Playing { get; init; }
+
+    /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
+    public LastStop? LastStop { get; init; }
+
+    /// <summary>Level 2: variable values for this session.</summary>
+    public IReadOnlyDictionary<string, int> Vars { get; init; } = new Dictionary<string, int>();
+}
+
+public static class Navigator
+{
+    /// <summary>Advance <paramref name="state"/> by one event. Pure: the input state isn't changed.</summary>
+    public static (NavState State, IReadOnlyList<Effect> Effects) Step(Manifest manifest, NavState state, NavEvent navEvent)
+    {
+        var s = new Working(state);
+        var effects = new List<Effect>();
+
+        switch (navEvent)
+        {
+            case NavEvent.Start:
+                s.History.Clear();
+                s.Playing = null;
+                s.Vars = new Dictionary<string, int>(manifest.Vars ?? []);
+                if (manifest.FirstPlay is { } firstPlay)
+                {
+                    Run(manifest, s, firstPlay, effects, pushHistory: false);
+                }
+                else
+                {
+                    OpenRoot(manifest, s);
+                }
+
+                break;
+
+            case NavEvent.Press or NavEvent.Select or NavEvent.Activate:
+                // Any key or click skips a transition or a menu intro; the viewer is always in control.
+                // Pointer hover (Select) is ignored meanwhile, so moving the mouse doesn't skip anything.
+                if ((s.Mode == NavMode.Transition || (s.Mode == NavMode.Menu && !s.ButtonsReady)) && navEvent is NavEvent.Select)
+                {
+                    break;
+                }
+
+                if (s.Mode == NavMode.Transition)
+                {
+                    EndTransition(manifest, s);
+                    break;
+                }
+
+                if (s.Mode == NavMode.Menu && !s.ButtonsReady)
+                {
+                    s.ButtonsReady = true;
+                    effects.Add(new Effect.SkipIntro(s.Menu!));
+                    break;
+                }
+
+                HandleInput(manifest, s, navEvent, effects);
+                break;
+
+            case NavEvent.ButtonsReady:
+                if (s.Mode == NavMode.Menu)
+                {
+                    s.ButtonsReady = true;
+                }
+
+                break;
+
+            case NavEvent.TransitionEnded:
+                if (s.Mode == NavMode.Transition)
+                {
+                    EndTransition(manifest, s);
+                }
+
+                break;
+
+            case NavEvent.Ended:
+                if (s.Mode != NavMode.Playing || s.Playing is null)
+                {
+                    break;
+                }
+
+                if (s.Playing.Queue.Count > 0)
+                {
+                    var next = s.Playing.Queue[0];
+                    s.Playing = s.Playing with { Item = next, Queue = s.Playing.Queue.Skip(1).ToList() };
+                    effects.Add(PlayEffect(manifest, next, s.Vars));
+                }
+                else
+                {
+                    FinishPlayback(manifest, s, effects, completed: true, stoppedAt: null);
+                }
+
+                break;
+
+            case NavEvent.Stopped stopped:
+                if (s.Mode == NavMode.Playing)
+                {
+                    FinishPlayback(manifest, s, effects, completed: false, stoppedAt: stopped.Position);
+                }
+
+                break;
+        }
+
+        return (s.ToState(), effects);
+    }
+
+    /// <summary>Start offset in seconds for a play item (a chapter wins over start).</summary>
+    public static double StartTime(Manifest manifest, PlayItem item)
+    {
+        if (item.Chapter is { } chapter)
+        {
+            var chapters = manifest.Media.TryGetValue(item.Media, out var media) ? media.Chapters : null;
+            return chapters is not null && chapter >= 1 && chapter <= chapters.Count ? chapters[chapter - 1].Time : 0;
+        }
+
+        return item.Start ?? 0;
+    }
+
+    /// <summary>
+    /// The nearest button in a direction, for menus with autoNav. Candidates must lie that way (by
+    /// centre); the score favours a short distance along the axis and penalises sideways offset.
+    /// </summary>
+    public static Button? NearestButton(Menu menu, Button from, Direction dir)
+    {
+        var (fx, fy) = (from.Rect.CentreX, from.Rect.CentreY);
+        Button? best = null;
+        var bestScore = double.PositiveInfinity;
+        foreach (var b in menu.Buttons)
+        {
+            if (b.Id == from.Id)
+            {
+                continue;
+            }
+
+            var dx = b.Rect.CentreX - fx;
+            var dy = b.Rect.CentreY - fy;
+            var along = dir switch { Direction.Left => -dx, Direction.Right => dx, Direction.Up => -dy, _ => dy };
+            var sideways = dir is Direction.Left or Direction.Right ? Math.Abs(dy) : Math.Abs(dx);
+            if (along <= 0)
+            {
+                continue;
+            }
+
+            var score = along + 2 * sideways;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = b;
+            }
+        }
+
+        return best;
+    }
+
+    private static void HandleInput(Manifest manifest, Working s, NavEvent navEvent, List<Effect> effects)
+    {
+        switch (navEvent)
+        {
+            case NavEvent.Press press:
+                if (s.Mode == NavMode.Playing)
+                {
+                    // Players report the position with Stopped; a bare Back stops at an unknown position.
+                    if (press.Key == Key.Back)
+                    {
+                        FinishPlayback(manifest, s, effects, completed: false, stoppedAt: null);
+                    }
+
+                    break;
+                }
+
+                if (s.Mode != NavMode.Menu)
+                {
+                    break;
+                }
+
+                switch (press.Key)
+                {
+                    case Key.Enter:
+                        Activate(manifest, s, s.Focus!, effects);
+                        break;
+                    case Key.Back:
+                        RemoteBack(manifest, s, effects);
+                        break;
+                    default:
+                        Move(manifest, s, (Direction)(int)press.Key, effects);
+                        break;
+                }
+
+                break;
+
+            case NavEvent.Select select:
+            {
+                if (s.Mode != NavMode.Menu || select.Button == s.Focus)
+                {
+                    break;
+                }
+
+                if (FindButton(MenuOf(manifest, s.Menu!), select.Button) is { } button)
+                {
+                    FocusButton(manifest, s, button, effects);
+                }
+
+                break;
+            }
+
+            case NavEvent.Activate activate:
+                if (s.Mode != NavMode.Menu)
+                {
+                    break;
+                }
+
+                if (FindButton(MenuOf(manifest, s.Menu!), activate.Button) is not null)
+                {
+                    s.Focus = activate.Button;
+                    Activate(manifest, s, activate.Button, effects);
+                }
+
+                break;
+        }
+    }
+
+    private static Menu MenuOf(Manifest manifest, string id) =>
+        manifest.Menus is not null && manifest.Menus.TryGetValue(id, out var menu) ? menu : throw new InvalidOperationException($"No menu \"{id}\"");
+
+    private static Button? FindButton(Menu menu, string id) => menu.Buttons.FirstOrDefault(b => b.Id == id);
+
+    private static void OpenRoot(Manifest manifest, Working s)
+    {
+        if (manifest.RootMenu is null || manifest.Menus is null)
+        {
+            s.Mode = NavMode.Fallback;
+            s.Menu = s.Focus = null;
+            return;
+        }
+
+        EnterMenu(manifest, s, manifest.RootMenu, null, intro: true);
+    }
+
+    private static void EnterMenu(Manifest manifest, Working s, string menuId, string? buttonId, bool intro)
+    {
+        var menu = MenuOf(manifest, menuId);
+        s.Mode = NavMode.Menu;
+        s.Menu = menuId;
+        s.Focus = buttonId ?? menu.DefaultButton ?? menu.Buttons[0].Id;
+        s.Intro = intro;
+        s.ButtonsReady = !(intro && (menu.ButtonsAt ?? 0) > 0);
+        s.TransitionTo = null;
+    }
+
+    private static void EndTransition(Manifest manifest, Working s)
+    {
+        var to = s.TransitionTo!.Value;
+        EnterMenu(manifest, s, to.Menu, to.Button, intro: true);
+    }
+
+    private static void FocusButton(Manifest manifest, Working s, Button button, List<Effect> effects)
+    {
+        s.Focus = button.Id;
+        if (button.AutoAction == true)
+        {
+            Activate(manifest, s, button.Id, effects);
+        }
+    }
+
+    private static void Move(Manifest manifest, Working s, Direction dir, List<Effect> effects)
+    {
+        var menu = MenuOf(manifest, s.Menu!);
+        var current = FindButton(menu, s.Focus!)!;
+        var targetId = current.Nav?[dir];
+        if (string.IsNullOrEmpty(targetId) && menu.AutoNav == true)
+        {
+            targetId = NearestButton(menu, current, dir)?.Id;
+        }
+
+        if (string.IsNullOrEmpty(targetId) || targetId == current.Id)
+        {
+            return;
+        }
+
+        FocusButton(manifest, s, FindButton(menu, targetId)!, effects);
+    }
+
+    private static void Activate(Manifest manifest, Working s, string buttonId, List<Effect> effects)
+    {
+        var button = FindButton(MenuOf(manifest, s.Menu!), buttonId)!;
+        effects.Add(new Effect.Activated(s.Menu!, button.Id));
+        Run(manifest, s, button.Action, effects, pushHistory: true);
+    }
+
+    /// <summary>
+    /// The remote's Back on a menu. A menu's back action says where Back goes (like a disc's "Go
+    /// Up"), run as a step up: no history is added, and a target already in history unwinds it.
+    /// Without one, Back returns through history, except on the root menu, where it leaves the disc.
+    /// Back never traps the viewer: if back leaves them on the same menu, they step back (or leave).
+    /// </summary>
+    private static void RemoteBack(Manifest manifest, Working s, List<Effect> effects)
+    {
+        var menu = MenuOf(manifest, s.Menu!);
+        if (menu.Back is null)
+        {
+            BackWithoutTarget(manifest, s, effects);
+            return;
+        }
+
+        var from = s.Menu;
+        Run(manifest, s, menu.Back, effects, pushHistory: false, up: true);
+        if (s.Mode == NavMode.Menu && s.Menu == from)
+        {
+            BackWithoutTarget(manifest, s, effects);
+        }
+    }
+
+    private static void BackWithoutTarget(Manifest manifest, Working s, List<Effect> effects)
+    {
+        if (s.Menu == manifest.RootMenu)
+        {
+            effects.Add(new Effect.Exit());
+        }
+        else
+        {
+            GoBack(manifest, s, effects);
+        }
+    }
+
+    private static void GoBack(Manifest manifest, Working s, List<Effect> effects)
+    {
+        if (s.History.Count == 0)
+        {
+            effects.Add(new Effect.Exit());
+            return;
+        }
+
+        var previous = s.History[^1];
+        s.History.RemoveAt(s.History.Count - 1);
+        EnterMenu(manifest, s, previous.Menu, previous.Focus, intro: false);
+    }
+
+    private static MenuPosition? CurrentPosition(Working s) =>
+        s.Mode == NavMode.Menu && s.Menu is not null && s.Focus is not null ? new MenuPosition(s.Menu, s.Focus) : null;
+
+    /// <summary><paramref name="up"/>: running a menu's back (see RemoteBack): gotos unwind history instead of adding to it.</summary>
+    private static void Run(Manifest manifest, Working s, MenuAction action, List<Effect> effects, bool pushHistory, bool up = false)
+    {
+        switch (action)
+        {
+            case GotoAction g:
+            {
+                var here = CurrentPosition(s);
+                if (up)
+                {
+                    // Going up to a menu already in history: drop it and everything after it.
+                    var i = s.History.FindLastIndex(h => h.Menu == g.Menu);
+                    if (i >= 0)
+                    {
+                        s.History.RemoveRange(i, s.History.Count - i);
+                    }
+                }
+                else if (pushHistory && here is not null && g.History != "replace")
+                {
+                    s.History.Add(here);
+                }
+
+                if (!string.IsNullOrEmpty(g.Transition))
+                {
+                    s.Mode = NavMode.Transition;
+                    s.TransitionTo = (g.Menu, g.Button);
+                    effects.Add(new Effect.Transition(g.Transition));
+                }
+                else
+                {
+                    EnterMenu(manifest, s, g.Menu, g.Button, intro: true);
+                }
+
+                break;
+            }
+
+            case BackAction:
+                GoBack(manifest, s, effects);
+                break;
+            case PlayAction p:
+                StartPlayback(manifest, s, [p.ToItem()], p.After, effects);
+                break;
+            case PlayAllAction pa:
+                StartPlayback(manifest, s, pa.Items, pa.After, effects);
+                break;
+            case ResumeAction:
+                if (s.LastStop is { } stop)
+                {
+                    StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects);
+                }
+
+                break;
+            case SetAction set:
+                s.Vars = new Dictionary<string, int>(s.Vars) { [set.Var] = set.Value };
+                if (set.Then is not null)
+                {
+                    Run(manifest, s, set.Then, effects, pushHistory, up);
+                }
+
+                break;
+            case ActivateAction a:
+            {
+                // Press a button of the current menu, as if the viewer had: focus, activated state, action.
+                var button = s.Menu is not null ? FindButton(MenuOf(manifest, s.Menu), a.Button) : null;
+                if (button is null)
+                {
+                    break;
+                }
+
+                s.Focus = button.Id;
+                effects.Add(new Effect.Activated(s.Menu!, button.Id));
+                Run(manifest, s, button.Action, effects, pushHistory, up);
+                break;
+            }
+        }
+    }
+
+    private static void StartPlayback(Manifest manifest, Working s, IReadOnlyList<PlayItem> items, MenuAction? after, List<Effect> effects)
+    {
+        s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
+        s.Mode = NavMode.Playing;
+        effects.Add(PlayEffect(manifest, items[0], s.Vars));
+    }
+
+    private static void FinishPlayback(Manifest manifest, Working s, List<Effect> effects, bool completed, double? stoppedAt)
+    {
+        var playing = s.Playing!;
+        s.Playing = null;
+        if (completed)
+        {
+            if (s.LastStop?.Media == playing.Item.Media)
+            {
+                s.LastStop = null;
+            }
+        }
+        else if (stoppedAt is { } position)
+        {
+            s.LastStop = new LastStop(playing.Item.Media, position);
+        }
+
+        // Go back to where playback was started from, then run the after-action from there.
+        if (playing.ReturnTo is { } returnTo)
+        {
+            EnterMenu(manifest, s, returnTo.Menu, returnTo.Focus, intro: false);
+        }
+        else
+        {
+            OpenRoot(manifest, s);
+        }
+
+        if (completed && playing.After is not null)
+        {
+            Run(manifest, s, playing.After, effects, pushHistory: true);
+        }
+    }
+
+    private static Effect.Play PlayEffect(Manifest manifest, PlayItem item, IReadOnlyDictionary<string, int> vars) =>
+        new(item.Media, StartTime(manifest, item), item.Audio?.Resolve(vars), item.Subtitle?.Resolve(vars));
+
+    /// <summary>A mutable copy of the state while a step runs.</summary>
+    private sealed class Working(NavState from)
+    {
+        public NavMode Mode { get; set; } = from.Mode;
+
+        public string? Menu { get; set; } = from.Menu;
+
+        public string? Focus { get; set; } = from.Focus;
+
+        public bool Intro { get; set; } = from.Intro;
+
+        public bool ButtonsReady { get; set; } = from.ButtonsReady;
+
+        public (string Menu, string? Button)? TransitionTo { get; set; } = from.TransitionTo;
+
+        public List<MenuPosition> History { get; } = [.. from.History];
+
+        public Playback? Playing { get; set; } = from.Playing;
+
+        public LastStop? LastStop { get; set; } = from.LastStop;
+
+        public IReadOnlyDictionary<string, int> Vars { get; set; } = from.Vars;
+
+        public NavState ToState() => new()
+        {
+            Mode = Mode,
+            Menu = Menu,
+            Focus = Focus,
+            Intro = Intro,
+            ButtonsReady = ButtonsReady,
+            TransitionTo = TransitionTo,
+            History = History,
+            Playing = Playing,
+            LastStop = LastStop,
+            Vars = Vars,
+        };
+    }
+}

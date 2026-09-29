@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
+using OpenVideoMenu;
 
 namespace Jellyfin.Plugin.OpenVideoMenu;
 
@@ -38,8 +39,6 @@ public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonEl
 /// </summary>
 public sealed class MenuCatalog
 {
-    public const string ManifestSuffix = ".openvideomenu.json";
-    public const string FormatVersion = "0.1";
     private static readonly TimeSpan Stale = TimeSpan.FromMinutes(5);
 
     private static readonly JsonSerializerOptions IndexJson = new()
@@ -51,7 +50,7 @@ public sealed class MenuCatalog
     private readonly ILibraryManager _libraries;
     private readonly ILogger<MenuCatalog> _log;
     private readonly SemaphoreSlim _scanLock = new(1, 1);
-    private readonly Dictionary<string, (DateTime Modified, CatalogEntry Entry, Dictionary<string, BundleMember>? Members)> _cache = new();
+    private readonly Dictionary<string, (DateTime Modified, CatalogEntry Entry, IReadOnlyDictionary<string, BundleMember>? Members)> _cache = new();
 
     private volatile Snapshot? _snapshot;
     private Task? _background;
@@ -67,7 +66,7 @@ public sealed class MenuCatalog
         string[] Roots,
         List<CatalogEntry> Entries,
         HashSet<string> Allowed,
-        Dictionary<string, (string File, Dictionary<string, BundleMember> Members)> Bundles,
+        Dictionary<string, (string File, IReadOnlyDictionary<string, BundleMember> Members)> Bundles,
         string Json,
         string ETag,
         DateTime ScannedAt);
@@ -109,7 +108,7 @@ public sealed class MenuCatalog
         var segments = normalized.Split('/');
         for (var i = 0; i < segments.Length - 1; i++)
         {
-            if (!Bundle.IsBundle(segments[i]))
+            if (!Format.IsBundleFileName(segments[i]))
             {
                 continue;
             }
@@ -148,14 +147,14 @@ public sealed class MenuCatalog
 
             var entries = new List<CatalogEntry>();
             var allowed = new HashSet<string>(StringComparer.Ordinal);
-            var bundles = new Dictionary<string, (string File, Dictionary<string, BundleMember> Members)>(StringComparer.Ordinal);
+            var bundles = new Dictionary<string, (string File, IReadOnlyDictionary<string, BundleMember> Members)>(StringComparer.Ordinal);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             for (var r = 0; r < roots.Length; r++)
             {
                 var found = FindManifests(roots[r]).ToList();
                 // A folder with both X.ovmz and X.openvideomenu.json: the bundle is the one to use (spec §2.1).
-                var bundleBases = found.Where(Bundle.IsBundle).Select(f => f[..^Bundle.Extension.Length]).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                foreach (var rel in found.Where(f => Bundle.IsBundle(f) || !bundleBases.Contains(f[..^ManifestSuffix.Length])))
+                var bundleBases = found.Where(Format.IsBundleFileName).Select(f => f[..^Format.BundleExtension.Length]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var rel in found.Where(f => Format.IsBundleFileName(f) || !bundleBases.Contains(f[..^Format.ManifestSuffix.Length])))
                 {
                     var key = $"{r}:{roots[r]}:{rel}";
                     seen.Add(key);
@@ -179,7 +178,7 @@ public sealed class MenuCatalog
                         bundles[$"{r}:{rel}"] = (file, members);
                         if (entry.Valid)
                         {
-                            allowed.Add($"{r}:{rel}/{Bundle.ManifestName}");
+                            allowed.Add($"{r}:{rel}/{Format.BundleManifestName}");
                         }
                     }
                     else
@@ -199,7 +198,7 @@ public sealed class MenuCatalog
                 _cache.Remove(stale);
             }
 
-            var json = JsonSerializer.Serialize(new { api = "1", format = FormatVersion, roots = roots.Length, manifests = entries }, IndexJson);
+            var json = JsonSerializer.Serialize(new { api = "1", format = Format.Version, roots = roots.Length, manifests = entries }, IndexJson);
             var etag = "\"" + Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(json)))[..20].ToLowerInvariant() + "\"";
             var snapshot = new Snapshot(roots, entries, allowed, bundles, json, etag, DateTime.UtcNow);
             _snapshot = snapshot;
@@ -219,8 +218,8 @@ public sealed class MenuCatalog
         IEnumerable<string> files;
         try
         {
-            files = Directory.EnumerateFiles(root, "*" + ManifestSuffix, options)
-                .Concat(Directory.EnumerateFiles(root, "*" + Bundle.Extension, options))
+            files = Directory.EnumerateFiles(root, "*" + Format.ManifestSuffix, options)
+                .Concat(Directory.EnumerateFiles(root, "*" + Format.BundleExtension, options))
                 .ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -246,24 +245,25 @@ public sealed class MenuCatalog
     /// holding the manifest (or the bundle); assets against the manifest's own location, which for a
     /// bundle is inside it ("…/X.ovmz/menus/a.jpg"), as if the bundle were a folder.
     /// </summary>
-    private (CatalogEntry Entry, Dictionary<string, BundleMember>? Members) Load(int root, string path, string file, DateTime modified)
+    private (CatalogEntry Entry, IReadOnlyDictionary<string, BundleMember>? Members) Load(int root, string path, string file, DateTime modified)
     {
-        var isBundle = Bundle.IsBundle(path);
+        var isBundle = Format.IsBundleFileName(path);
         var id = Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes($"{root}:{path}")))[..16].ToLowerInvariant();
-        var url = $"/v1/files/{root}/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}" + (isBundle ? "/" + Bundle.ManifestName : string.Empty);
+        var url = $"/v1/files/{root}/{string.Join('/', path.Split('/').Select(Uri.EscapeDataString))}" + (isBundle ? "/" + Format.BundleManifestName : string.Empty);
         CatalogEntry Invalid(params string[] errors) => new() { Id = id, Root = root, Path = path, Url = url, Valid = false, Errors = [.. errors], Modified = modified.ToString("O") };
 
-        Dictionary<string, BundleMember>? members = null;
+        IReadOnlyDictionary<string, BundleMember>? members = null;
         string text;
         try
         {
             if (isBundle)
             {
-                var (found, bundleErrors) = Bundle.Read(file);
+                var (found, readErrors) = Bundle.Read(file);
                 members = found;
-                if (!found.TryGetValue(Bundle.ManifestName, out var manifest))
+                var bundleErrors = readErrors.ToList();
+                if (!found.TryGetValue(Format.BundleManifestName, out var manifest))
                 {
-                    bundleErrors.Add($"No {Bundle.ManifestName} at the bundle's root.");
+                    bundleErrors.Add($"No {Format.BundleManifestName} at the bundle's root.");
                 }
 
                 if (bundleErrors.Count > 0)
@@ -296,38 +296,14 @@ public sealed class MenuCatalog
         using (doc)
         {
             var m = doc.RootElement;
-            var errors = new List<string>();
-            if (m.ValueKind != JsonValueKind.Object)
+            var result = Manifest.Validate(m);
+            if (!result.Ok)
             {
-                return (Invalid("/: A manifest must be a JSON object."), members);
+                return (Invalid([.. result.Errors.Select(e => e.ToString())]), members);
             }
 
-            if (Str(m, "format") != "openvideomenu")
-            {
-                errors.Add("/format: must be \"openvideomenu\"");
-            }
-
-            var version = Str(m, "version");
-            if (version is null || !version.StartsWith("0.", StringComparison.Ordinal))
-            {
-                errors.Add($"/version: this server reads 0.x manifests, not \"{version}\"");
-            }
-
-            if (!m.TryGetProperty("media", out var media) || media.ValueKind != JsonValueKind.Object || !media.EnumerateObject().Any())
-            {
-                errors.Add("/media: at least one media item is required");
-            }
-
-            if (!m.TryGetProperty("fallback", out var fallback) || fallback.ValueKind != JsonValueKind.Array || fallback.GetArrayLength() == 0)
-            {
-                errors.Add("/fallback: a fallback list is required");
-            }
-
-            if (errors.Count > 0)
-            {
-                return (Invalid([.. errors]), members);
-            }
-
+            var version = result.Manifest!.Version;
+            var media = m.GetProperty("media");
             var dir = path.Contains('/') ? path[..path.LastIndexOf('/')] : string.Empty;
             string? InRoot(string rel) => NormalizePosix(dir.Length == 0 ? rel : $"{dir}/{rel}");
             var assetDir = isBundle ? path : dir;
@@ -351,116 +327,10 @@ public sealed class MenuCatalog
                     var relPath = r.ValueKind == JsonValueKind.String && IsRelative(r.GetString()!) ? InRoot(r.GetString()!) : null;
                     return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath);
                 }).ToList(),
-                Assets = MenuAssets(m).Select(AssetInRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
+                Assets = result.Manifest.MenuAssets().Select(AssetInRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
                 Modified = modified.ToString("O"),
             }, members);
         }
-    }
-
-    /// <summary>
-    /// Every menu asset a manifest names (backgrounds, highlight overlays, menu music, transitions,
-    /// chapter thumbnails). Media refs are not assets. Mirrors menuAssets() in packages/core/src/assets.ts.
-    /// </summary>
-    public static IEnumerable<string> MenuAssets(JsonElement manifest)
-    {
-        var found = new HashSet<string>(StringComparer.Ordinal);
-        void Add(JsonElement? el)
-        {
-            if (el is { ValueKind: JsonValueKind.String } v && v.GetString() is { Length: > 0 } s && IsRelative(s))
-            {
-                found.Add(s);
-            }
-        }
-
-        void WalkAction(JsonElement action)
-        {
-            if (action.ValueKind != JsonValueKind.Object)
-            {
-                return;
-            }
-
-            var type = Str(action, "type");
-            if (type == "goto")
-            {
-                Add(Prop(action, "transition"));
-            }
-
-            if (type is "play" or "playAll" && action.TryGetProperty("after", out var after))
-            {
-                WalkAction(after);
-            }
-
-            if (type == "set" && action.TryGetProperty("then", out var then))
-            {
-                WalkAction(then);
-            }
-        }
-
-        if (manifest.TryGetProperty("menus", out var menus) && menus.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var menu in menus.EnumerateObject().Select(p => p.Value))
-            {
-                if (menu.TryGetProperty("background", out var bg) && bg.ValueKind == JsonValueKind.Object)
-                {
-                    Add(Prop(bg, "image"));
-                    if (bg.TryGetProperty("video", out var video) && video.ValueKind == JsonValueKind.Object)
-                    {
-                        Add(Prop(video, "src"));
-                    }
-
-                    if (bg.TryGetProperty("audio", out var audio) && audio.ValueKind == JsonValueKind.Object)
-                    {
-                        Add(Prop(audio, "src"));
-                    }
-                }
-
-                if (menu.TryGetProperty("buttons", out var buttons) && buttons.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var button in buttons.EnumerateArray())
-                    {
-                        if (button.TryGetProperty("states", out var states) && states.ValueKind == JsonValueKind.Object)
-                        {
-                            foreach (var state in states.EnumerateObject())
-                            {
-                                if (state.Value.ValueKind == JsonValueKind.Object)
-                                {
-                                    Add(Prop(state.Value, "image"));
-                                }
-                            }
-                        }
-
-                        if (button.TryGetProperty("action", out var action))
-                        {
-                            WalkAction(action);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (manifest.TryGetProperty("firstPlay", out var firstPlay))
-        {
-            WalkAction(firstPlay);
-        }
-
-        if (manifest.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var item in media.EnumerateObject())
-            {
-                if (item.Value.ValueKind == JsonValueKind.Object && item.Value.TryGetProperty("chapters", out var chapters) && chapters.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var chapter in chapters.EnumerateArray())
-                    {
-                        if (chapter.ValueKind == JsonValueKind.Object)
-                        {
-                            Add(Prop(chapter, "thumbnail"));
-                        }
-                    }
-                }
-            }
-        }
-
-        return found;
     }
 
     private static readonly Regex UrlScheme = new("^[a-z][a-z0-9+.-]*:", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -495,8 +365,6 @@ public sealed class MenuCatalog
 
         return parts.Count == 0 ? null : string.Join('/', parts);
     }
-
-    private static JsonElement? Prop(JsonElement el, string name) => el.TryGetProperty(name, out var v) ? v : null;
 
     private static string? Str(JsonElement el, string name) =>
         el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 
+using OpenVideoMenu;
+
 namespace Jellyfin.Plugin.OpenVideoMenu;
 
 /// <summary>
@@ -27,7 +29,7 @@ public class OpenVideoMenuController(MenuCatalog catalog, Microsoft.Extensions.L
         ok = true,
         name = "Open Video Menu for Jellyfin",
         api = "1",
-        format = MenuCatalog.FormatVersion,
+        format = Format.Version,
         manifests = catalog.Count,
         auth = "jellyfin",
     });

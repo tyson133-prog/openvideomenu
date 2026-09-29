@@ -17,4 +17,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The format itself (validation, assets, bundles): ships with the plugin as OpenVideoMenu.dll. -->
+    <ProjectReference Include="..\..\..\sdk\dotnet\OpenVideoMenu\OpenVideoMenu.csproj" />
+  </ItemGroup>
+
 </Project>

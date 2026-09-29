@@ -1,0 +1,182 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Xunit;
+
+namespace OpenVideoMenu.Tests;
+
+/// <summary>
+/// Every case in conformance/cases, run through this library: the validator must accept or reject
+/// it like the reference (and report the listed error and warning paths), and the navigator must
+/// produce the listed states and effects. Same files as conformance/conformance.test.ts.
+/// </summary>
+public sealed class ConformanceTests
+{
+    public static TheoryData<string> Cases()
+    {
+        var data = new TheoryData<string>();
+        foreach (var file in Directory.GetFiles(Repo.Path("conformance", "cases"), "*.json").Order(StringComparer.Ordinal))
+        {
+            data.Add(Path.GetFileName(file));
+        }
+
+        return data;
+    }
+
+    private static JsonElement Load(string name) =>
+        JsonDocument.Parse(File.ReadAllText(Repo.Path("conformance", "cases", name))).RootElement;
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void Validator(string name)
+    {
+        var c = Load(name);
+        var result = Manifest.Validate(c.GetProperty("manifest"));
+        if (c.GetProperty("valid").GetBoolean())
+        {
+            Assert.True(result.Ok, string.Join("\n", result.Errors));
+            Assert.NotNull(result.Manifest);
+        }
+        else
+        {
+            Assert.False(result.Ok);
+        }
+
+        var errorPaths = result.Errors.Select(e => e.Path).ToList();
+        foreach (var path in Strings(c, "errors"))
+        {
+            Assert.True(errorPaths.Contains(path), $"missing error at {path}; got {string.Join(", ", errorPaths)}");
+        }
+
+        var warningPaths = result.Warnings.Select(w => w.Path).ToList();
+        foreach (var path in Strings(c, "warnings"))
+        {
+            Assert.True(warningPaths.Contains(path), $"missing warning at {path}; got {string.Join(", ", warningPaths)}");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void Navigation(string name)
+    {
+        var c = Load(name);
+        if (!c.TryGetProperty("steps", out var steps))
+        {
+            return;
+        }
+
+        var manifest = Manifest.Validate(c.GetProperty("manifest")).Manifest!;
+        var state = new NavState();
+        var i = 0;
+        foreach (var step in steps.EnumerateArray())
+        {
+            var navEvent = Event(step.GetProperty("event"));
+            var (next, effects) = Navigator.Step(manifest, state, navEvent);
+            state = next;
+            var label = $"step {i++} ({step.GetProperty("event").GetRawText()})";
+            if (!step.TryGetProperty("expect", out var want))
+            {
+                continue;
+            }
+
+            if (want.TryGetProperty("mode", out var mode))
+            {
+                Assert.True(JsonNamingPolicy.CamelCase.ConvertName(state.Mode.ToString()) == mode.GetString(), $"{label}: mode {state.Mode}");
+            }
+
+            if (want.TryGetProperty("menu", out var menu))
+            {
+                Assert.True(state.Menu == menu.GetString(), $"{label}: menu {state.Menu}");
+            }
+
+            if (want.TryGetProperty("focus", out var focus))
+            {
+                Assert.True(state.Focus == focus.GetString(), $"{label}: focus {state.Focus}");
+            }
+
+            if (want.TryGetProperty("intro", out var intro))
+            {
+                Assert.True(state.Intro == intro.GetBoolean(), $"{label}: intro {state.Intro}");
+            }
+
+            if (want.TryGetProperty("buttonsReady", out var ready))
+            {
+                Assert.True(state.ButtonsReady == ready.GetBoolean(), $"{label}: buttonsReady {state.ButtonsReady}");
+            }
+
+            if (want.TryGetProperty("effects", out var wantEffects))
+            {
+                var expected = wantEffects.EnumerateArray().Select(Effect).ToList();
+                Assert.True(expected.SequenceEqual(effects), $"{label}: effects\n  want {string.Join(", ", expected)}\n  got  {string.Join(", ", effects)}");
+            }
+        }
+    }
+
+    /// <summary>Valid manifests survive read → write → read unchanged, extensions included.</summary>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void RoundTrip(string name)
+    {
+        var c = Load(name);
+        if (!c.GetProperty("valid").GetBoolean())
+        {
+            return;
+        }
+
+        var original = JsonNode.Parse(c.GetProperty("manifest").GetRawText());
+        var manifest = Manifest.Validate(c.GetProperty("manifest")).Manifest!;
+        var written = JsonNode.Parse(manifest.ToJson());
+        Assert.True(JsonNode.DeepEquals(original, written), $"wrote:\n{manifest.ToJson()}");
+        Assert.True(Manifest.Parse(manifest.ToJson()).Ok);
+    }
+
+    private static IEnumerable<string> Strings(JsonElement c, string name) =>
+        c.TryGetProperty(name, out var list) ? list.EnumerateArray().Select(e => e.GetString()!) : [];
+
+    private static NavEvent Event(JsonElement e) => e.GetProperty("type").GetString() switch
+    {
+        "start" => new NavEvent.Start(),
+        "press" => new NavEvent.Press(Enum.Parse<Key>(e.GetProperty("key").GetString()!, ignoreCase: true)),
+        "select" => new NavEvent.Select(e.GetProperty("button").GetString()!),
+        "activate" => new NavEvent.Activate(e.GetProperty("button").GetString()!),
+        "ended" => new NavEvent.Ended(),
+        "stopped" => new NavEvent.Stopped(e.GetProperty("position").GetDouble()),
+        "buttonsReady" => new NavEvent.ButtonsReady(),
+        "transitionEnded" => new NavEvent.TransitionEnded(),
+        var other => throw new InvalidDataException($"Unknown event {other}"),
+    };
+
+    private static Effect Effect(JsonElement e)
+    {
+        int? Int(string name) => e.TryGetProperty(name, out var v) ? v.GetInt32() : null;
+        return e.GetProperty("type").GetString() switch
+        {
+            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle")),
+            "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),
+            "exit" => new Effect.Exit(),
+            "transition" => new Effect.Transition(e.GetProperty("src").GetString()!),
+            "skipIntro" => new Effect.SkipIntro(e.GetProperty("menu").GetString()!),
+            var other => throw new InvalidDataException($"Unknown effect {other}"),
+        };
+    }
+}
+
+/// <summary>Files in this repository, found from the test's output folder.</summary>
+internal static class Repo
+{
+    private static readonly string Root = Find();
+
+    public static string Path(params string[] parts) => System.IO.Path.Combine([Root, .. parts]);
+
+    private static string Find()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (Directory.Exists(System.IO.Path.Combine(dir.FullName, "conformance", "cases")))
+            {
+                return dir.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("conformance/cases not found above the test output folder.");
+    }
+}
