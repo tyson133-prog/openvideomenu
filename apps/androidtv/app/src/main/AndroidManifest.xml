@@ -7,7 +7,8 @@
     <!-- Service discovery (mDNS) of the asset server. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- A TV app: Google Play offers it only on TVs. -->
+    <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application

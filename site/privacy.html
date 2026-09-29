@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — Open Video Menu</title>
+  <meta name="description" content="Privacy policy for the Open Video Menu website and the ovmplayer apps: no analytics, no ads, no tracking.">
+  <link rel="canonical" href="https://openvideomenu.org/privacy.html">
+  <meta property="og:title" content="Privacy — Open Video Menu">
+  <meta property="og:description" content="Privacy policy for the Open Video Menu website and the ovmplayer apps: no analytics, no ads, no tracking.">
+  <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="format.html">The format</a>
+      <a href="players.html">Players</a>
+      <a href="developers.html">Developers</a>
+      <a href="faq.html">FAQ</a>
+      <a href="about.html">About</a>
+      <a class="btn btn-primary btn-small" href="players.html">Get the players</a>
+    </nav>
+    <details class="menu-toggle">
+      <summary>Menu</summary>
+      <nav class="mobile-nav" aria-label="Main">
+        <a href="format.html">The format</a>
+        <a href="players.html">Players</a>
+        <a href="developers.html">Developers</a>
+        <a href="faq.html">FAQ</a>
+        <a href="about.html">About</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+<section class="page-hero">
+    <div class="wrap">
+      <p class="eyebrow">Privacy</p>
+      <h1>Privacy policy</h1>
+      <p class="lead">Short version: nothing is collected. The apps talk to your own media server, and the website has no cookies, analytics or trackers.</p>
+      <p class="small muted">Effective <span class="tbd">Date of publication</span></p>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap prose">
+      <h2>ovmplayer apps (Google TV, Android TV, Roku)</h2>
+      <p>The ovmplayer apps are made by Tyson Treasure. They play films, shows and their menus from a media server that you run or have been invited to.</p>
+      <h3>What the apps don't do</h3>
+      <ul>
+        <li>They collect no personal information and send nothing to us. We run no servers the apps talk to.</li>
+        <li>They contain no advertising, analytics, crash reporting or tracking of any kind.</li>
+        <li>They don't sell or share data, because they have none to share.</li>
+      </ul>
+      <h3>What stays on your device</h3>
+      <ul>
+        <li><strong>Sign-in:</strong> when you sign in to Plex or Jellyfin, the app keeps the access token your server issues, on the device, so you stay signed in. Signing out removes it.</li>
+        <li><strong>Settings and resume points:</strong> which server you chose, the menu server's address, and where you stopped titles (with your audio and subtitle choices), so titles can pick up where you left off. These stay on the device.</li>
+      </ul>
+      <h3>Who the apps talk to</h3>
+      <ul>
+        <li><strong>Your media server</strong> (Plex or Jellyfin) and, for Plex, a menu server on your network: to browse your library, fetch menus and artwork, stream video, and report playback progress so your server can remember where you stopped. This is the same thing any client app for your server does.</li>
+        <li><strong>plex.tv</strong> (Plex only): to sign in with a code and to find your Plex servers. Plex's own privacy policy applies to your Plex account.</li>
+        <li><strong>Your local network:</strong> the apps look for menu servers and Jellyfin servers on your home network, using DNS-SD (mDNS) and Jellyfin's own discovery broadcast. These messages stay on your network.</li>
+      </ul>
+      <h3>Permissions</h3>
+      <p>On Android the apps use network access (to reach your server), local network access, and permission to receive multicast (to find servers on your network). They don't use your location, microphone, camera, contacts or files outside the app.</p>
+
+      <h2>Jellyfin plugin and menu server</h2>
+      <p>These run on your own computer or server. They read menu files from your media folders and answer apps on your network. They send nothing to us. The menu server checks sign-ins with your own Plex or Jellyfin server, and with plex.tv for Plex accounts.</p>
+
+      <h2>This website</h2>
+      <p>This site uses no cookies, no analytics, and no fonts, scripts or images from other sites. Like any website, the hosting provider may keep standard server logs (such as IP address, time and page requested) for security and operation.</p>
+      <p class="small muted">Hosting provider and log retention: <span class="tbd">Host name and retention period</span></p>
+
+      <h2>Children</h2>
+      <p>The apps and site are not directed at children and collect no information from anyone.</p>
+
+      <h2>Changes</h2>
+      <p>If this policy changes, the new version will be posted here with its effective date. Changes that affect the apps will also be noted in their release notes.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about privacy: <span class="tbd">Contact email</span></p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+        <p class="muted small" style="margin-top:14px;max-width:26em">An open, royalty-free format for menus over the films and shows you already have.</p>
+      </div>
+      <div>
+        <h4>Format</h4>
+        <ul>
+          <li><a href="format.html">Overview</a></li>
+          <li><a href="format.html#spec">Specification 0.1</a></li>
+          <li><a href="format.html#compatibility">Compatibility</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Use it</h4>
+        <ul>
+          <li><a href="players.html">Players</a></li>
+          <li><a href="developers.html">Developers</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="about.html">About &amp; governance</a></li>
+          <li><a href="about.html#contact">Contact</a></li>
+          <li><a href="privacy.html">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 Tyson Treasure and the Open Video Menu contributors. Specification CC BY 4.0; code Apache-2.0.</span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

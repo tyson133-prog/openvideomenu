@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Developers — Open Video Menu</title>
+  <meta name="description" content="Add Open Video Menu support to a player, server or authoring tool: conformance suite, TypeScript and .NET libraries, command-line tools.">
+  <link rel="canonical" href="https://openvideomenu.org/developers.html">
+  <meta property="og:title" content="Developers — Open Video Menu">
+  <meta property="og:description" content="Add Open Video Menu support to a player, server or authoring tool: conformance suite, TypeScript and .NET libraries, command-line tools.">
+  <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="format.html">The format</a>
+      <a href="players.html">Players</a>
+      <a href="developers.html" aria-current="page">Developers</a>
+      <a href="faq.html">FAQ</a>
+      <a href="about.html">About</a>
+      <a class="btn btn-primary btn-small" href="players.html">Get the players</a>
+    </nav>
+    <details class="menu-toggle">
+      <summary>Menu</summary>
+      <nav class="mobile-nav" aria-label="Main">
+        <a href="format.html">The format</a>
+        <a href="players.html">Players</a>
+        <a href="developers.html" aria-current="page">Developers</a>
+        <a href="faq.html">FAQ</a>
+        <a href="about.html">About</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+<section class="page-hero">
+    <div class="wrap">
+      <p class="eyebrow">Developers</p>
+      <h1>Add menus to your player.</h1>
+      <p class="lead">Support is free to add, in any software, with no fees and no permission needed. A language-neutral conformance suite tells you exactly how menus must behave, so every player behaves the same.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">For player developers</p>
+        <h2>Three small pieces</h2>
+        <p class="lead">Navigation is a pure state machine you can reuse or re-implement. Your player supplies the rest.</p>
+      </div>
+      <ol class="steps">
+        <li class="card"><h3>Playback</h3><p class="muted">Play a URL from a time; report when it ends or when the viewer stops it.</p></li>
+        <li class="card"><h3>Input</h3><p class="muted">Turn remote or keyboard presses into up, down, left, right, enter and back.</p></li>
+        <li class="card"><h3>Media resolver</h3><p class="muted">Turn a media reference into something playable: a file path, a stream, an item on your server.</p></li>
+      </ol>
+      <div class="split" style="margin-top:48px">
+        <pre class="code" aria-label="Navigation step"><span class="c">// The whole navigation model: state in, event in,
+// new state and effects out.</span>
+<span class="k">const</span> { state, effects } = step(manifest, state, {
+  type: <span class="s">"press"</span>, key: <span class="s">"down"</span>
+});
+<span class="c">// effects: play, activated, transition, skipIntro, exit</span></pre>
+        <div>
+          <h3>Start at Level 0</h3>
+          <p class="muted">Showing the fallback list and playing items is Level 0, and takes about an afternoon. Menus (Level 1) and enhanced features (Level 2) build on the same manifest.</p>
+          <a href="format.html">Levels and concepts →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="conformance">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Conformance</p>
+        <h2>"Compatible" has a precise meaning</h2>
+        <p class="muted">Each conformance case is a manifest plus a script of input events and the states and effects that must follow. Run them in any language; if they pass, your player is compatible with that version. The TypeScript, .NET and Roku implementations all run the same files.</p>
+        <span class="tbd">Link to the conformance suite</span>
+      </div>
+      <pre class="code small" aria-label="Conformance step">{ <span class="k">"event"</span>: { <span class="k">"type"</span>: <span class="s">"press"</span>, <span class="k">"key"</span>: <span class="s">"enter"</span> },
+  <span class="k">"expect"</span>: {
+    <span class="k">"mode"</span>: <span class="s">"playing"</span>,
+    <span class="k">"effects"</span>: [
+      { <span class="k">"type"</span>: <span class="s">"activated"</span>, <span class="k">"menu"</span>: <span class="s">"main"</span>, <span class="k">"button"</span>: <span class="s">"all"</span> },
+      { <span class="k">"type"</span>: <span class="s">"play"</span>, <span class="k">"media"</span>: <span class="s">"e1"</span>, <span class="k">"start"</span>: <span class="n">0</span> }
+    ]
+  } }</pre>
+    </div>
+  </section>
+
+  <section id="libraries">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Libraries</p>
+        <h2>Don't start from zero</h2>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>TypeScript</h3>
+          <p class="muted">The reference validator and navigator, with no dependencies, plus a web player with a 10-foot UI and pluggable playback.</p>
+          <p class="small"><code>@openvideomenu/core</code> · <code>@openvideomenu/renderer-web</code></p>
+          <span class="tbd">npm links</span>
+        </div>
+        <div class="card">
+          <h3>.NET</h3>
+          <p class="muted">Read, write and validate manifests, pack and read bundles, and run navigation, on .NET 8 and 10. It gives exactly the same results as the reference implementation.</p>
+          <p class="small"><code>dotnet add package OpenVideoMenu</code></p>
+          <span class="tbd">NuGet link</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Tools for authors and importers</p>
+        <h2>Validate, preview, bundle</h2>
+        <p class="muted">The <code>openvideomenu</code> command checks manifests and bundles with the same rules players use, previews menus in a browser with remote-style keys, and packs a manifest and its art into a bundle.</p>
+        <p class="muted">Importers that turn DVD menus into manifests follow the <strong>DVD profile</strong>. <strong>Help wanted:</strong> a Blu-ray (HDMV) import profile, mapping interactive-graphics buttons and HDMV commands to the format.</p>
+      </div>
+      <pre class="code">openvideomenu validate <span class="s">"Sintel (2010)"</span>
+openvideomenu preview  <span class="s">"Sintel (2010)"</span>
+openvideomenu pack     <span class="s">"Sintel (2010)/Sintel (2010).openvideomenu.json"</span>
+openvideomenu unpack   <span class="s">"Sintel (2010)/Sintel (2010).ovmz"</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Servers</p>
+        <h2>Serve menus from your media server</h2>
+        <p class="muted">A small read-only HTTP API lets apps list the menus in a library and fetch manifests and art, with bundles served as folders and byte ranges for motion clips. Servers advertise it on the local network with DNS-SD (<code>_openvideomenu._tcp</code>). The Jellyfin plugin and the Plex menu server both implement it.</p>
+      </div>
+      <div class="card">
+        <h3>Using the name</h3>
+        <p class="muted">Say your software "supports Open Video Menu" any time. Say "compatible" once it passes the conformance suite. Please don't name products "Open Video Menu"; "Acme Player, with Open Video Menu support" is perfect.</p>
+        <a href="about.html#naming">Naming guidelines →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+        <p class="muted small" style="margin-top:14px;max-width:26em">An open, royalty-free format for menus over the films and shows you already have.</p>
+      </div>
+      <div>
+        <h4>Format</h4>
+        <ul>
+          <li><a href="format.html">Overview</a></li>
+          <li><a href="format.html#spec">Specification 0.1</a></li>
+          <li><a href="format.html#compatibility">Compatibility</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Use it</h4>
+        <ul>
+          <li><a href="players.html">Players</a></li>
+          <li><a href="developers.html">Developers</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="about.html">About &amp; governance</a></li>
+          <li><a href="about.html#contact">Contact</a></li>
+          <li><a href="privacy.html">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 Tyson Treasure and the Open Video Menu contributors. Specification CC BY 4.0; code Apache-2.0.</span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

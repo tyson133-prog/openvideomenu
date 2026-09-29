@@ -18,13 +18,29 @@ android {
         minSdk = 26
         // -PtargetSdkOverride=37 builds a test variant for checking Android 17 behaviour (local-network permission).
         targetSdk = (project.findProperty("targetSdkOverride") as String?)?.toInt() ?: 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Release builds set these from the tag (-PversionCode=… -PversionName=…).
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = project.findProperty("versionName") as String? ?: "0.1.0"
+    }
+
+    // Release signing comes only from the environment (CI secrets, or your shell), never from the repo:
+    // OVM_KEYSTORE (path to the .jks), OVM_KEYSTORE_PASSWORD, OVM_KEY_ALIAS, OVM_KEY_PASSWORD.
+    val keystore = System.getenv("OVM_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("OVM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("OVM_KEY_ALIAS")
+                keyPassword = System.getenv("OVM_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 

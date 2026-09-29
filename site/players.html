@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Players — Open Video Menu</title>
+  <meta name="description" content="ovmplayer for Google TV, Android TV and Roku, the Jellyfin plugin and the menu server for Plex: play films and shows with their menus from your own library.">
+  <link rel="canonical" href="https://openvideomenu.org/players.html">
+  <meta property="og:title" content="Players — Open Video Menu">
+  <meta property="og:description" content="ovmplayer for Google TV, Android TV and Roku, the Jellyfin plugin and the menu server for Plex: play films and shows with their menus from your own library.">
+  <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="format.html">The format</a>
+      <a href="players.html" aria-current="page">Players</a>
+      <a href="developers.html">Developers</a>
+      <a href="faq.html">FAQ</a>
+      <a href="about.html">About</a>
+      <a class="btn btn-primary btn-small" href="players.html">Get the players</a>
+    </nav>
+    <details class="menu-toggle">
+      <summary>Menu</summary>
+      <nav class="mobile-nav" aria-label="Main">
+        <a href="format.html">The format</a>
+        <a href="players.html" aria-current="page">Players</a>
+        <a href="developers.html">Developers</a>
+        <a href="faq.html">FAQ</a>
+        <a href="about.html">About</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+<section class="page-hero">
+    <div class="wrap">
+      <p class="eyebrow">Players · Early access</p>
+      <h1>Play menus from your own library.</h1>
+      <p class="lead"><strong>ovmplayer</strong> apps play films and shows with Open Video Menu menus from Plex or Jellyfin on your TV. They're proof-of-concept players, built to show the format working today; the goal is for the apps you already use to support it natively.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="grid grid-2">
+        <div class="card">
+          <p class="eyebrow">TV app</p>
+          <h3>ovmplayer for Google TV and Android TV</h3>
+          <p class="muted">Browse your Plex or Jellyfin library, open titles straight into their menus, and play everything else as usual. Plays AC-3 and DTS soundtracks, and passes them through to your receiver where supported.</p>
+          <div class="actions" style="margin-top:12px">
+            <span class="btn tbd-link">Google Play</span>
+            <span class="btn tbd-link">Download APK</span>
+          </div>
+          <p class="small muted" style="margin-top:16px">Sideloading: <span class="tbd">Downloader code</span></p>
+          <p class="small muted">Android TV 8.0 or later. Fire TV may work by sideloading but hasn't been tested yet.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">TV app</p>
+          <h3>ovmplayer for Roku</h3>
+          <p class="muted">The same menus on Roku TVs and players, with a native menu renderer. Roku plays one stream at a time, so a motion menu's music travels inside its video clip, and loops can pause very briefly at the loop point.</p>
+          <div class="actions" style="margin-top:12px">
+            <span class="btn tbd-link">Add the Roku channel</span>
+          </div>
+          <p class="small muted" style="margin-top:16px">Early access: <span class="tbd">Beta channel link</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Your server</p>
+        <h2>Share menus from Plex or Jellyfin</h2>
+        <p class="lead">Players get menus from your media server. Nothing leaves your home network, and your media folders stay read-only.</p>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>Jellyfin plugin</h3>
+          <p class="muted">Serves menus from your Jellyfin libraries directly, so there's nothing else to run. Apps find it automatically.</p>
+          <ol class="muted small">
+            <li>Add the plugin repository in Dashboard → Plugins → Repositories: <span class="tbd">Repository URL</span></li>
+            <li>Install <strong>Open Video Menu</strong> from the catalogue and restart Jellyfin.</li>
+            <li>Put menus next to your films; the plugin finds them after each library scan.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Menu server for Plex</h3>
+          <p class="muted">Plex doesn't take plugins, so a small read-only menu server runs beside it: Docker, a Linux service, or Node.js on Windows or macOS. It only answers people signed in to your Plex server, and apps find it automatically on your network.</p>
+          <pre class="code small" style="margin-top:12px"><span class="c"># Docker, with your media mounted read-only</span>
+docker compose up -d</pre>
+          <p class="small muted" style="margin-top:12px"><span class="tbd">Link to the setup guide</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Try it</p>
+        <h2>No menus of your own yet?</h2>
+        <p class="muted">Two example titles come with the project: <strong>Sintel</strong>, the Blender Foundation's open film, with a motion menu, scene selection and extras, and <strong>Example Show</strong>, a synthetic DVD-shaped season with flat highlights, page arrows and a hidden easter egg.</p>
+        <span class="tbd">Download link for the example titles</span>
+      </div>
+      <div class="card">
+        <h3>See it first</h3>
+        <p class="muted">A short film of the players running on real TVs: menus, scene selection, special features and resume.</p>
+        <div class="tbd tbd-block" style="width:100%;aspect-ratio:16/9;margin-top:8px">Demo video</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+        <p class="muted small" style="margin-top:14px;max-width:26em">An open, royalty-free format for menus over the films and shows you already have.</p>
+      </div>
+      <div>
+        <h4>Format</h4>
+        <ul>
+          <li><a href="format.html">Overview</a></li>
+          <li><a href="format.html#spec">Specification 0.1</a></li>
+          <li><a href="format.html#compatibility">Compatibility</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Use it</h4>
+        <ul>
+          <li><a href="players.html">Players</a></li>
+          <li><a href="developers.html">Developers</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="about.html">About &amp; governance</a></li>
+          <li><a href="about.html#contact">Contact</a></li>
+          <li><a href="privacy.html">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 Tyson Treasure and the Open Video Menu contributors. Specification CC BY 4.0; code Apache-2.0.</span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,7 +1,8 @@
 ' ovmplayer for Roku (proof of concept). Launched with conformance=1 (dev builds), it only runs
 ' the conformance cases and prints the results to the debug console.
 sub Main(args as dynamic)
-    if args <> invalid and args["conformance"] = "1"
+    ' Store builds leave the cases out (tools/package.mjs), so there test mode never starts.
+    if args <> invalid and args["conformance"] = "1" and CreateObject("roFileSystem").Exists("pkg:/conformance")
         msRunConformance()
         return
     end if

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ — Open Video Menu</title>
+  <meta name="description" content="Common questions about Open Video Menu: what it is, what it isn't, and how it works with your library.">
+  <link rel="canonical" href="https://openvideomenu.org/faq.html">
+  <meta property="og:title" content="FAQ — Open Video Menu">
+  <meta property="og:description" content="Common questions about Open Video Menu: what it is, what it isn't, and how it works with your library.">
+  <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="format.html">The format</a>
+      <a href="players.html">Players</a>
+      <a href="developers.html">Developers</a>
+      <a href="faq.html" aria-current="page">FAQ</a>
+      <a href="about.html">About</a>
+      <a class="btn btn-primary btn-small" href="players.html">Get the players</a>
+    </nav>
+    <details class="menu-toggle">
+      <summary>Menu</summary>
+      <nav class="mobile-nav" aria-label="Main">
+        <a href="format.html">The format</a>
+        <a href="players.html">Players</a>
+        <a href="developers.html">Developers</a>
+        <a href="faq.html" aria-current="page">FAQ</a>
+        <a href="about.html">About</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="main">
+<section class="page-hero">
+    <div class="wrap">
+      <p class="eyebrow">FAQ</p>
+      <h1>Questions and answers</h1>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap faq prose">
+      <details open>
+        <summary>What is Open Video Menu?</summary>
+        <div><p>An open file format for menus over the films and shows you already have. A small manifest next to a film describes its menus: backgrounds, buttons, highlights, navigation, and which of your files each button plays. Players that support the format show the menu; everything else keeps working as before.</p></div>
+      </details>
+      <details>
+        <summary>Does it copy or change my videos?</summary>
+        <div><p>No. The format only describes menus and points at files you already have. A manifest contains no video, and adding one never changes your files.</p></div>
+      </details>
+      <details>
+        <summary>Do I need to re-encode or reorganize my library?</summary>
+        <div><p>No. Menus sit beside your films in the folder layout Plex and Jellyfin already use, and buttons point at the files as they are. Removing a menu is as simple as deleting its file.</p></div>
+      </details>
+      <details>
+        <summary>What if my player doesn't support it?</summary>
+        <div><p>Nothing breaks: players that don't know the format ignore the file, and your films play as they always have. Players with basic support can show the manifest's plain list of titles, so the extras are still one click away.</p></div>
+      </details>
+      <details>
+        <summary>Which apps and servers support it?</summary>
+        <div><p>Today, the ovmplayer apps for Google TV, Android TV and Roku, with Plex (through a small menu server) and Jellyfin (through a plugin). They're proof-of-concept players; we hope media apps and servers add native support, and the format is free for them to do so.</p></div>
+      </details>
+      <details>
+        <summary>Where do menus come from?</summary>
+        <div><p>Converters can build them from existing menus, as DVD Tamer does for DVDs. Anyone can also write them by hand or make them with their own tools, and check them with <code>openvideomenu validate</code>.</p></div>
+      </details>
+      <details>
+        <summary>Does anything leave my home network?</summary>
+        <div><p>The format involves no servers of ours. The players talk to your media server, and to plex.tv only for signing in to Plex. They collect no analytics. See the <a href="privacy.html">privacy policy</a>.</p></div>
+      </details>
+      <details>
+        <summary>Is it free? Who owns it?</summary>
+        <div><p>The specification is licensed CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0), and the code is Apache-2.0. Anyone can implement it, in free or commercial software, without asking. Tyson Treasure created the format and edits the specification; see <a href="about.html">About</a> for how decisions are made.</p></div>
+      </details>
+      <details>
+        <summary>What about Blu-ray?</summary>
+        <div><p>The format already covers what Blu-ray menus mostly do: art, buttons, highlights, navigation and track choice. An import profile for Blu-ray (HDMV) menus is a great place to help. Java-based (BD-J) menus are out of scope for now.</p></div>
+      </details>
+      <details>
+        <summary>Why JSON?</summary>
+        <div><p>Every language reads it, people can open and fix it in a text editor, and it compresses and diffs well. A typical manifest is a few kilobytes; the art is ordinary images and video clips.</p></div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+        <p class="muted small" style="margin-top:14px;max-width:26em">An open, royalty-free format for menus over the films and shows you already have.</p>
+      </div>
+      <div>
+        <h4>Format</h4>
+        <ul>
+          <li><a href="format.html">Overview</a></li>
+          <li><a href="format.html#spec">Specification 0.1</a></li>
+          <li><a href="format.html#compatibility">Compatibility</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Use it</h4>
+        <ul>
+          <li><a href="players.html">Players</a></li>
+          <li><a href="developers.html">Developers</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="about.html">About &amp; governance</a></li>
+          <li><a href="about.html#contact">Contact</a></li>
+          <li><a href="privacy.html">Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 Tyson Treasure and the Open Video Menu contributors. Specification CC BY 4.0; code Apache-2.0.</span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

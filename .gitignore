@@ -25,3 +25,4 @@ plugins/jellyfin/**/obj/
 # .NET SDK build output
 sdk/dotnet/**/bin/
 sdk/dotnet/**/obj/
+plugins/jellyfin/dist/
