@@ -109,9 +109,9 @@ fun App(vm: AppViewModel) {
                     onSearch = { vm.findJellyfin() },
                     onBack = vm::signOut,
                 )
-                is Screen.QuickConnect -> {
+                is Screen.JellyfinSignIn -> {
                     androidx.activity.compose.BackHandler { vm.findJellyfin() }
-                    com.ovmplayer.tv.ui.QuickConnectScreen(s.server, s.code, s.error, onBack = { vm.findJellyfin() })
+                    com.ovmplayer.tv.ui.JellyfinSignInScreen(s, onPassword = vm::signInWithPassword, onBack = { vm.findJellyfin() })
                 }
                 is Screen.PickServer -> PickServerScreen(s.servers) { vm.connect(it) }
                 Screen.Browse -> BrowseScreen(vm)

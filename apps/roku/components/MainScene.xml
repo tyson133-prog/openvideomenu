@@ -36,6 +36,8 @@
       <Label id="codeValue" text="" translation="[0, 520]" width="1920" horizAlign="center" color="0xFFFFFFFF">
         <Font role="font" uri="font:BoldSystemFontFile" size="120" />
       </Label>
+      <!-- Jellyfin only: the other way to sign in -->
+      <LabelList id="codeOptions" visible="false" translation="[610, 760]" itemSize="[700, 72]" color="0xE8E6E1FF" focusedColor="0x131418FF" focusBitmapBlendColor="0xFFD27AFF" />
     </Group>
 
     <Group id="browse" visible="false">

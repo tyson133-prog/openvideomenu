@@ -53,7 +53,8 @@ longer, or publish the public channel.
 > Jellyfin server; no ads, no tracking, no account with us. Learn more at openvideomenu.org.
 
 **Notes for certification (public channel):** it's a client for the user's own media server, so
-reviewers need a test server; offer the Jellyfin demo server or a test server with the Sintel example.
+reviewers need a test server and account (the app signs in with a username and password, or Quick
+Connect); offer a test server with the Sintel example, or the Jellyfin demo server.
 Roku requires channels to behave well with deep links and the Home key; check the current Roku
 certification checklist before submitting.
 

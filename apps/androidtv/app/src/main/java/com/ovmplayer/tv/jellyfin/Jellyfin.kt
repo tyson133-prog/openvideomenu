@@ -147,11 +147,14 @@ private class JfHttp(val baseUrl: String, val deviceId: String, var token: Strin
 // --- sign-in -------------------------------------------------------------------------------------
 
 /**
- * Signing in to one Jellyfin server with Quick Connect: the TV shows a code, the viewer approves it
- * from another Jellyfin app (profile → Quick Connect), and the server hands this device a token.
+ * Signing in to one Jellyfin server, either with Quick Connect (the TV shows a code, the viewer
+ * approves it from another Jellyfin app: profile → Quick Connect) or with a username and password.
+ * Either way the server hands this device a token.
  */
 class JellyfinAccount(baseUrl: String, deviceId: String) {
     private val http = JfHttp(baseUrl.trimEnd('/'), deviceId, http = Http.probe)
+    // Checking a password is slow on purpose (the server hashes it), so not the quick probe client.
+    private val signIn = JfHttp(baseUrl.trimEnd('/'), deviceId)
     val baseUrl get() = http.baseUrl
 
     suspend fun publicInfo(): JfPublicInfo = http.get("/System/Info/Public")
@@ -160,6 +163,10 @@ class JellyfinAccount(baseUrl: String, deviceId: String) {
     suspend fun check(secret: String): JfQuickConnect = http.get("/QuickConnect/Connect", "secret" to secret)
     suspend fun authenticate(secret: String): JfAuthResult =
         http.post("/Users/AuthenticateWithQuickConnect", buildJsonObject { put("Secret", secret) }.toString())
+
+    /** Username and password. The password may be empty: Jellyfin allows accounts without one. */
+    suspend fun authenticateByName(user: String, password: String): JfAuthResult =
+        signIn.post("/Users/AuthenticateByName", buildJsonObject { put("Username", user); put("Pw", password) }.toString())
 }
 
 /** A Jellyfin server found on the home network. */

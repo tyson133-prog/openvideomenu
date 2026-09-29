@@ -65,18 +65,12 @@ code on 2026-09-28). Re-check if the app changes.
 
 - **Privacy policy:** https://openvideomenu.org/privacy.html
 - **Ads:** No.
-- **App access:** *All or some functionality is restricted* (the app needs a media server). Reviewers
-  need a way in, and today the app signs in to Jellyfin **only with Quick Connect** (no username and
-  password screen) and to Plex with a plex.tv code. So before submitting, either:
-  - add username/password sign-in for Jellyfin, then give reviewers a test server and account
-    (`https://demo.jellyfin.org/stable`, user `demo`, no password, if it's still up; better, a test
-    server with the Sintel example so they see a menu), or
-  - give reviewers a Plex account shared to a test server, with instructions to sign in at
-    plex.tv/link with the code the TV shows.
-
-  Example instructions once password sign-in exists:
-  > Choose Jellyfin, enter the server address `<test server>`, and sign in as `<user>` / `<password>`.
-  > Open "Sintel" in the Menus row to see its menu.
+- **App access:** *All or some functionality is restricted* (the app needs a media server). Give
+  reviewers a Jellyfin test server and account: the app signs in with a username and password as
+  well as Quick Connect. Best is a test server with the Sintel example, so they see a menu;
+  otherwise `https://demo.jellyfin.org/stable`, user `demo`, no password (check it's still up).
+  > Choose Jellyfin, enter the server address `<test server>`, and sign in with username `<user>`
+  > and password `<password>`. Open "Sintel" in the Menus row to see its menu.
 - **Content rating (IARC questionnaire):** category *All other app types*; no violence, sexuality,
   language or controlled substances in the app itself; no user interaction or chat between users; no
   sharing of location; no purchases. It plays the user's own media. Expect a rating of Everyone / PEGI 3.

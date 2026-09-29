@@ -1,5 +1,5 @@
 ' ovmplayer for Roku: the app flow. Choose Plex or Jellyfin, sign in (plex.tv PIN, or Jellyfin
-' Quick Connect), list titles with menus, and open one in MenuView. Menus come from the
+' Quick Connect or username and password), list titles with menus, and open one in MenuView. Menus come from the
 ' Jellyfin Open Video Menu plugin, or for Plex from an Open Video Menu asset server. Plex specifics are in
 ' MainScene.plex.brs; m.login.kind says which server this is ("plex", else Jellyfin).
 
@@ -16,6 +16,7 @@ sub init()
     m.chooseList.observeField("itemSelected", "onKindChosen")
     m.serverList = m.top.findNode("serverList")
     m.serverList.observeField("itemSelected", "onServerChosen")
+    m.top.findNode("codeOptions").observeField("itemSelected", "onCodeOption")
     m.rows = m.top.findNode("rows")
     m.rows.observeField("rowItemSelected", "onTileChosen")
     m.showRows = m.top.findNode("showRows")
@@ -73,6 +74,7 @@ sub show(name as string)
     for each id in ["choose", "servers", "code", "browse", "show"]
         m.top.findNode(id).visible = (id = name)
     end for
+    m.top.findNode("codeOptions").visible = false
     setStatus("")
 end sub
 
@@ -146,6 +148,7 @@ sub onHttp(event as object)
     if pending.handler = "onInitiate" then onInitiate(res, pending.context)
     if pending.handler = "onCheck" then onCheck(res, pending.context)
     if pending.handler = "onAuthenticated" then onAuthenticated(res, pending.context)
+    if pending.handler = "onPasswordAuthenticated" then onPasswordAuthenticated(res, pending.context)
     if pending.handler = "onHealth" then onHealth(res, pending.context)
     if pending.handler = "onServerName" then onServerName(res, pending.context)
     if pending.handler = "onIndex" then onIndex(res, pending.context)
@@ -228,7 +231,7 @@ sub onAddressEntered()
     useServer(url)
 end sub
 
-' --- Quick Connect ------------------------------------------------------------------------
+' --- signing in: Quick Connect, or username and password -----------------------------------
 
 sub useServer(url as string)
     m.login = invalid
@@ -244,19 +247,88 @@ sub onServerInfo(res as object, ctx as dynamic)
     end if
     m.pending.id = res.json["Id"]
     m.pending.name = res.json["ServerName"]
+    ' Both ways at once: a Quick Connect code (once the server gives one), and username and password.
+    show("code")
+    m.top.findNode("codeTitle").text = "Sign in to " + m.pending.name
+    m.top.findNode("codeHint").text = "Getting a Quick Connect code…"
+    m.top.findNode("codeValue").text = ""
+    options = CreateObject("roSGNode", "ContentNode")
+    options.createChild("ContentNode").title = "Use username and password"
+    list = m.top.findNode("codeOptions")
+    list.content = options
+    list.visible = true
+    list.setFocus(true)
     http(m.pending.url + "/QuickConnect/Initiate", "POST", "", "onInitiate")
 end sub
 
 sub onInitiate(res as object, ctx as dynamic)
+    if m.pending = invalid then return
     if res.code <> 200 or res.json = invalid
-        setStatus("Quick Connect isn't available on " + m.pending.name + " (an admin can turn it on in Dashboard → General).")
+        m.top.findNode("codeHint").text = "Quick Connect is turned off on this server. Sign in with your username and password."
         return
     end if
     m.pending.secret = res.json["Secret"]
-    show("code")
-    m.top.findNode("codeTitle").text = "Sign in to " + m.pending.name
+    m.top.findNode("codeHint").text = "In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter"
     m.top.findNode("codeValue").text = res.json["Code"]
     m.pollTimer.control = "start"
+end sub
+
+sub onCodeOption()
+    askSignIn("Username", false, "onUsernameEntered")
+end sub
+
+' Roku's own keyboard for one sign-in field; the password is masked.
+sub askSignIn(title as string, secret as boolean, handler as string)
+    dialog = CreateObject("roSGNode", "StandardKeyboardDialog")
+    dialog.title = title
+    if m.pending <> invalid then dialog.message = ["Your account on " + m.pending.name]
+    if secret
+        dialog.keyboardDomain = "password"
+        ' Masking is the text box's secureMode; the dialog holds it as textEditBox.
+        editBox = invalid
+        if dialog.hasField("textEditBox") then editBox = dialog.textEditBox
+        if editBox <> invalid then editBox.secureMode = true
+    end if
+    dialog.buttons = ["OK", "Cancel"]
+    dialog.observeField("buttonSelected", handler)
+    m.top.dialog = dialog
+end sub
+
+sub onUsernameEntered()
+    dialog = m.top.dialog
+    text = dialog.text.Trim()
+    ok = dialog.buttonSelected = 0
+    dialog.close = true
+    if not ok or m.pending = invalid then return
+    if text = ""
+        setStatus("Enter your username.")
+        return
+    end if
+    m.pending.user = text
+    askSignIn("Password for " + text, true, "onPasswordEntered")
+end sub
+
+' The password may be empty: Jellyfin allows accounts without one.
+sub onPasswordEntered()
+    dialog = m.top.dialog
+    password = dialog.text
+    ok = dialog.buttonSelected = 0
+    dialog.close = true
+    if not ok or m.pending = invalid then return
+    setStatus("Signing in…")
+    body = FormatJson({ "Username": m.pending.user, "Pw": password })
+    http(m.pending.url + "/Users/AuthenticateByName", "POST", body, "onPasswordAuthenticated", invalid, { headers: headers(), timeoutMs: 30000 })
+end sub
+
+sub onPasswordAuthenticated(res as object, ctx as dynamic)
+    if m.pending = invalid then return ' the viewer left the sign-in screen
+    if res.code = 401
+        setStatus("Wrong username or password.")
+        m.top.findNode("codeOptions").setFocus(true)
+        return
+    end if
+    m.pollTimer.control = "stop"
+    onAuthenticated(res, ctx)
 end sub
 
 sub onPollQuickConnect()
@@ -280,6 +352,7 @@ sub onAuthenticated(res as object, ctx as dynamic)
         setStatus("Sign-in failed (HTTP " + res.code.ToStr() + ").")
         return
     end if
+    m.pollTimer.control = "stop"
     m.login = { url: m.pending.url, name: m.pending.name, serverId: m.pending.id, token: res.json["AccessToken"], userId: res.json["User"]["Id"] }
     m.registry.Write("login", FormatJson(m.login))
     m.registry.Flush()
@@ -959,6 +1032,7 @@ function onKeyEvent(key as string, press as boolean) as boolean
     if key = "back" and m.top.findNode("code").visible
         m.pollTimer.control = "stop"
         m.pin = invalid
+        m.pending = invalid ' a sign-in still under way is dropped
         chooseKind()
         return true
     end if

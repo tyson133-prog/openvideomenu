@@ -2,6 +2,7 @@ package com.ovmplayer.tv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -188,6 +190,8 @@ fun FindJellyfinScreen(
     Spacer(Modifier.height(24.dp))
     var address by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val connect = { if (address.text.isNotBlank()) { keyboard?.hide(); onPick(address.text) } }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         BasicTextField(
             value = address,
@@ -196,7 +200,7 @@ fun FindJellyfinScreen(
             textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
             // The on-screen keyboard's ✓ connects straight away.
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (address.text.isNotBlank()) onPick(address.text) }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { connect() }),
             decorationBox = { inner ->
                 Box(Modifier.width(360.dp).background(Color(0xFF333333), RoundedCornerShape(6.dp)).padding(10.dp)) {
                     if (address.text.isEmpty()) Text("e.g. 192.168.1.20:8096", color = Color.Gray)
@@ -218,34 +222,127 @@ fun FindJellyfinScreen(
                     }
                 },
         )
-        Button(onClick = { if (address.text.isNotBlank()) onPick(address.text) }) { Text("Connect") }
+        Button(onClick = { connect() }) { Text("Connect") }
         Button(onClick = onSearch) { Text("Search again") }
         Button(onClick = onBack) { Text("Back") }
     }
     LaunchedEffect(searching, servers.size) { if (!searching) runCatching { first.requestFocus() } }
 }
 
-/** Jellyfin Quick Connect: approve this code in another Jellyfin app. */
+/**
+ * Signing in to a Jellyfin server, both ways side by side: a Quick Connect code to approve in another
+ * Jellyfin app, or a username and password.
+ */
 @Composable
-fun QuickConnectScreen(server: String, code: String?, error: String?, onBack: () -> Unit) = Centered {
-    Text("Sign in to $server", style = MaterialTheme.typography.displaySmall)
+fun JellyfinSignInScreen(
+    state: com.ovmplayer.tv.Screen.JellyfinSignIn,
+    onPassword: (String, String) -> Unit,
+    onBack: () -> Unit,
+) = Centered {
+    Text("Sign in to ${state.server}", style = MaterialTheme.typography.displaySmall)
     Spacer(Modifier.height(32.dp))
-    when {
-        error != null -> {
-            Text(error, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(16.dp))
-        }
-        code != null -> {
-            Text("In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(16.dp))
-            Text(code, style = TextStyle(fontSize = 72.sp, fontWeight = FontWeight.Bold, letterSpacing = 12.sp, color = Color.White))
-            Spacer(Modifier.height(16.dp))
-        }
-        else -> Text("Connecting…", style = MaterialTheme.typography.titleMedium)
+    if (state.connecting) {
+        Text("Connecting…", style = MaterialTheme.typography.titleMedium)
+        return@Centered
     }
-    val focus = remember { FocusRequester() }
-    Button(onClick = onBack, modifier = Modifier.focusRequester(focus)) { Text("Back") }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    var user by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    var password by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
+    val userFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // Submitting closes the keyboard so the result (or an error) shows.
+    val submit = { if (!state.busy) { keyboard?.hide(); onPassword(user.text, password.text) } }
+    Row(horizontalArrangement = Arrangement.spacedBy(64.dp), verticalAlignment = Alignment.Top) {
+        // Username and password.
+        Column(Modifier.width(420.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("With your username and password", style = MaterialTheme.typography.titleLarge)
+            SignInField(user, { user = it }, "Username", userFocus, password = false, onDone = { runCatching { passwordFocus.requestFocus() }; keyboard?.show() })
+            SignInField(password, { password = it }, "Password", passwordFocus, password = true, onDone = submit)
+            state.passwordError?.let { Text(it, style = MaterialTheme.typography.titleMedium, color = Gold) }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = submit) { Text(if (state.busy) "Signing in…" else "Sign in") }
+                Button(onClick = onBack) { Text("Back") }
+            }
+        }
+        // Quick Connect.
+        Column(Modifier.width(420.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Or with Quick Connect", style = MaterialTheme.typography.titleLarge)
+            when {
+                state.code != null -> {
+                    Text("In Jellyfin on your phone or computer, open your profile, choose Quick Connect, and enter", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+                    Text(state.code, style = TextStyle(fontSize = 64.sp, fontWeight = FontWeight.Bold, letterSpacing = 10.sp, color = Color.White))
+                }
+                state.quickConnectNote != null -> Text(state.quickConnectNote, style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+                else -> Text("Getting a code…", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        runCatching { userFocus.requestFocus() }
+        // The keyboard may still be open from typing the server's address; close it once focus has
+        // moved here (hiding it before the move leaves it attached to the new field).
+        kotlinx.coroutines.delay(150)
+        keyboard?.hide()
+    }
+}
+
+/** A one-line text field for the TV: the on-screen keyboard's action key moves on (or submits). */
+@Composable
+private fun SignInField(
+    value: androidx.compose.ui.text.input.TextFieldValue,
+    onChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    placeholder: String,
+    focus: FocusRequester,
+    password: Boolean,
+    onDone: () -> Unit,
+) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    var focused by remember { mutableStateOf(false) }
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            keyboardType = if (password) androidx.compose.ui.text.input.KeyboardType.Password else androidx.compose.ui.text.input.KeyboardType.Text,
+            imeAction = if (password) androidx.compose.ui.text.input.ImeAction.Done else androidx.compose.ui.text.input.ImeAction.Next,
+            autoCorrectEnabled = false,
+            // The keyboard opens on OK, not on focus, so it doesn't cover the Quick Connect code.
+            showKeyboardOnFocus = false,
+        ),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { onDone() }, onDone = { onDone() }),
+        decorationBox = { inner ->
+            Box(
+                Modifier.fillMaxWidth()
+                    .background(Color(0xFF333333), RoundedCornerShape(6.dp))
+                    .border(2.dp, if (focused) Gold else Color.Transparent, RoundedCornerShape(6.dp))
+                    .padding(12.dp),
+            ) {
+                if (value.text.isEmpty()) Text(placeholder, color = Color.Gray)
+                inner()
+            }
+        },
+        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+            .onFocusChanged { focused = it.isFocused }
+            // On a remote: OK opens the keyboard; up and down move between fields instead of being
+            // swallowed by the text cursor.
+            .onPreviewKeyEvent { e ->
+                val key = e.nativeKeyEvent.keyCode
+                if (key == android.view.KeyEvent.KEYCODE_DPAD_CENTER || key == android.view.KeyEvent.KEYCODE_ENTER) {
+                    if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) keyboard?.show()
+                    true
+                } else if (e.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN &&
+                    (key == android.view.KeyEvent.KEYCODE_DPAD_DOWN || key == android.view.KeyEvent.KEYCODE_DPAD_UP)
+                ) {
+                    focusManager.moveFocus(if (key == android.view.KeyEvent.KEYCODE_DPAD_DOWN) androidx.compose.ui.focus.FocusDirection.Down else androidx.compose.ui.focus.FocusDirection.Up)
+                } else {
+                    false
+                }
+            },
+    )
 }
 
 /** A title's menu, with native playback layered on top when a button plays something. */

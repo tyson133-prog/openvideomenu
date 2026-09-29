@@ -22,6 +22,8 @@ import com.ovmplayer.tv.assets.CatalogEntry
 import com.ovmplayer.tv.assets.discoverAssetServers
 import com.ovmplayer.tv.jellyfin.FoundJellyfin
 import com.ovmplayer.tv.jellyfin.JellyfinAccount
+import com.ovmplayer.tv.jellyfin.JfAuthResult
+import com.ovmplayer.tv.jellyfin.JfPublicInfo
 import com.ovmplayer.tv.jellyfin.JellyfinSource
 import com.ovmplayer.tv.jellyfin.discoverJellyfin
 import com.ovmplayer.tv.media.Item
@@ -92,7 +94,18 @@ sealed interface Screen {
     /** Jellyfin servers found on the network, plus typing an address. */
     data class FindJellyfin(val servers: List<FoundJellyfin>, val searching: Boolean, val error: String? = null) : Screen
     /** Quick Connect: the code to approve in another Jellyfin app. */
-    data class QuickConnect(val server: String, val code: String?, val error: String? = null) : Screen
+    /**
+     * Signing in to a Jellyfin server: a Quick Connect [code] (when the server allows it; otherwise
+     * [quickConnectNote] says why not) and a username/password form, whichever the viewer uses.
+     */
+    data class JellyfinSignIn(
+        val server: String,
+        val code: String? = null,
+        val quickConnectNote: String? = null,
+        val passwordError: String? = null,
+        val busy: Boolean = false,
+        val connecting: Boolean = false,
+    ) : Screen
     data object Browse : Screen
     data class Show(val state: ShowState) : Screen
     data class Menu(val open: OpenMenu) : Screen
@@ -288,44 +301,88 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (_screen.value is Screen.FindJellyfin) _screen.value = Screen.FindJellyfin(found, searching = false)
     }
 
+    /** The Jellyfin server being signed in to. */
+    private class PendingJellyfin(val account: JellyfinAccount, val url: String, val info: JfPublicInfo)
+
+    private var pendingJellyfin: PendingJellyfin? = null
+    private var passwordJob: Job? = null
+
     /**
-     * Sign in to the Jellyfin server at [address] with Quick Connect: show a code, wait for the viewer
-     * to approve it in another Jellyfin app, then keep the token this device is given.
+     * Sign in to the Jellyfin server at [address]. The screen offers both ways at once: a Quick Connect
+     * code (approved in another Jellyfin app; shown while the server allows it, and renewed when it
+     * expires) and a username/password form ([signInWithPassword]). Whichever finishes first wins.
      */
     fun useJellyfin(address: String) {
         signInJob?.cancel()
+        passwordJob?.cancel()
+        pendingJellyfin = null
         signInJob = viewModelScope.launch {
             val url = address.trim().trimEnd('/').let { if (it.startsWith("http")) it else "http://$it" }
                 .let { if (Regex(":\\d+$").containsMatchIn(it.substringAfter("//"))) it else "$it:8096" }
             val jf = JellyfinAccount(url, settings.clientId)
-            _screen.value = Screen.QuickConnect(url, null)
+            _screen.value = Screen.JellyfinSignIn(url, connecting = true)
             val info = attempt { jf.publicInfo() }.getOrElse {
                 _screen.value = Screen.FindJellyfin(emptyList(), searching = false, error = "No Jellyfin server answered at $url (${it.message}).")
                 return@launch
             }
+            val pending = PendingJellyfin(jf, url, info).also { pendingJellyfin = it }
+            _screen.value = Screen.JellyfinSignIn(info.serverName)
             if (!attempt { jf.quickConnectEnabled() }.getOrDefault(false)) {
-                _screen.value = Screen.QuickConnect(info.serverName, null, "Quick Connect is turned off on ${info.serverName}. An admin can turn it on in Dashboard → General.")
+                updateSignIn { it.copy(quickConnectNote = "Quick Connect is turned off on this server.") }
                 return@launch
             }
-            val start = attempt { jf.initiate() }.getOrElse {
-                _screen.value = Screen.QuickConnect(info.serverName, null, "Couldn't start Quick Connect: ${it.message}")
+            while (true) {
+                val start = attempt { jf.initiate() }.getOrElse {
+                    updateSignIn { s -> s.copy(quickConnectNote = "Couldn't start Quick Connect: ${it.message}") }
+                    return@launch
+                }
+                updateSignIn { it.copy(code = start.code, quickConnectNote = null) }
+                val approved = withTimeoutOrNull(10 * 60_000L) {
+                    while (attempt { jf.check(start.secret).authenticated }.getOrDefault(false).not()) delay(3_000)
+                    true
+                }
+                if (approved == null) continue // the code expired: show a new one
+                val auth = attempt { jf.authenticate(start.secret) }.getOrElse {
+                    updateSignIn { s -> s.copy(code = null, quickConnectNote = "Sign-in failed: ${it.message}") }
+                    return@launch
+                }
+                passwordJob?.cancel()
+                finishJellyfin(pending, auth)
                 return@launch
             }
-            _screen.value = Screen.QuickConnect(info.serverName, start.code)
-            val approved = withTimeoutOrNull(10 * 60_000L) {
-                while (attempt { jf.check(start.secret).authenticated }.getOrDefault(false).not()) delay(3_000)
-                true
-            }
-            if (approved == null) return@launch useJellyfin(url) // code expired: show a new one
-            val auth = attempt { jf.authenticate(start.secret) }.getOrElse {
-                _screen.value = Screen.QuickConnect(info.serverName, null, "Sign-in failed: ${it.message}")
-                return@launch
-            }
-            val login = JellyfinLogin(url, info.id, info.serverName, auth.user.id, auth.accessToken)
-            settings.sourceKind = "jellyfin"
-            settings.jellyfin = login
-            startJellyfin(login)
         }
+    }
+
+    /** The other way in: the viewer's Jellyfin username and password. */
+    fun signInWithPassword(user: String, password: String) {
+        val pending = pendingJellyfin ?: return
+        if (user.isBlank()) {
+            updateSignIn { it.copy(passwordError = "Enter your username.") }
+            return
+        }
+        passwordJob?.cancel()
+        passwordJob = viewModelScope.launch {
+            updateSignIn { it.copy(busy = true, passwordError = null) }
+            val auth = attempt { pending.account.authenticateByName(user.trim(), password) }.getOrElse { e ->
+                val message = if (e is HttpStatusException && e.code == 401) "Wrong username or password." else "Sign-in failed: ${e.message}"
+                updateSignIn { it.copy(busy = false, passwordError = message) }
+                return@launch
+            }
+            signInJob?.cancel() // stop waiting for Quick Connect
+            finishJellyfin(pending, auth)
+        }
+    }
+
+    private fun updateSignIn(change: (Screen.JellyfinSignIn) -> Screen.JellyfinSignIn) {
+        (_screen.value as? Screen.JellyfinSignIn)?.let { _screen.value = change(it) }
+    }
+
+    private fun finishJellyfin(pending: PendingJellyfin, auth: JfAuthResult) {
+        pendingJellyfin = null
+        val login = JellyfinLogin(pending.url, pending.info.id, pending.info.serverName, auth.user.id, auth.accessToken)
+        settings.sourceKind = "jellyfin"
+        settings.jellyfin = login
+        startJellyfin(login)
     }
 
     private fun startJellyfin(login: JellyfinLogin) = viewModelScope.launch {

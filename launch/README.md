@@ -49,5 +49,4 @@ work;** nothing here publishes anything by itself.
 - [ ] Example titles testers can download (Sintel and Example Show), since testers have no DVD Tamer yet.
 - [ ] Test the Jellyfin plugin repository install from a clean Jellyfin (add repository → install).
 - [ ] Fire TV: untested; either test it or keep the site saying so.
-- [ ] **Jellyfin username/password sign-in** (both apps have Quick Connect only). Store reviewers
-  need a way in, and some servers have Quick Connect turned off. See [`google-play.md`](google-play.md#app-content-policy--app-content).
+- [ ] A Jellyfin test server and account for store reviewers (see [`google-play.md`](google-play.md#app-content-policy--app-content)).
