@@ -440,7 +440,9 @@ export class MenuPlayer {
       place(hit, button.rect);
       if (button.showLabel) {
         hit.classList.add("ms-labelled");
-        hit.textContent = button.label ?? "";
+        const text = document.createElement("span");
+        text.textContent = button.label ?? "";
+        hit.appendChild(text);
       }
       // Without highlight art the viewer couldn't see focus, so draw a ring.
       if (!overlays.selected && !button.showLabel) hit.classList.add("ms-ring");
@@ -484,8 +486,15 @@ export class MenuPlayer {
       left: `${(w - stageW) / 2}px`,
       top: `${(h - stageH) / 2}px`,
     });
-    for (const view of this.buttonViews.values())
-      if (view.button.showLabel) view.hit.style.fontSize = `${(view.button.rect[3] / menu.canvas.height) * stageH * 0.5}px`;
+    // Labels are half the button's height, smaller when the text would be wider than the button.
+    for (const view of this.buttonViews.values()) {
+      if (!view.button.showLabel) continue;
+      const size = (view.button.rect[3] / menu.canvas.height) * stageH * 0.5;
+      view.hit.style.fontSize = `${size}px`;
+      const room = view.hit.clientWidth * 0.94;
+      const width = (view.hit.firstElementChild as HTMLElement | null)?.getBoundingClientRect().width ?? 0;
+      if (width > room && room > 0) view.hit.style.fontSize = `${Math.max((size * room) / width, 8)}px`;
+    }
   }
 
   private preloadImages() {

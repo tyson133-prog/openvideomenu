@@ -30,7 +30,8 @@
       <Rectangle id="fill" color="0x000000FF" />
       <Poster id="still" loadDisplayMode="noScale" />
       <Video id="motion" enableUI="false" loop="false" />
-      <Poster id="highlight" loadDisplayMode="noScale" />
+      <!-- one layer per button of the menu shown: its state image, and a drawn label (showLabel) -->
+      <Group id="buttons" />
       <!-- focus ring for buttons without highlight art (as the web renderer's ms-ring) -->
       <Group id="ring" visible="false">
         <Rectangle id="ringTop" color="0xFFD54AFF" />

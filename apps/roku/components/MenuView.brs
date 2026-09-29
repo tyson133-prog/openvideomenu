@@ -5,12 +5,11 @@ sub init()
     m.fill = m.top.findNode("fill")
     m.still = m.top.findNode("still")
     m.motion = m.top.findNode("motion")
-    m.highlight = m.top.findNode("highlight")
+    m.buttons = m.top.findNode("buttons")
     m.ring = m.top.findNode("ring")
-    m.still.observeField("loadStatus", "drawHighlight")
+    m.still.observeField("loadStatus", "drawButtons")
     m.music = m.top.findNode("music")
     m.still.loadDisplayMode = "scaleToFill"
-    m.highlight.loadDisplayMode = "scaleToFill"
 
     m.motion.observeField("state", "onMotionState")
     m.motion.observeField("position", "onMotionPosition")
@@ -29,6 +28,8 @@ sub init()
     m.seq = 0
     m.shownMenu = invalid
     m.videoRole = invalid  ' "background" or "transition"
+    m.buttonViews = []     ' per button of the menu shown: { button, poster, fill?, shadow?, label? }
+    m.activatedId = invalid ' the button showing its activated state, briefly
 end sub
 
 sub onControl()
@@ -57,12 +58,9 @@ end sub
 sub apply(effect as object)
     t = effect.type
     if t = "activated"
-        button = findButton(effect.menu, effect.button)
-        image = stateImage(button, "activated")
-        if image <> invalid
-            showImage(m.highlight, image)
-            m.flash.control = "start"
-        end if
+        m.activatedId = effect.button
+        drawButtons()
+        m.flash.control = "start"
     else if t = "play"
         stopBackground()
         m.top.playRequest = effect
@@ -75,12 +73,13 @@ sub apply(effect as object)
         menu = m.manifest["menus"][effect.menu]
         at = msOr(menu["buttonsAt"], 0)
         if m.videoRole = "background" then m.motion.seek = at
-        drawHighlight()
+        drawButtons()
     end if
 end sub
 
 sub onFlashDone()
-    drawHighlight()
+    m.activatedId = invalid
+    drawButtons()
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -110,7 +109,7 @@ sub render(fresh as boolean)
     if mode = "menu"
         menu = m.manifest["menus"][m.nav.menu]
         if fresh or m.shownMenu <> m.nav.menu then showMenu(menu)
-        drawHighlight()
+        drawButtons()
     else if mode = "transition"
         hideCursor()
     else if mode = "playing"
@@ -144,6 +143,7 @@ sub showMenu(menu as object)
     m.still.height = dh
     m.still.visible = bg["image"] <> invalid
     if bg["image"] <> invalid then showImage(m.still, bg["image"])
+    buildButtons(menu)
     prefetchMenu(menu)
 
     m.motion.translation = [0, 0]
@@ -184,31 +184,121 @@ sub showMenu(menu as object)
     end if
 end sub
 
-sub drawHighlight()
-    if m.nav.mode <> "menu" or not m.nav.buttonsReady
+' One layer per button, in the menu's order: a poster for its state image and, for showLabel
+' buttons, a fill and the label the player draws (otherwise the label is part of the art).
+sub buildButtons(menu as object)
+    for each view in m.buttonViews
+        m.wanted.Delete(view.poster.id)
+    end for
+    m.buttons.removeChildrenIndex(m.buttons.getChildCount(), 0)
+    m.buttonViews = []
+    m.seq = m.seq + 1
+    i = 0
+    for each button in menu["buttons"]
+        view = { button: button }
+        view.poster = m.buttons.createChild("Poster")
+        view.poster.id = "b" + m.seq.ToStr() + "-" + i.ToStr()
+        view.poster.loadDisplayMode = "scaleToFill"
+        view.poster.visible = false
+        if button["showLabel"] = true
+            r = button["rect"]
+            x = r[0] * m.sx
+            y = r[1] * m.sy
+            w = r[2] * m.sx
+            h = r[3] * m.sy
+            view.fill = m.buttons.createChild("Rectangle")
+            view.fill.translation = [x, y]
+            view.fill.width = w
+            view.fill.height = h
+            ' Font size half the button's height, as the web renderer, smaller if the text would be wider
+            ' than the button; a soft shadow keeps it legible on art.
+            size = fitFontSize(button["label"], w, h * 0.5)
+            view.shadow = labelNode(button["label"], x + 2, y + 3, w, h, size)
+            view.shadow.color = "0x000000CC"
+            view.label = labelNode(button["label"], x, y, w, h, size)
+        end if
+        m.buttonViews.push(view)
+        i = i + 1
+    end for
+end sub
+
+' The largest size up to maxSize at which the text fits in width (a little padding each side).
+function fitFontSize(text as dynamic, width as float, maxSize as float) as float
+    size = maxSize
+    probe = CreateObject("roSGNode", "Label")
+    probe.text = msOr(text, "")
+    font = CreateObject("roSGNode", "Font")
+    font.uri = "font:SystemFontFile"
+    font.size = Int(size)
+    probe.font = font
+    textWidth = probe.boundingRect().width
+    if textWidth > width * 0.94 and textWidth > 0 then size = size * width * 0.94 / textWidth
+    if size < 12 then size = 12
+    return size
+end function
+
+function labelNode(text as dynamic, x as float, y as float, w as float, h as float, size as float) as object
+    label = m.buttons.createChild("Label")
+    label.text = msOr(text, "")
+    label.translation = [x, y]
+    label.width = w
+    label.height = h
+    label.horizAlign = "center"
+    label.vertAlign = "center"
+    font = CreateObject("roSGNode", "Font")
+    font.uri = "font:SystemFontFile"
+    font.size = Int(size)
+    label.font = font
+    return label
+end function
+
+' Show each button in exactly one state (spec: activated briefly when pressed, selected while it
+' has focus, otherwise normal), each with its own image, rect, label colour and fill.
+sub drawButtons()
+    if m.nav.mode <> "menu" or not m.nav.buttonsReady or not menuShowing()
         hideCursor()
         return
     end if
-    button = findButton(m.nav.menu, m.nav.focus)
-    if button = invalid or not menuShowing()
-        hideCursor()
-        return
+    m.buttons.visible = true
+    ring = invalid
+    for each view in m.buttonViews
+        button = view.button
+        visual = "normal"
+        if button["id"] = m.activatedId
+            visual = "activated"
+        else if button["id"] = m.nav.focus
+            visual = "selected"
+        end if
+        s = invalid
+        if button["states"] <> invalid then s = button["states"][visual]
+        if s = invalid then s = {}
+        if s["image"] <> invalid
+            rect = button["rect"]
+            if s["rect"] <> invalid then rect = s["rect"]
+            view.poster.translation = [rect[0] * m.sx, rect[1] * m.sy]
+            view.poster.width = rect[2] * m.sx
+            view.poster.height = rect[3] * m.sy
+            showImage(view.poster, s["image"])
+        else
+            view.poster.visible = false
+            m.wanted.Delete(view.poster.id)
+        end if
+        if view.label <> invalid
+            ' Unstyled labels are 85% white, full white with focus (the web renderer's defaults).
+            fallback = "0xFFFFFFD9"
+            if visual = "selected" then fallback = "0xFFFFFFFF"
+            view.label.color = cssColor(s["textColor"], fallback)
+            view.fill.color = cssColor(s["fill"], "0x00000000")
+            view.fill.visible = s["fill"] <> invalid
+        end if
+        ' Without highlight art or a drawn label the viewer couldn't see focus, so draw a ring.
+        if visual <> "normal" and view.label = invalid and stateImage(button, "selected") = invalid then ring = { rect: button["rect"], visual: visual }
+    end for
+    if ring = invalid
+        m.ring.visible = false
+    else
+        showRing(ring.rect, ring.visual)
     end if
-    image = stateImage(button, "selected")
-    if image = invalid
-        ' Without highlight art the viewer couldn't see focus, so draw a ring around the button.
-        m.highlight.visible = false
-        showRing(button["rect"])
-        return
-    end if
-    m.ring.visible = false
-    rect = button["rect"]
-    s = button["states"]["selected"]
-    if s["rect"] <> invalid then rect = s["rect"]
-    m.highlight.translation = [rect[0] * m.sx, rect[1] * m.sy]
-    m.highlight.width = rect[2] * m.sx
-    m.highlight.height = rect[3] * m.sy
-    showImage(m.highlight, image)
 end sub
 
 '  Whether the menu itself is on screen, so the cursor never floats over black while the still
@@ -221,20 +311,24 @@ function menuShowing() as boolean
 end function
 
 sub hideCursor()
-    m.highlight.visible = false
+    m.buttons.visible = false
     m.ring.visible = false
 end sub
 
-' A 4-pixel yellow frame just outside the button's rect (canvas units scaled to the screen).
-sub showRing(rect as object)
+' A 4-pixel frame just outside the button's rect (canvas units scaled to the screen): yellow with
+' focus, white while activated (the web renderer's ms-ring).
+sub showRing(rect as object, visual = "selected" as string)
     t = 4
     x = rect[0] * m.sx - t
     y = rect[1] * m.sy - t
     w = rect[2] * m.sx + 2 * t
     h = rect[3] * m.sy + 2 * t
     sides = [["ringTop", x, y, w, t], ["ringBottom", x, y + h - t, w, t], ["ringLeft", x, y, t, h], ["ringRight", x + w - t, y, t, h]]
+    colour = "0xFFD54AFF"
+    if visual = "activated" then colour = "0xFFFFFFFF"
     for each side in sides
         node = m.ring.findNode(side[0])
+        node.color = colour
         node.translation = [side[1], side[2]]
         node.width = side[3]
         node.height = side[4]
@@ -280,7 +374,9 @@ end sub
 sub stopBackground()
     m.motion.control = "stop"
     m.motion.visible = false
-    m.still.visible = m.shownMenu <> invalid
+    ' The still belongs to the menu shown: a menu without an image never shows the last one's.
+    m.still.visible = false
+    if m.shownMenu <> invalid then m.still.visible = msOr(m.manifest["menus"][m.shownMenu]["background"], {})["image"] <> invalid
     m.music.control = "stop"
     m.videoRole = invalid
 end sub
@@ -295,7 +391,7 @@ sub onMotionState()
     end if
     if state = "playing" and m.videoRole = "background" and m.motionShown <> true
         m.motionShown = true ' stays true through loop seeks, so the cursor doesn't blink
-        drawHighlight()
+        drawButtons()
     end if
     if state = "finished"
         if m.videoRole = "transition"
@@ -411,7 +507,11 @@ sub onDownloaded(event as object)
         return
     end if
     m.images[pending.url] = task.file
-    for each poster in [m.still, m.highlight]
+    posters = [m.still]
+    for each view in m.buttonViews
+        posters.push(view.poster)
+    end for
+    for each poster in posters
         if m.wanted[poster.id] = pending.url then poster.uri = task.file
     end for
 end sub
@@ -466,9 +566,60 @@ function aspectOf(value as dynamic, fallback as float) as float
 end function
 
 function colorOf(css as dynamic) as string
-    if css = invalid then return "0x000000FF"
-    hex = css.Replace("#", "")
-    if Len(hex) = 3 then hex = Mid(hex, 1, 1) + Mid(hex, 1, 1) + Mid(hex, 2, 1) + Mid(hex, 2, 1) + Mid(hex, 3, 1) + Mid(hex, 3, 1)
-    if Len(hex) <> 6 then return "0x000000FF"
-    return "0x" + UCase(hex) + "FF"
+    return cssColor(css, "0x000000FF")
+end function
+
+' A CSS colour as Roku's 0xRRGGBBAA: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba() and a few
+' names. Anything else gives the fallback.
+function cssColor(css as dynamic, fallback as string) as string
+    if css = invalid or (type(css) <> "String" and type(css) <> "roString") then return fallback
+    c = LCase(css.Trim())
+    names = { black: "#000000", white: "#ffffff", red: "#ff0000", green: "#008000", blue: "#0000ff", yellow: "#ffff00", gray: "#808080", grey: "#808080", transparent: "#00000000" }
+    if names.DoesExist(c) then c = names[c]
+    if Left(c, 1) = "#"
+        hex = Mid(c, 2)
+        if Len(hex) = 3 or Len(hex) = 4
+            long = ""
+            for i = 1 to Len(hex)
+                long = long + Mid(hex, i, 1) + Mid(hex, i, 1)
+            end for
+            hex = long
+        end if
+        if Len(hex) = 6 then hex = hex + "ff"
+        if Len(hex) <> 8 then return fallback
+        for i = 1 to 8
+            if Instr(1, "0123456789abcdef", Mid(hex, i, 1)) = 0 then return fallback
+        end for
+        return "0x" + UCase(hex)
+    end if
+    if Left(c, 4) = "rgb(" or Left(c, 5) = "rgba("
+        inner = Mid(c, Instr(1, c, "(") + 1)
+        inner = inner.Replace(")", "").Replace("/", ",")
+        parts = []
+        for each part in inner.Split(",")
+            if part.Trim() <> "" then parts.push(part.Trim())
+        end for
+        if parts.Count() < 3 then return fallback
+        out = "0x"
+        for i = 0 to 2
+            v = Val(parts[i])
+            if Right(parts[i], 1) = "%" then v = v * 2.55
+            out = out + hexByte(v)
+        end for
+        a = 255
+        if parts.Count() > 3
+            a = Val(parts[3])
+            if Right(parts[3], 1) = "%" then a = a / 100
+            a = a * 255
+        end if
+        return out + hexByte(a)
+    end if
+    return fallback
+end function
+
+function hexByte(v as float) as string
+    n = Int(v + 0.5)
+    if n < 0 then n = 0
+    if n > 255 then n = 255
+    return Right("0" + UCase(StrI(n, 16)), 2)
 end function
