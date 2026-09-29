@@ -53,7 +53,7 @@ public abstract record Effect
     /// <summary>Briefly show the button's activated state.</summary>
     public sealed record Activated(string Menu, string Button) : Effect;
 
-    /// <summary>Back was pressed at the top of the menus; the host may leave the disc.</summary>
+    /// <summary>Back was pressed at the top of the menus; the host may leave the title.</summary>
     public sealed record Exit : Effect;
 
     /// <summary>Play a transition clip, then report <see cref="NavEvent.TransitionEnded"/>.</summary>
@@ -394,9 +394,9 @@ public static class Navigator
     }
 
     /// <summary>
-    /// The remote's Back on a menu. A menu's back action says where Back goes (like a disc's "Go
+    /// The remote's Back on a menu. A menu's back action says where Back goes (like a DVD's "Go
     /// Up"), run as a step up: no history is added, and a target already in history unwinds it.
-    /// Without one, Back returns through history, except on the root menu, where it leaves the disc.
+    /// Without one, Back returns through history, except on the root menu, where it leaves the title.
     /// Back never traps the viewer: if back leaves them on the same menu, they step back (or leave).
     /// </summary>
     private static void RemoteBack(Manifest manifest, Working s, List<Effect> effects)

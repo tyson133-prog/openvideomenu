@@ -31,7 +31,7 @@ class Settings(context: Context) {
         get() = prefs.getString("serverId", null)
         set(value) = prefs.edit().putString("serverId", value).apply()
 
-    /** Asset server base URL, e.g. http://192.168.4.101:8790 */
+    /** Asset server base URL, e.g. http://192.168.1.20:8790 */
     var assetServer: String?
         get() = prefs.getString("assetServer", null)
         set(value) = prefs.edit().putString("assetServer", value).apply()
@@ -54,7 +54,7 @@ class Settings(context: Context) {
     /**
      * Where the viewer stopped each title this app played, with the tracks they had, keyed by server
      * and item ([stopKey]). Servers keep their own resume points, but skip short viewings and often
-     * extras, and don't know which soundtrack a disc menu chose.
+     * extras, and don't know which soundtrack a menu chose.
      */
     fun stopOf(key: String): Stop? = stops()[key]
 

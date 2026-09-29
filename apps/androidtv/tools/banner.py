@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 NAME = "ovmplayer"
-TAGLINE = "disc menus for your library"
+TAGLINE = "menus for your library"
 W, H = 640, 360
 GOLD = (255, 208, 110)
 RULE = (204, 165, 84)

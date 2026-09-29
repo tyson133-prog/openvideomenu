@@ -1,7 +1,7 @@
 {
   "name": "openvideomenu-monorepo",
   "private": true,
-  "description": "Open Video Menu: an open, royalty-free format for disc-style menus over existing media files.",
+  "description": "Open Video Menu: an open, royalty-free format for menus over existing media files.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": { "node": ">=22.2" },

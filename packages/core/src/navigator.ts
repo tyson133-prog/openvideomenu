@@ -226,10 +226,10 @@ function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Ef
 }
 
 /**
- * The remote's Back key on a menu. A menu's `back` action says where Back goes (like a disc's
+ * The remote's Back key on a menu. A menu's `back` action says where Back goes (like a DVD's
  * "Go Up"), run as a step up: no history is added, and a target already in history unwinds it, so
  * paging through ten bios never means ten presses. Without `back`, Back returns through history,
- * except on the root menu, where it leaves the disc however the viewer got there (a "return to the
+ * except on the root menu, where it leaves the title however the viewer got there (a "return to the
  * main menu" button adds history, but the main menu is still the top). Back must never trap the
  * viewer: if `back` leaves them on the same menu, they step back (or leave, on the root menu).
  */

@@ -1,7 +1,7 @@
 # Open Video Menu asset server (proof of concept) as a systemd service.
 # Install steps: packaging/linux/README.md. Settings: /etc/openvideomenu/asset-server.env
 [Unit]
-Description=Open Video Menu asset server (disc menus for Plex and Jellyfin)
+Description=Open Video Menu asset server (menus for Plex and Jellyfin)
 Documentation=https://openvideomenu.org
 Wants=network-online.target
 After=network-online.target

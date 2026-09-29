@@ -1,4 +1,4 @@
-// Channel art: the same gold disc-with-play mark as the Android TV launcher icon, on near-black.
+// Channel art: the same gold ring-with-play mark as the Android TV launcher icon, on near-black.
 import { mkdirSync } from "node:fs";
 import { Image, hex } from "../../../examples/_tools/png.mjs";
 

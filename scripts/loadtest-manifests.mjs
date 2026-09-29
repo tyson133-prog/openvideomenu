@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Load test: many Matrix-sized manifests (about 50 menus and 450 menu assets each) for timing the
- * asset server's scan and index, and the TV app's Disc Menus row.
+ * asset server's scan and index, and the TV app's Menus row.
  *
  *   node scripts/loadtest-manifests.mjs [--count 400] [--movies <folder>] [--out <folder>]
  *

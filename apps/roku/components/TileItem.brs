@@ -1,6 +1,6 @@
 sub showContent()
     c = m.top.itemContent
-    ' Tiles are reused as rows scroll: follow only this content's fields that change later (a disc's
+    ' Tiles are reused as rows scroll: follow only this content's fields that change later (a menu's
     ' poster once its title is found, a show's badge, progress after playback).
     if m.content <> invalid
         for each f in ["shortDescriptionLine2", "HDPosterUrl", "badge"]

@@ -36,7 +36,7 @@ public sealed partial class Manifest
     /// <summary>The menu shown first (after <see cref="FirstPlay"/>). Required when there are menus.</summary>
     public string? RootMenu { get; set; }
 
-    /// <summary>What runs when the disc starts, like a DVD's first-play program.</summary>
+    /// <summary>What runs when the title opens, like a DVD's first-play program.</summary>
     public MenuAction? FirstPlay { get; set; }
 
     /// <summary>The plain list every player can show. At least one visible group.</summary>
@@ -152,7 +152,7 @@ public sealed class Menu
     /// <summary>Seconds into the menu's intro before buttons appear and respond.</summary>
     public double? ButtonsAt { get; set; }
 
-    /// <summary>What the remote's Back key does on this menu (like a disc's "Go Up").</summary>
+    /// <summary>What the remote's Back key does on this menu (like a DVD's "Go Up").</summary>
     public MenuAction? Back { get; set; }
 
     [JsonExtensionData]

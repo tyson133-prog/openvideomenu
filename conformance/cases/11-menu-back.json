@@ -1,5 +1,5 @@
 {
-  "description": "A menu's back says where the remote's Back goes (a step up, like a disc's Go Up), page turns with history \"replace\" add no Back steps, and Back never traps. Walk: main → cast list → bio page 1 → bio page 2 (page turn); Back presses the bio's on-screen Cast button and lands on the cast list with the actor still focused; the next Back returns to main (history was unwound, not walked).",
+  "description": "A menu's back says where the remote's Back goes (a step up, like a DVD's Go Up), page turns with history \"replace\" add no Back steps, and Back never traps. Walk: main → cast list → bio page 1 → bio page 2 (page turn); Back presses the bio's on-screen Cast button and lands on the cast list with the actor still focused; the next Back returns to main (history was unwound, not walked).",
   "level": 1,
   "valid": true,
   "manifest": {

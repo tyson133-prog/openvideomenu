@@ -11,14 +11,14 @@ public sealed class LibraryTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    /// <summary>A small disc the way a converter would build it: a menu, chapters, a play-all, a fallback.</summary>
+    /// <summary>A small title the way a converter would build it: a menu, chapters, a play-all, a fallback.</summary>
     private static Manifest Authored() => new()
     {
-        Title = new Title { Name = "Test Disc", Year = 2001 },
+        Title = new Title { Name = "Test Film", Year = 2001 },
         Source = new Source { Kind = "dvd", Generator = "tests 1.0" },
         Media =
         {
-            ["feature"] = new MediaEntry { Ref = "Test Disc (2001).mkv", Kind = "feature", Chapters = [new Chapter { Time = 0 }, new Chapter { Time = 312.5, Label = "The chase" }] },
+            ["feature"] = new MediaEntry { Ref = "Test Film (2001).mkv", Kind = "feature", Chapters = [new Chapter { Time = 0 }, new Chapter { Time = 312.5, Label = "The chase" }] },
         },
         Menus = new()
         {
@@ -123,7 +123,7 @@ public sealed class LibraryTests : IDisposable
             ["menus/main.mp4"] = new byte[200_000],
             ["menus/play-on.png"] = Encoding.ASCII.GetBytes("PNG!"),
         };
-        var bundle = Path.Combine(_dir, "Test Disc (2001).ovmz");
+        var bundle = Path.Combine(_dir, "Test Film (2001).ovmz");
         var packed = Bundle.Pack(manifest, name => art.TryGetValue(name, out var b) ? new MemoryStream(b) : null, bundle);
         Assert.Equal(4, packed.Written);
         Assert.Empty(packed.Problems);
@@ -131,7 +131,7 @@ public sealed class LibraryTests : IDisposable
         var check = Bundle.Validate(bundle);
         Assert.True(check.Ok, string.Join("\n", check.Errors));
         Assert.Empty(check.Warnings);
-        Assert.Equal("Test Disc", check.Manifest!.Title.Name);
+        Assert.Equal("Test Film", check.Manifest!.Title.Name);
 
         // Other ZIP readers see the same stored files, byte for byte.
         using (var zip = ZipFile.OpenRead(bundle))
@@ -152,7 +152,7 @@ public sealed class LibraryTests : IDisposable
 
         var outDir = Path.Combine(_dir, "out");
         Assert.Equal(4, Bundle.Unpack(bundle, outDir));
-        var loose = Manifest.Load(Path.Combine(outDir, "Test Disc (2001).openvideomenu.json"));
+        var loose = Manifest.Load(Path.Combine(outDir, "Test Film (2001).openvideomenu.json"));
         Assert.True(loose.Ok);
         Assert.Empty(loose.Manifest!.MissingAssets(outDir));
         Assert.Equal("JPEG", File.ReadAllText(Path.Combine(outDir, "menus", "main.jpg")));
@@ -173,14 +173,14 @@ public sealed class LibraryTests : IDisposable
     public void PacksALooseManifestFromItsFolder()
     {
         var manifest = Authored();
-        var file = Path.Combine(_dir, "Test Disc (2001).openvideomenu.json");
+        var file = Path.Combine(_dir, "Test Film (2001).openvideomenu.json");
         manifest.Save(file);
         Directory.CreateDirectory(Path.Combine(_dir, "menus"));
         File.WriteAllText(Path.Combine(_dir, "menus", "main.jpg"), "JPEG");
-        var packed = Bundle.Pack(file, Path.Combine(_dir, "Test Disc (2001).ovmz"));
+        var packed = Bundle.Pack(file, Path.Combine(_dir, "Test Film (2001).ovmz"));
         Assert.Equal(2, packed.Written);
         Assert.Equal(2, packed.Problems.Count);
-        Assert.True(Manifest.Load(Path.Combine(_dir, "Test Disc (2001).ovmz")).Ok);
+        Assert.True(Manifest.Load(Path.Combine(_dir, "Test Film (2001).ovmz")).Ok);
     }
 
     [Fact]

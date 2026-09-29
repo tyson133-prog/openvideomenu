@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A tile in the browse rows: a poster (or a wide episode still), a "DISC MENU" badge when the
+<!-- A tile in the browse rows: a poster (or a wide episode still), a "MENU" badge when the
      title has one, its title and a second line (year, progress). -->
 <component name="TileItem" extends="Group">
   <interface>
@@ -12,7 +12,7 @@
     <Poster id="poster" width="264" height="396" loadDisplayMode="scaleToZoom" loadingBitmapUri="" failedBitmapUri="" />
     <Group id="badge">
       <Rectangle id="badgeBg" translation="[150, 10]" width="104" height="26" color="0xFFD27AFF" />
-      <Label id="badgeText" text="DISC MENU" translation="[150, 10]" width="104" height="26" horizAlign="center" vertAlign="center" color="0x000000FF">
+      <Label id="badgeText" text="MENU" translation="[150, 10]" width="104" height="26" horizAlign="center" vertAlign="center" color="0x000000FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="16" />
       </Label>
     </Group>

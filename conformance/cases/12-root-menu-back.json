@@ -1,5 +1,5 @@
 {
-  "description": "Remote Back on the root menu leaves the disc, however the viewer got there. Walk: main → languages → a language button that sets a variable and returns to main (a goto, so it adds history); Back on main exits rather than retracing to languages. Other menus still return through history.",
+  "description": "Remote Back on the root menu leaves the title, however the viewer got there. Walk: main → languages → a language button that sets a variable and returns to main (a goto, so it adds history); Back on main exits rather than retracing to languages. Other menus still return through history.",
   "level": 1,
   "valid": true,
   "manifest": {

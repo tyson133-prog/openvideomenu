@@ -1,6 +1,6 @@
 # Open Video Menu for Jellyfin (plugin, proof of concept)
 
-Serves Open Video Menu disc menus straight from your Jellyfin server, so TV apps need **no separate
+Serves Open Video Menu menus straight from your Jellyfin server, so TV apps need **no separate
 asset server**. It is the reference for "a media server that supports Open Video Menu natively": the same
 `/v1` API as [`packages/asset-server`](../../packages/asset-server), answered by the server that
 already holds your library and your sign-in.

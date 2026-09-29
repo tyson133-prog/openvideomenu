@@ -7,7 +7,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described i
 
 ## 1. Purpose
 
-A Open Video Menu manifest adds a disc-style menu to media that already exists: a film and its extras, a season of episodes, an imported DVD. It holds backgrounds, buttons, highlight art, remote-control navigation and actions. Every action **points to** existing media files or streams. The manifest never contains video.
+An Open Video Menu manifest adds a menu to media that already exists: a film and its extras, a season of episodes, an imported DVD. It holds backgrounds, buttons, highlight art, remote-control navigation and actions. Every action **points to** existing media files or streams. The manifest never contains video.
 
 ## 2. Files
 
@@ -104,7 +104,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `action` | yes | What activating the button does. |
 | `label` | no | Human name. Used for accessibility and tools, and drawn only when `showLabel` is true. |
 | `a11yLabel` | no | Screen-reader text when it differs from `label`. |
-| `showLabel` | no | If true, the player draws `label` itself. Otherwise the text is part of the background art, as on discs. |
+| `showLabel` | no | If true, the player draws `label` itself. Otherwise the text is part of the background art, as on DVDs. |
 | `states` | no | `normal`, `selected` and `activated`, each `{ image?, rect?, textColor?, fill? }`. |
 | `nav` | no | `{ up?, down?, left?, right? }`: button ids in the same menu. |
 | `autoAction` | no | If true, the button activates as soon as it is selected (DVD auto-action). |
@@ -158,7 +158,7 @@ Every action is an object with a `type`:
 
 ### 6.1 Variables and track selection (Level 2)
 
-Discs remember choices, such as the soundtrack picked in a Languages menu, in registers. Open Video Menu keeps them as **variables**: data, not scripts.
+DVDs remember choices, such as the soundtrack picked in a Languages menu, in registers. Open Video Menu keeps them as **variables**: data, not scripts.
 
 ```json
 "vars": { "audio": 1, "subs": 0 },
@@ -179,7 +179,7 @@ Discs remember choices, such as the soundtrack picked in a Languages menu, in re
 
 ### 6.2 The remote's Back key
 
-On a disc, the remote's Return key doesn't retrace every menu you visited: each menu has a "go up" target. Open Video Menu menus say the same with `back`:
+On a DVD, the remote's Return key doesn't retrace every menu you visited: each menu has a "go up" target. Open Video Menu menus say the same with `back`:
 
 ```json
 "neo-bio-2": {
@@ -195,9 +195,9 @@ On a disc, the remote's Return key doesn't retrace every menu you visited: each 
 - **It is a step up, not a new visit.** A `goto` run by `back` doesn't add to history, and if its target is already in the history, the history is unwound to it (that entry and everything after it are dropped). So ten bio pages still take one press to leave.
 - **Page turns** (next/previous page of the same thing) SHOULD use `history: "replace"`, so they add no Back steps even in menus without `back`.
 - **Without `back`**, Back returns through history as in §6 (at the top, the player MAY exit).
-- **Back on `rootMenu` leaves the disc** (the player exits), unless that menu has its own `back`. This holds however the viewer got there: a "return to the main menu" button is a `goto` and adds history, but the main menu is still the top, and retracing into a submenu from it surprises viewers.
-- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A disc may leave Return inactive; a TV app must not.)
-- **Importers choose per menu** to match the source as closely as possible: a disc's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
+- **Back on `rootMenu` leaves the title** (the player exits), unless that menu has its own `back`. This holds however the viewer got there: a "return to the main menu" button is a `goto` and adds history, but the main menu is still the top, and retracing into a submenu from it surprises viewers.
+- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A DVD may leave Return inactive; a TV app must not.)
+- **Importers choose per menu** to match the source as closely as possible: a DVD's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
 
 ## 7. Cross-reference rules
 
@@ -224,7 +224,7 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 ## 9. Unknown fields and extensions
 
 - Readers MUST ignore properties they don't understand.
-- Vendor or tool data goes in properties starting with `x-`, e.g. `x-dvd` for disc provenance (see [profiles/dvd.md](profiles/dvd.md)). Validators SHOULD warn about unknown properties that don't start with `x-`, because they're usually typos.
+- Vendor or tool data goes in properties starting with `x-`, e.g. `x-dvd` for DVD provenance (see [profiles/dvd.md](profiles/dvd.md)). Validators SHOULD warn about unknown properties that don't start with `x-`, because they're usually typos.
 - A manifest with a **newer minor version** MUST still be read: its unknown fields are ignored.
 - A manifest with a **different major version** MUST be rejected rather than guessed at.
 
@@ -234,6 +234,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Disc** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, variables with audio/subtitle selection. *(Next drafts)* Menu timeouts, conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

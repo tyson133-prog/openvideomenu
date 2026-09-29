@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Jellyfin.Plugin.OpenVideoMenu;
 
 /// <summary>
-/// Open Video Menu for Jellyfin: serves disc-menu manifests (and only the menu art they name) from the
+/// Open Video Menu for Jellyfin: serves menu manifests (and only the menu art they name) from the
 /// libraries' own folders, over the same API as the standalone Open Video Menu asset server, so TV apps
 /// need no separate server. Signed-in Jellyfin users only.
 /// </summary>
@@ -25,7 +25,7 @@ public class Plugin : BasePlugin<PluginConfiguration>
     public override Guid Id => Guid.Parse("6d1c3a52-4f0b-4d7e-9a5e-3c2b7f1e8a90");
 
     public override string Description =>
-        "Disc-style menus for your films and shows: serves .openvideomenu.json manifests and their menu art to Open Video Menu players such as ovmplayer.";
+        "Menus for your films and shows: serves .openvideomenu.json manifests and their menu art to Open Video Menu players such as ovmplayer.";
 }
 
 /// <summary>No settings yet: the plugin reads the libraries Jellyfin already has.</summary>

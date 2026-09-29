@@ -1,10 +1,10 @@
-' The library beyond disc menus: a row per movie or TV library on the home screen, a screen per
-' show (its Discs, then a row per season), and titles without a menu, which simply play (from
+' The library beyond menus: a row per movie or TV library on the home screen, a screen per
+' show (its menus, then a row per season), and titles without a menu, which simply play (from
 ' where the viewer left off). Plex and Jellyfin items are kept as the server sent them; the small
 ' accessors below read either.
 '
 ' Loading never blocks the screen (as in the Android app): the rows appear at once and fill page by
-' page. Movie pages are also where movie discs find their film. TV discs look for their show by
+' page. Movie pages are also where movie menus find their film. TV menus look for their show by
 ' title once the movie libraries are done, and a show's episodes load when it's first needed.
 
 function pageSize() as integer
@@ -13,34 +13,34 @@ end function
 
 sub resetLibraries()
     m.found = {}          ' manifest id -> the movie it belongs to
-    m.shows = {}          ' manifest id -> an episode of the show it belongs to (TV discs)
-    m.discShow = {}       ' manifest id -> that series
+    m.shows = {}          ' manifest id -> an episode of the show it belongs to (TV menus)
+    m.manifestShow = {}       ' manifest id -> that series
     m.menuOf = {}         ' movie key -> manifest id, for movies whose files have a menu
     m.episodesByShow = {} ' show key -> its episodes, once loaded
     m.libraries = []      ' [{ name, kind: "movie" | "show", key, row, done }] in the server's order
     m.tileItems = []      ' what each tile stands for (tile.itemRef indexes this)
-    m.discTiles = {}      ' manifest id -> its tile in the Disc Menus row
+    m.manifestTiles = {}      ' manifest id -> its tile in the Menus row
     m.showTiles = {}      ' show key -> its tile in a library row
-    m.tvLookups = -1      ' TV disc lookups still running; -1 = not started
+    m.tvLookups = -1      ' TV menu lookups still running; -1 = not started
 end sub
 
 sub addLibrary(name as dynamic, kind as string, key as string)
     m.libraries.push({ name: msOr(name, ""), kind: kind, key: key, row: invalid, done: false })
 end sub
 
-' The rows, at once: Disc Menus (posters arrive as their titles are found), then a row per
+' The rows, at once: Menus (posters arrive as their titles are found), then a row per
 ' library with a "Loading" tile until its first page arrives. Then every library's first page.
 sub startLibraries()
     root = CreateObject("roSGNode", "ContentNode")
     if m.catalog.Count() > 0
         row = root.createChild("ContentNode")
-        row.title = "Disc Menus"
+        row.title = "Menus"
         for each entry in m.catalog
             tile = row.createChild("ContentNode")
-            tile.addFields({ kind: "disc", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
+            tile.addFields({ kind: "manifest", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
             tile.title = msOr(entry["title"]["name"], "")
             if entry["title"]["year"] <> invalid then tile.shortDescriptionLine2 = entry["title"]["year"].ToStr()
-            m.discTiles[entry["id"]] = tile
+            m.manifestTiles[entry["id"]] = tile
         end for
     end if
     for i = 0 to m.libraries.Count() - 1
@@ -59,14 +59,14 @@ sub startLibraries()
     librariesProgress()
 end sub
 
-' "Media Center (Plex) · 3 disc menus from http://…" — which server, which kind, where menus come from.
+' "Media Center (Plex) · 3 menus from http://…" — which server, which kind, where menus come from.
 sub showBrowseStatus()
-    menus = m.catalog.Count().ToStr() + " disc menus"
-    if m.catalog.Count() = 1 then menus = "1 disc menu"
+    menus = m.catalog.Count().ToStr() + " menus"
+    if m.catalog.Count() = 1 then menus = "1 menu"
     if m.menuBase = invalid and isPlex()
-        menus = "no disc menus (no menu server)"
+        menus = "no menus (no menu server)"
     else if m.menuBase = invalid
-        menus = "no disc menus (the Open Video Menu plugin isn't installed)"
+        menus = "no menus (the Open Video Menu plugin isn't installed)"
     else if isPlex()
         menus = menus + " from " + m.menuBase
     else
@@ -109,7 +109,7 @@ sub onLibraryPage(res as object, ctx as dynamic)
             addTile(lib.row, item, "movie", m.menuOf[itemKey(item)] <> invalid)
         else
             key = itemKey(item)
-            m.showTiles[key] = addTile(lib.row, item, "show", discsOfShow(key).Count() > 0)
+            m.showTiles[key] = addTile(lib.row, item, "show", manifestsOfShow(key).Count() > 0)
         end if
     end for
     total = 0
@@ -137,24 +137,24 @@ sub removeRow(lib as object)
     end for
 end sub
 
-' A movie that has a menu: its disc tile gets its poster, and the movie opens the menu.
+' A movie that has a menu: its tile in the Menus row gets its poster, and the movie opens the menu.
 sub matchMovie(movie as object)
     for each f in filesOf(movie)
         for each entry in msManifestsFor(f.path, m.catalog)
             if not m.found.DoesExist(entry["id"])
                 m.found[entry["id"]] = movie
-                updateDiscTile(entry["id"])
+                updateManifestTile(entry["id"])
             end if
             m.menuOf[itemKey(movie)] = entry["id"]
         end for
     end for
 end sub
 
-sub updateDiscTile(id as string)
-    tile = m.discTiles[id]
+sub updateManifestTile(id as string)
+    tile = m.manifestTiles[id]
     if tile = invalid then return
     movie = m.found[id]
-    series = m.discShow[id]
+    series = m.manifestShow[id]
     if movie <> invalid
         tile.HDPosterUrl = posterOf(movie)
         tile.shortDescriptionLine2 = yearOf(movie)
@@ -164,7 +164,7 @@ sub updateDiscTile(id as string)
     end if
 end sub
 
-' Once every movie library is loaded, the discs not found yet are TV discs: look for their shows.
+' Once every movie library is loaded, the menus not found yet are TV menus: look for their shows.
 sub librariesProgress()
     moviesDone = true
     allDone = true
@@ -174,7 +174,7 @@ sub librariesProgress()
             if lib.kind = "movie" then moviesDone = false
         end if
     end for
-    if moviesDone and m.tvLookups = -1 then findTvDiscs()
+    if moviesDone and m.tvLookups = -1 then findTvManifests()
     if not allDone or m.tvLookups > 0
         m.top.findNode("browseStatus").text = serverLabel() + " · loading your library…"
     else
@@ -182,19 +182,19 @@ sub librariesProgress()
     end if
 end sub
 
-' --- TV discs: find the show, confirmed by its episode files ---------------------------------
-' Titles are unreliable (metadata agents rename shows: the example disc "Example Show" is the show
+' --- TV menus: find the show, confirmed by its episode files ---------------------------------
+' Titles are unreliable (metadata agents rename shows: the example "Example Show" is the show
 ' "Example" in Plex), so as in the Android app: shows found by title, then the TV libraries'
-' recently added episodes; a show only counts if one of its episode files is one the disc plays.
+' recently added episodes; a show only counts if one of its episode files is one the menu plays.
 
-sub findTvDiscs()
+sub findTvManifests()
     m.tvLookups = 0
-    m.discPending = {}
-    m.discTriedRecent = {}
+    m.manifestPending = {}
+    m.manifestTriedRecent = {}
     for each entry in m.catalog
         name = entry["title"]["name"]
         if not m.found.DoesExist(entry["id"])
-            m.discPending[entry["id"]] = 0
+            m.manifestPending[entry["id"]] = 0
             for each lib in m.libraries
                 if lib.kind = "show" and name <> invalid
                     if isPlex()
@@ -202,33 +202,33 @@ sub findTvDiscs()
                     else
                         url = m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + lib.key + "&recursive=true&includeItemTypes=Series&limit=5&searchTerm=" + percentEncodeQuery(name)
                     end if
-                    discLookup(entry, url, "onShowSearch", entry)
+                    manifestLookup(entry, url, "onShowSearch", entry)
                 end if
             end for
-            if m.discPending[entry["id"]] = 0 then discSearchDone(entry)
+            if m.manifestPending[entry["id"]] = 0 then manifestSearchDone(entry)
         end if
     end for
 end sub
 
-' One request for a disc's lookup, counted so the app knows when the search is over.
-sub discLookup(entry as object, url as string, handler as string, ctx as object)
+' One request for a TV menu's lookup, counted so the app knows when the search is over.
+sub manifestLookup(entry as object, url as string, handler as string, ctx as object)
     m.tvLookups = m.tvLookups + 1
-    m.discPending[entry["id"]] = m.discPending[entry["id"]] + 1
+    m.manifestPending[entry["id"]] = m.manifestPending[entry["id"]] + 1
     http(url, "GET", invalid, handler, ctx)
 end sub
 
-sub discLookupDone(entry as object)
+sub manifestLookupDone(entry as object)
     m.tvLookups = m.tvLookups - 1
-    m.discPending[entry["id"]] = m.discPending[entry["id"]] - 1
-    if m.discPending[entry["id"]] = 0 then discSearchDone(entry)
+    m.manifestPending[entry["id"]] = m.manifestPending[entry["id"]] - 1
+    if m.manifestPending[entry["id"]] = 0 then manifestSearchDone(entry)
     librariesProgress()
 end sub
 
 ' Nothing confirmed by title: try the episodes most recently added to each TV library.
-sub discSearchDone(entry as object)
+sub manifestSearchDone(entry as object)
     id = entry["id"]
-    if m.discShow.DoesExist(id) or m.discTriedRecent[id] = true then return
-    m.discTriedRecent[id] = true
+    if m.manifestShow.DoesExist(id) or m.manifestTriedRecent[id] = true then return
+    m.manifestTriedRecent[id] = true
     for each lib in m.libraries
         if lib.kind = "show"
             if isPlex()
@@ -236,42 +236,42 @@ sub discSearchDone(entry as object)
             else
                 url = m.login.url + "/Items?userId=" + m.login.userId + "&parentId=" + lib.key + "&recursive=true&includeItemTypes=Episode&sortBy=DateCreated&sortOrder=Descending&limit=100&fields=Path,MediaSources"
             end if
-            discLookup(entry, url, "onRecentEpisodes", entry)
+            manifestLookup(entry, url, "onRecentEpisodes", entry)
         end if
     end for
 end sub
 
 sub onShowSearch(res as object, entry as dynamic)
     for each series in itemsOf(res.json)
-        discLookup(entry, episodesUrl(series), "onDiscEpisodes", { entry: entry, show: series })
+        manifestLookup(entry, episodesUrl(series), "onManifestEpisodes", { entry: entry, show: series })
     end for
-    discLookupDone(entry)
+    manifestLookupDone(entry)
 end sub
 
 sub onRecentEpisodes(res as object, entry as dynamic)
-    if not m.discShow.DoesExist(entry["id"])
+    if not m.manifestShow.DoesExist(entry["id"])
         for each ep in itemsOf(res.json)
-            if episodeOfDisc(ep, entry)
+            if episodeOfManifest(ep, entry)
                 ' Its show, then all its episodes (which confirms it and fills the cache).
                 if isPlex()
                     url = m.login.url + "/library/metadata/" + msOr(ep["grandparentRatingKey"], "")
                 else
                     url = m.login.url + "/Items/" + msOr(ep["SeriesId"], "") + "?userId=" + m.login.userId
                 end if
-                discLookup(entry, url, "onDiscShowFound", entry)
+                manifestLookup(entry, url, "onManifestShowFound", entry)
                 exit for
             end if
         end for
     end if
-    discLookupDone(entry)
+    manifestLookupDone(entry)
 end sub
 
-sub onDiscShowFound(res as object, entry as dynamic)
+sub onManifestShowFound(res as object, entry as dynamic)
     shows = itemsOf(res.json)
-    if shows.Count() > 0 and not m.discShow.DoesExist(entry["id"])
-        discLookup(entry, episodesUrl(shows[0]), "onDiscEpisodes", { entry: entry, show: shows[0] })
+    if shows.Count() > 0 and not m.manifestShow.DoesExist(entry["id"])
+        manifestLookup(entry, episodesUrl(shows[0]), "onManifestEpisodes", { entry: entry, show: shows[0] })
     end if
-    discLookupDone(entry)
+    manifestLookupDone(entry)
 end sub
 
 function episodesUrl(series as object) as string
@@ -279,37 +279,37 @@ function episodesUrl(series as object) as string
     return m.login.url + "/Shows/" + series["Id"] + "/Episodes?userId=" + m.login.userId + "&fields=Path,MediaSources"
 end function
 
-function episodeOfDisc(ep as object, entry as object) as boolean
+function episodeOfManifest(ep as object, entry as object) as boolean
     for each f in filesOf(ep)
         if msManifestsFor(f.path, [entry]).Count() > 0 then return true
     end for
     return false
 end function
 
-' The show is the disc's when one of its episode files is a file the disc references.
-sub onDiscEpisodes(res as object, ctx as dynamic)
+' The show is the menu's when one of its episode files is a file the manifest references.
+sub onManifestEpisodes(res as object, ctx as dynamic)
     eps = itemsOf(res.json)
     key = itemKey(ctx.show)
     m.episodesByShow[key] = eps
     id = ctx.entry["id"]
-    if not m.discShow.DoesExist(id)
+    if not m.manifestShow.DoesExist(id)
         for each ep in eps
-            if episodeOfDisc(ep, ctx.entry)
+            if episodeOfManifest(ep, ctx.entry)
                 m.shows[id] = ep
-                m.discShow[id] = ctx.show
-                updateDiscTile(id)
+                m.manifestShow[id] = ctx.show
+                updateManifestTile(id)
                 if m.showTiles[key] <> invalid then m.showTiles[key].badge = true
                 exit for
             end if
         end for
     end if
-    discLookupDone(ctx.entry)
+    manifestLookupDone(ctx.entry)
 end sub
 
-' The files a TV disc's menu can play: its show's episodes.
-function discEpisodeFiles(id as string) as object
+' The files a TV show's menu can play: its episodes.
+function manifestEpisodeFiles(id as string) as object
     files = []
-    series = m.discShow[id]
+    series = m.manifestShow[id]
     if series = invalid then return files
     for each ep in msOr(m.episodesByShow[itemKey(series)], [])
         files.Append(filesOf(ep))
@@ -317,16 +317,16 @@ function discEpisodeFiles(id as string) as object
     return files
 end function
 
-' Whether a disc tile can open yet: its title is known, or the search for it is over.
-function discReady(id as string) as boolean
-    if m.found.DoesExist(id) or m.discShow.DoesExist(id) then return true
+' Whether a menu tile can open yet: its title is known, or the search for it is over.
+function manifestReady(id as string) as boolean
+    if m.found.DoesExist(id) or m.manifestShow.DoesExist(id) then return true
     return m.tvLookups = 0
 end function
 
-function discsOfShow(key as string) as object
+function manifestsOfShow(key as string) as object
     out = []
     for each entry in m.catalog
-        series = m.discShow[entry["id"]]
+        series = m.manifestShow[entry["id"]]
         if series <> invalid and itemKey(series) = key then out.push(entry)
     end for
     return out
@@ -437,7 +437,7 @@ end function
 
 ' --- where the viewer stopped, remembered by this app ---------------------------------------
 ' Servers keep their own resume points, but skip short viewings and often extras, and don't know
-' which soundtrack a disc menu chose. So the app also keeps, per server and title, where the viewer
+' which soundtrack a menu chose. So the app also keeps, per server and title, where the viewer
 ' stopped and with which tracks (registry "stops": { key: { position, audio, subtitle, at } }).
 
 function stopKey(item as object) as string
@@ -502,7 +502,7 @@ sub forgetStop(item as object)
     if stops.Delete(stopKey(item)) then stopsWrite(stops)
 end sub
 
-' --- a show: its discs, then its seasons ------------------------------------------------------
+' --- a show: its menus, then its seasons ------------------------------------------------------
 
 sub openShow(tile as object)
     showItem = tileItem(tile)
@@ -532,18 +532,17 @@ sub buildShow(showItem as object)
     sizes = []
     heights = []
 
-    discs = discsOfShow(key)
-    if discs.Count() > 0
+    manifests = manifestsOfShow(key)
+    if manifests.Count() > 0
         row = root.createChild("ContentNode")
-        row.title = "Discs"
+        row.title = "Menus"
         sizes.push([264, 470])
         heights.push(540)
-        for each entry in discs
+        for each entry in manifests
             t = row.createChild("ContentNode")
-            t.addFields({ kind: "disc", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
-            t.title = msOr(entry["title"]["name"], "Disc")
+            t.addFields({ kind: "manifest", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
+            t.title = msOr(entry["title"]["name"], "Menu")
             t.HDPosterUrl = posterOf(showItem)
-            t.shortDescriptionLine2 = msOr(entry["title"]["disc"], "")
         end for
     end if
 
@@ -630,7 +629,7 @@ sub backFromTitle(position as float, watched as boolean)
         d.item["UserData"] = ud
     end if
     if d.tile = invalid
-        ' Resumed from a disc's question: no tile of its own.
+        ' Resumed from a menu's question: no tile of its own.
     else if d.tile.kind = "episode"
         d.tile.shortDescriptionLine2 = progressOf(d.item)
     else

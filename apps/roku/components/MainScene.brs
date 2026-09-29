@@ -1,5 +1,5 @@
 ' ovmplayer for Roku: the app flow. Choose Plex or Jellyfin, sign in (plex.tv PIN, or Jellyfin
-' Quick Connect), list titles with disc menus, and open one in MenuView. Menus come from the
+' Quick Connect), list titles with menus, and open one in MenuView. Menus come from the
 ' Jellyfin Open Video Menu plugin, or for Plex from an Open Video Menu asset server. Plex specifics are in
 ' MainScene.plex.brs; m.login.kind says which server this is ("plex", else Jellyfin).
 
@@ -152,14 +152,14 @@ sub onHttp(event as object)
     if pending.handler = "onViews" then onViews(res, pending.context)
     if pending.handler = "onLibraryPage" then onLibraryPage(res, pending.context)
     if pending.handler = "onShowSearch" then onShowSearch(res, pending.context)
-    if pending.handler = "onDiscEpisodes" then onDiscEpisodes(res, pending.context)
+    if pending.handler = "onManifestEpisodes" then onManifestEpisodes(res, pending.context)
     if pending.handler = "onRecentEpisodes" then onRecentEpisodes(res, pending.context)
-    if pending.handler = "onDiscShowFound" then onDiscShowFound(res, pending.context)
+    if pending.handler = "onManifestShowFound" then onManifestShowFound(res, pending.context)
     if pending.handler = "onShowEpisodes" then onShowEpisodes(res, pending.context)
     if pending.handler = "onPlaybackInfo" then onPlaybackInfo(res, pending.context)
     if pending.handler = "onManifest" then onManifest(res, pending.context)
     if pending.handler = "onTitleFiles" then onTitleFiles(res, pending.context)
-    if pending.handler = "onDiscRefresh" then onDiscRefresh(res, pending.context)
+    if pending.handler = "onManifestRefresh" then onManifestRefresh(res, pending.context)
     if pending.handler = "onReported" then onReported(res, pending.context)
     if pending.handler = "onPlexPin" then onPlexPin(res, pending.context)
     if pending.handler = "onPlexPinCheck" then onPlexPinCheck(res, pending.context)
@@ -316,7 +316,7 @@ sub onHealth(res as object, ctx as dynamic)
         return
     end if
     if res.code <> 200
-        ' No plugin: no disc menus, but the library still browses and plays.
+        ' No plugin: no menus, but the library still browses and plays.
         m.menuBase = invalid
         onIndex({ code: 200, json: { manifests: [] } }, invalid)
         return
@@ -393,18 +393,18 @@ sub onTileChosen()
     chooseTile(m.rows.content.getChild(sel[0]).getChild(sel[1]), "browse", m.rows)
 end sub
 
-' Open a disc menu, play a title that has none, or open a show.
+' Open a menu, play a title that has none, or open a show.
 sub chooseTile(tile as object, screen as string, list as object)
     if tile.kind = "loading" then return
     if tile.kind = "show"
         openShow(tile)
         return
     end if
-    if tile.kind = "disc" and not discReady(tile.entryId)
+    if tile.kind = "manifest" and not manifestReady(tile.entryId)
         setStatus("Still finding " + tile.title + " in your library…")
         return
     end if
-    if tile.kind = "episode" ' a TV disc's menu opens from the show's Discs row
+    if tile.kind = "episode" ' a TV show's menu opens from the show's Menus row
         playDirect(tileItem(tile), tile, screen, list)
         return
     end if
@@ -438,15 +438,15 @@ sub chooseTile(tile as object, screen as string, list as object)
         http(base + "?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
         http(base + "/SpecialFeatures?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
         http(base + "/LocalTrailers?userId=" + m.login.userId, "GET", invalid, "onTitleFiles")
-    else if m.discShow[entry["id"]] <> invalid
-        ' A TV disc: its show's episodes, fresh (resume points may have moved since they loaded).
+    else if m.manifestShow[entry["id"]] <> invalid
+        ' A TV show's menu: its episodes, fresh (resume points may have moved since they loaded).
         m.opening.waiting = 2
-        series = m.discShow[entry["id"]]
-        http(episodesUrl(series), "GET", invalid, "onDiscRefresh", series)
+        series = m.manifestShow[entry["id"]]
+        http(episodesUrl(series), "GET", invalid, "onManifestRefresh", series)
     end if
 end sub
 
-sub onDiscRefresh(res as object, series as dynamic)
+sub onManifestRefresh(res as object, series as dynamic)
     if res.json <> invalid then m.episodesByShow[itemKey(series)] = itemsOf(res.json)
     if m.opening <> invalid then openWhenReady()
 end sub
@@ -473,13 +473,13 @@ sub openWhenReady()
     m.opening.waiting = m.opening.waiting - 1
     if m.opening.waiting > 0 or m.opening.manifest = invalid then return
     files = m.opening.files
-    if m.opening.movie = invalid then files = discEpisodeFiles(m.opening.entry["id"]) ' a TV disc: its media are episodes
+    if m.opening.movie = invalid then files = manifestEpisodeFiles(m.opening.entry["id"]) ' a TV show's menu: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
-    ' Stopped partway last time: ask first, like a Blu-ray player. Every title the disc plays that
+    ' Stopped partway last time: ask first. Every title the menu plays that
     ' was stopped partway (the film, an extra, an episode), most recently played first; on a movie
-    ' disc the film always leads the list ("Play …" when it wasn't started), so it's one press away.
+    ' menu the film always leads the list ("Play …" when it wasn't started), so it's one press away.
     ' The menu's own Resume button gets the newest.
-    m.opening.resumes = discResumes(m.opening.manifest, m.menuMedia, m.opening.movie)
+    m.opening.resumes = menuResumes(m.opening.manifest, m.menuMedia, m.opening.movie)
     m.opening.lastStop = invalid
     newest = invalid
     for each r in m.opening.resumes
@@ -494,9 +494,9 @@ sub openWhenReady()
 end sub
 
 ' The prompt's titles: [{ media, item, position, audio, subtitle, label, playedAt }]. Titles stopped
-' partway, newest first; on a movie disc the film first, with position 0 when it wasn't started.
+' partway, newest first; on a movie's menu the film first, with position 0 when it wasn't started.
 ' At most four. Empty when nothing was stopped partway.
-function discResumes(manifest as object, media as object, film as dynamic) as object
+function menuResumes(manifest as object, media as object, film as dynamic) as object
     seen = {}
     list = []
     filmEntry = invalid
@@ -547,7 +547,7 @@ end function
 sub askResume()
     resumes = m.opening.resumes
     dialog = CreateObject("roSGNode", "StandardMessageDialog")
-    dialog.title = msOr(m.opening.entry["title"]["name"], "Disc")
+    dialog.title = msOr(m.opening.entry["title"]["name"], "Menu")
     buttons = []
     if resumes.Count() = 1 and m.opening.movie <> invalid and itemKey(resumes[0].item) = itemKey(m.opening.movie)
         ' Just the film: "Resume from 1:02:13".
@@ -563,7 +563,7 @@ sub askResume()
             end if
         end for
     end if
-    buttons.push("Disc menu")
+    buttons.push("Menu")
     dialog.buttons = buttons
     dialog.observeField("buttonSelected", "onResumeChosen")
     dialog.observeField("wasClosed", "onResumeClosed")

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Shows one manifest's disc menus: a port of packages/renderer-web's MenuPlayer to SceneGraph.
+  Shows one manifest's menus: a port of packages/renderer-web's MenuPlayer to SceneGraph.
   Navigation logic is navigator.brs (conformance-tested); this component only draws the state and
   carries out effects. Titles are played by the scene (playRequest out, playbackEnded/Stopped in).
 -->

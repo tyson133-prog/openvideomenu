@@ -85,7 +85,7 @@ console.log("Rendering menus...");
 const gold = hex("#ffcf6a");
 const white = hex("#ffffff");
 
-// Main menu: desert dunes, title at the top, three items baked into the art (like a real disc).
+// Main menu: desert dunes, title at the top, three items baked into the art (as published menus often are).
 const main = {
   x: 780,
   items: [

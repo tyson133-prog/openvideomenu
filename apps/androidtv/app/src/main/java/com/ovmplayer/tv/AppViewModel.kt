@@ -47,26 +47,26 @@ import com.ovmplayer.tv.store.JellyfinLogin
 import com.ovmplayer.tv.store.Settings
 import com.ovmplayer.tv.store.Stop
 
-/** Something on screen you can pick: a movie, show or episode, or a disc (a TV disc manifest). */
+/** Something on screen you can pick: a movie, show or episode, or a manifest (a TV show's menu). */
 sealed interface Tile {
     val key: String
 
-    /** [rowKey] keeps a tile's identity (and focus) when it replaces a placeholder in the Disc Menus row. */
+    /** [rowKey] keeps a tile's identity (and focus) when it replaces a placeholder in the Menus row. */
     data class Media(val item: Item, val menu: CatalogEntry?, val rowKey: String? = null) : Tile {
         override val key get() = rowKey ?: item.id
     }
 
-    /** [pending]: a Disc Menus placeholder whose title is still being looked up. */
-    data class Disc(val entry: CatalogEntry, val show: Item?, val pending: Boolean = false) : Tile {
-        override val key get() = "disc:" + entry.id
+    /** [pending]: a Menus placeholder whose title is still being looked up. */
+    data class Manifest(val entry: CatalogEntry, val show: Item?, val pending: Boolean = false) : Tile {
+        override val key get() = "manifest:" + entry.id
     }
 }
 
 data class TileRow(val title: String, val tiles: List<Tile>)
 
-/** A title opened into its disc menu: manifest media ids resolved to the server's files. */
+/** A title opened into its menu: manifest media ids resolved to the server's files. */
 /**
- * A title offered when a disc opens: [label] is the disc's own name for it. [position] 0 means "Play"
+ * A title offered when a menu opens: [label] is the menu's own name for it. [position] 0 means "Play"
  * (the film when it wasn't started). [audio] and [subtitle] are the tracks to use.
  */
 data class Resume(
@@ -81,7 +81,7 @@ data class Resume(
 
 data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, Playable>, val lastStop: LastStop?)
 
-data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val discs: List<Tile.Disc>)
+data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val manifests: List<Tile.Manifest>)
 
 sealed interface Screen {
     data class Busy(val message: String) : Screen
@@ -96,7 +96,7 @@ sealed interface Screen {
     data object Browse : Screen
     data class Show(val state: ShowState) : Screen
     data class Menu(val open: OpenMenu) : Screen
-    /** A disc with titles stopped partway: resume one of them, or open the disc menu? */
+    /** A menu with titles stopped partway: resume one of them, or open the menu? */
     data class ResumeAsk(val open: OpenMenu, val resumes: List<Resume>, val justTheFilm: Boolean) : Screen
     data class Play(val request: PlayRequest) : Screen
     data class Failed(val message: String) : Screen
@@ -107,9 +107,9 @@ sealed interface BrowseTab {
     val id: String
     val title: String
 
-    data object Discs : BrowseTab {
-        override val id = "discs"
-        override val title = "Disc Menus"
+    data object Menus : BrowseTab {
+        override val id = "menus"
+        override val title = "Menus"
     }
 
     data class Libraries(val library: Library) : BrowseTab {
@@ -129,7 +129,7 @@ data class MenuSource(val url: String?, val status: String)
 /** Browse A–Z within a library: the letters, the chosen one, and its titles. */
 data class LetterState(val letters: List<Letter> = emptyList(), val selected: Letter? = null, val tiles: List<Tile> = emptyList())
 
-/** Movies per request when paging a library for the Disc Menus row. */
+/** Movies per request when paging a library for the Menus row. */
 private const val MOVIE_PAGE = 300
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -354,11 +354,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _screen.value = Screen.Failed("Couldn't load your libraries from ${src.name}: ${it.message}")
             return@launch
         }
-        _tabs.value = listOf(BrowseTab.Discs) + libraries.map { BrowseTab.Libraries(it) } + BrowseTab.Search
+        _tabs.value = listOf(BrowseTab.Menus) + libraries.map { BrowseTab.Libraries(it) } + BrowseTab.Search
         stack.clear()
         _screen.value = Screen.Browse
         loadMenuServer()
-        loadDiscsTab()
+        loadMenusTab()
     }
 
     private fun tile(item: Item): Tile.Media =
@@ -396,11 +396,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The Disc Menus tab: every title with a menu, plus what's in progress and new. The row appears at
+     * The Menus tab: every title with a menu, plus what's in progress and new. The row appears at
      * once with a placeholder per manifest (named from the manifest), and each fills in with its
      * poster as its title is found, so hundreds of menus never hold the screen up.
      */
-    private suspend fun loadDiscsTab() = coroutineScope {
+    private suspend fun loadMenusTab() = coroutineScope {
         val src = source ?: return@coroutineScope
         val menus = catalog.filter { it.valid && it.hasMenus }.sortedBy { (it.title?.name ?: it.path).lowercase() }
         val found = HashMap<String, Tile>() // manifest id → its tile, once found
@@ -410,11 +410,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // state here needs no locking.
         fun publish() {
             val rows = listOf(
-                TileRow("Disc Menus", menus.map { found[it.id] ?: Tile.Disc(it, null, pending = true) }),
+                TileRow("Menus", menus.map { found[it.id] ?: Tile.Manifest(it, null, pending = true) }),
                 TileRow("Continue Watching", continueWatching),
                 TileRow("Recently Added", recentlyAdded),
             ).filter { it.tiles.isNotEmpty() }
-            _rows.update { it + (BrowseTab.Discs.id to rows) }
+            _rows.update { it + (BrowseTab.Menus.id to rows) }
         }
         publish()
         launch {
@@ -430,14 +430,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             found[id] = tile
             publish()
         }
-        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "disc menus: ${menus.size} placed in ${System.currentTimeMillis() - started} ms")
+        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "menus: ${menus.size} placed in ${System.currentTimeMillis() - started} ms")
     }
 
     /**
      * Find the title for each manifest and report it with [onFound] as soon as it's known:
      *  1. Movies: page through each movie library once (a few requests, even for thousands of films)
      *     and match every file locally against the manifests.
-     *  2. The rest are TV discs (or titles the server doesn't have): look for their show, a few at a time.
+     *  2. The rest are TV menus (or titles the server doesn't have): look for their show, a few at a time.
      */
     private suspend fun findCatalogTitles(menus: List<CatalogEntry>, onFound: (String, Tile) -> Unit) = coroutineScope {
         val src = source ?: return@coroutineScope
@@ -454,44 +454,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // Every manifest naming one of its files (two manifests for one film is a setup
                     // mistake, but both should still find it).
                     for (entry in movie.files.mapNotNull { it.path }.flatMap(index::manifestsFor).distinct()) {
-                        if (remaining.remove(entry.id) != null) onFound(entry.id, Tile.Media(movie, entry, rowKey = "disc:" + entry.id))
+                        if (remaining.remove(entry.id) != null) onFound(entry.id, Tile.Media(movie, entry, rowKey = "manifest:" + entry.id))
                     }
                 }
                 start += page.items.size
                 if (page.items.isEmpty() || start >= (page.total ?: Int.MAX_VALUE)) break
             }
         }
-        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "disc menus: movie libraries done, ${menus.size - remaining.size} found, ${remaining.size} left for TV lookups")
+        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "menus: movie libraries done, ${menus.size - remaining.size} found, ${remaining.size} left for TV lookups")
         val showLibraries = libraries.filter { it.kind == LibraryKind.SHOWS }
-        val recent = HashMap<String, List<Item>>() // per TV library, fetched once for all discs
+        val recent = HashMap<String, List<Item>>() // per TV library, fetched once for all TV menus
         suspend fun recentEpisodes(lib: Library): List<Item> = recent[lib.id]
             ?: attempt { src.recentEpisodes(lib, 100) }.getOrDefault(emptyList()).also { recent[lib.id] = it }
         val gate = Semaphore(4)
         remaining.values.map { entry ->
             launch {
                 val show = gate.withPermit {
-                    entry.title?.name?.let { findShowForDisc(entry, it, showLibraries, ::recentEpisodes) }
+                    entry.title?.name?.let { findShowForManifest(entry, it, showLibraries, ::recentEpisodes) }
                 }
-                onFound(entry.id, Tile.Disc(entry, show))
+                onFound(entry.id, Tile.Manifest(entry, show))
             }
         }.joinAll()
     }
 
     /**
-     * The show a TV disc manifest belongs to. Titles are unreliable (metadata agents rename shows), so
+     * The show a TV manifest belongs to. Titles are unreliable (metadata agents rename shows), so
      * candidates come from the exact title, a search, and recently added episodes, and a candidate only
-     * counts if one of its episode files matches a file the disc references.
+     * counts if one of its episode files matches a file the manifest references.
      */
-    private suspend fun findShowForDisc(
+    private suspend fun findShowForManifest(
         entry: CatalogEntry,
         name: String,
         showLibraries: List<Library>,
         recentEpisodes: suspend (Library) -> List<Item>,
     ): Item? {
         val src = source ?: return null
-        val discFiles = entry.media.mapNotNull { it.path }
-        if (discFiles.isEmpty()) return null
-        fun episodeMatches(ep: Item) = ep.files.any { f -> f.path?.let { p -> discFiles.any { MenuMatcher.matches(it, p) } } == true }
+        val manifestFiles = entry.media.mapNotNull { it.path }
+        if (manifestFiles.isEmpty()) return null
+        fun episodeMatches(ep: Item) = ep.files.any { f -> f.path?.let { p -> manifestFiles.any { MenuMatcher.matches(it, p) } } == true }
         suspend fun confirmed(show: Item): Boolean =
             attempt { src.allEpisodes(show) }.getOrDefault(emptyList()).any(::episodeMatches)
 
@@ -508,7 +508,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 attempt { src.item(id) }.getOrNull()?.let { return it }
             }
         }
-        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "no show found for disc '$name' (${entry.path})")
+        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "no show found for manifest '$name' (${entry.path})")
         return null
     }
 
@@ -572,17 +572,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun open(tile: Tile): Job = viewModelScope.launch {
         returnFocusKey = tile.key
-        if (tile is Tile.Disc && tile.pending) {
+        if (tile is Tile.Manifest && tile.pending) {
             // Picked before its title was found: wait for it (it's being looked up now).
             val ready = withTimeoutOrNull(30_000) {
-                rows.map { r -> r[BrowseTab.Discs.id]?.flatMap { it.tiles }?.firstOrNull { it.key == tile.key } }
-                    .first { it != null && !(it is Tile.Disc && it.pending) }
+                rows.map { r -> r[BrowseTab.Menus.id]?.flatMap { it.tiles }?.firstOrNull { it.key == tile.key } }
+                    .first { it != null && !(it is Tile.Manifest && it.pending) }
             } ?: return@launch
             open(ready).join()
             return@launch
         }
         when (tile) {
-            is Tile.Disc -> openDisc(tile)
+            is Tile.Manifest -> openManifest(tile)
             is Tile.Media -> when (tile.item.type) {
                 ItemType.SHOW -> openShow(tile.item)
                 ItemType.MOVIE -> if (tile.menu != null) openMovieMenu(tile.item, tile.menu) else playFromLibrary(tile.item)
@@ -605,8 +605,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Open a disc's menu; if titles it plays were stopped partway (the film, an extra, an episode),
-     * ask first, like a Blu-ray player: the most recently played first, at most four. The menu's
+     * Open a manifest's menu; if titles it plays were stopped partway (the film, an extra, an episode),
+     * ask first: the most recently played first, at most four. The menu's
      * own Resume button gets the newest either way.
      */
     private fun openAsking(title: String, entry: CatalogEntry, media: Map<String, Playable>, film: Item?) {
@@ -614,7 +614,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val point = resumePointOf(p.item)
             Resume(id, p.item, point.position, entry.media.firstOrNull { it.id == id }?.label ?: p.item.title, point.audio, point.subtitle, point.atMs)
         }
-        // Titles stopped partway, newest first; on a movie disc the film leads ("Play …" when it
+        // Titles stopped partway, newest first; on a movie's menu the film leads ("Play …" when it
         // wasn't started), so it's always one press away.
         val filmEntry = film?.let { f -> all.firstOrNull { it.item.id == f.id } }
         val others = all.filter { it !== filmEntry && it.position > 0 }.sortedByDescending { it.playedAtMs }
@@ -667,7 +667,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return "${server ?: "server"}|${item.id}"
     }
 
-    /** The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the disc menu. */
+    /** The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the menu. */
     fun resumeChosen(resume: Resume?) {
         val ask = _screen.value as? Screen.ResumeAsk ?: return
         if (resume != null) play(resume.item, resume.position, resume.audio, resume.subtitle) else _screen.value = Screen.Menu(ask.open)
@@ -684,13 +684,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val season = seasons.firstOrNull { it.type == ItemType.SEASON && (it.seasonNumber ?: 0) > 0 } ?: seasons.firstOrNull()
         val episodes = season?.let { attempt { src.children(it) }.getOrDefault(emptyList()) } ?: emptyList()
         go(Screen.Show(ShowState(show, seasons, season, episodes, emptyList())))
-        // Discs: manifests whose media are this show's episode files.
+        // Menus: manifests whose media are this show's episode files.
         val files = attempt { src.allEpisodes(show) }.getOrDefault(emptyList()).flatMap { e -> e.files.mapNotNull { it.path } }
-        val discs = files.flatMap(menuIndex::manifestsFor).distinct()
+        val manifests = files.flatMap(menuIndex::manifestsFor).distinct()
             .sortedBy { it.path.lowercase() }
-            .map { Tile.Disc(it, show) }
+            .map { Tile.Manifest(it, show) }
         (_screen.value as? Screen.Show)?.takeIf { it.state.show.id == show.id }?.let {
-            _screen.value = Screen.Show(it.state.copy(discs = discs))
+            _screen.value = Screen.Show(it.state.copy(manifests = manifests))
         }
     }
 
@@ -712,14 +712,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _screen.value = Screen.Show(current.copy(season = season, episodes = episodes))
     }
 
-    private suspend fun openDisc(disc: Tile.Disc) {
+    private suspend fun openManifest(manifest: Tile.Manifest) {
         val src = source ?: return
-        val show = disc.show
+        val show = manifest.show
         val episodes = show?.let { attempt { src.allEpisodes(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val extras = show?.let { attempt { src.extras(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val files = filesOf(episodes + extras)
-        val media = MenuMatcher.resolveMedia(disc.entry, files)
-        openAsking(disc.entry.title?.name ?: show?.title ?: "Disc", disc.entry, media, film = null)
+        val media = MenuMatcher.resolveMedia(manifest.entry, files)
+        openAsking(manifest.entry.title?.name ?: show?.title ?: "Menu", manifest.entry, media, film = null)
     }
 
     /** What plays now outside a menu, so where it stops can be remembered. */

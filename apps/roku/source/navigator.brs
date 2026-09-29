@@ -170,9 +170,9 @@ sub msNavActivate(manifest as object, s as object, buttonId as string, effects a
     msNavRun(manifest, s, button["action"], effects, true)
 end sub
 
-' The remote's Back key on a menu. A menu's back action says where Back goes (like a disc's
-' "Go Up"), run as a step up: no history is added, and a target already in history unwinds it.
-' Without back, Back returns through history, except on the root menu, where it leaves the disc
+' The remote's Back key on a menu. A menu's back action says where Back goes (its "Go Up"
+' target), run as a step up: no history is added, and a target already in history unwinds it.
+' Without back, Back returns through history, except on the root menu, where it leaves the title
 ' however the viewer got there. Back never traps: if back leaves the viewer on the same menu, they
 ' step back (or leave, on the root menu).
 sub msNavRemoteBack(manifest as object, s as object, effects as object)

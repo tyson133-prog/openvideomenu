@@ -101,7 +101,7 @@ class PlexServer(
 
     /**
      * One page of a section's movies, with their file paths. Paging the whole library is how the
-     * Disc Menus row finds titles for hundreds of manifests in a few requests instead of one each.
+     * Menus row finds titles for hundreds of manifests in a few requests instead of one each.
      */
     suspend fun moviesPage(sectionKey: String, start: Int, size: Int): MediaContainer =
         container(

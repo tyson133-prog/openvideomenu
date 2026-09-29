@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The app: choose Plex or Jellyfin, sign in, browse the library (disc menus first), open a menu
+  The app: choose Plex or Jellyfin, sign in, browse the library (menus first), open a menu
   (MenuView) or play a title without one. One screen group is visible at a time.
 -->
 <component name="MainScene" extends="Scene">
@@ -16,7 +16,7 @@
       <Label text="Where are your movies?" translation="[0, 330]" width="1920" horizAlign="center" color="0xE8E6E1FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="52" />
       </Label>
-      <Label text="ovmplayer plays titles from your media server and adds their disc menus." translation="[0, 420]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
+      <Label text="ovmplayer plays titles from your media server and adds their menus." translation="[0, 420]" width="1920" horizAlign="center" color="0x9BA0AAFF" />
       <LabelList id="chooseList" translation="[760, 520]" itemSize="[400, 72]" color="0xE8E6E1FF" focusedColor="0x131418FF" focusBitmapBlendColor="0xFFD27AFF" />
     </Group>
 

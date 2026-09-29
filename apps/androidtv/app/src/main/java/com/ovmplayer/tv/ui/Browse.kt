@@ -76,11 +76,11 @@ fun BrowseScreen(vm: AppViewModel) {
     val firstTile = remember { androidx.compose.ui.focus.FocusRequester() }
     val returnTile = remember { androidx.compose.ui.focus.FocusRequester() }
     var focusedOnce by rememberSaveable { mutableStateOf(false) }
-    val firstRowReady = rows[BrowseTab.Discs.id]?.isNotEmpty() == true
+    val firstRowReady = rows[BrowseTab.Menus.id]?.isNotEmpty() == true
     LaunchedEffect(firstRowReady) {
-        if (firstRowReady && !focusedOnce && tab == BrowseTab.Discs) {
+        if (firstRowReady && !focusedOnce && tab == BrowseTab.Menus) {
             kotlinx.coroutines.delay(100)
-            val back = vm.returnFocusKey?.let { key -> rows[BrowseTab.Discs.id]?.any { r -> r.tiles.any { it.key == key } } } == true
+            val back = vm.returnFocusKey?.let { key -> rows[BrowseTab.Menus.id]?.any { r -> r.tiles.any { it.key == key } } } == true
             focusedOnce = (back && runCatching { returnTile.requestFocus() }.isSuccess) ||
                 runCatching { firstTile.requestFocus() }.isSuccess
         }
@@ -113,8 +113,8 @@ fun BrowseScreen(vm: AppViewModel) {
                     items(tabRows ?: emptyList(), key = { "row:" + it.title }) { row ->
                         TileRowView(vm, row, if (row == tabRows?.firstOrNull()) firstTile else null, returnTile)
                     }
-                    if (tab is BrowseTab.Discs && tabRows != null && tabRows.none { it.title == "Disc Menus" }) {
-                        item { Text("No disc menus yet. Put a .openvideomenu.json manifest next to a title.", modifier = Modifier.padding(16.dp)) }
+                    if (tab is BrowseTab.Menus && tabRows != null && tabRows.none { it.title == "Menus" }) {
+                        item { Text("No menus yet. Put a .openvideomenu.json manifest next to a title.", modifier = Modifier.padding(16.dp)) }
                     }
                     if (tab is BrowseTab.Libraries && letterState != null) {
                         item(key = "letters") {
@@ -175,9 +175,9 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
                 tile.menu != null,
             )
         }
-        is Tile.Disc -> Quad(
-            tile.entry.title?.name ?: "Disc",
-            if (tile.pending) tile.entry.title?.year?.toString() ?: "" else discLabel(tile),
+        is Tile.Manifest -> Quad(
+            tile.entry.title?.name ?: "Menu",
+            if (tile.pending) tile.entry.title?.year?.toString() ?: "" else manifestLabel(tile),
             tile.show?.image,
             true,
         )
@@ -208,17 +208,17 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
 
 private data class Quad(val title: String, val subtitle: String, val thumb: String?, val hasMenu: Boolean)
 
-/** "Season 01" etc. from where the disc's manifest or bundle sits, e.g. Show/Season 01/Disc 2.ovmz */
-private fun discLabel(disc: Tile.Disc): String {
-    val parts = disc.entry.path.split('/')
+/** "Season 01" etc. from where the manifest or bundle sits, e.g. Show/Season 01/Volume 2.ovmz */
+private fun manifestLabel(manifest: Tile.Manifest): String {
+    val parts = manifest.entry.path.split('/')
     val file = parts.last().removeSuffix(".openvideomenu.json").removeSuffix(".ovmz")
     val folder = parts.getOrNull(parts.size - 2) ?: ""
-    return if (file.equals(disc.entry.title?.name, ignoreCase = true)) folder else file
+    return if (file.equals(manifest.entry.title?.name, ignoreCase = true)) folder else file
 }
 
 @Composable
 fun MenuBadge(modifier: Modifier = Modifier) = Text(
-    "DISC MENU",
+    "MENU",
     style = MaterialTheme.typography.labelSmall.copy(color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 9.sp),
     modifier = modifier.background(Gold, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
 )
@@ -270,14 +270,14 @@ fun AssetServerEditor(current: String?, onDone: (String?) -> Unit) {
     }
 }
 
-/** A show: its disc menus, then seasons and episodes. */
+/** A show: its menus, then seasons and episodes. */
 @Composable
 fun ShowScreen(vm: AppViewModel, state: ShowState) {
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 24.dp)) {
         Text(state.show.title, style = MaterialTheme.typography.headlineMedium)
         state.show.year?.let { Text("$it", color = Color.Gray) }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 48.dp)) {
-            if (state.discs.isNotEmpty()) item(key = "discs") { TileRowView(vm, TileRow("Discs", state.discs)) }
+            if (state.manifests.isNotEmpty()) item(key = "menus") { TileRowView(vm, TileRow("Menus", state.manifests)) }
             item(key = "seasons") {
                 Column {
                     Text("Seasons", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))

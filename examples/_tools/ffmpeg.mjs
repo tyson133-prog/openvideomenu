@@ -80,6 +80,6 @@ export async function download(url, file) {
  * Plex honours .plexignore (patterns, "*" = everything here), Jellyfin an .ignore file in the folder.
  */
 export function writeIgnoreFiles(dir) {
-  writeFileSync(join(dir, ".plexignore"), "# Menu art for a disc menu, not titles to list.\n*\n");
+  writeFileSync(join(dir, ".plexignore"), "# Menu art, not titles to list.\n*\n");
   writeFileSync(join(dir, ".ignore"), "");
 }

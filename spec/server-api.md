@@ -8,7 +8,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described i
 
 ## 1. Purpose
 
-A TV app needs two things to show a disc menu: the **manifest** and the **menu art** it names. This
+A TV app needs two things to show a menu: the **manifest** and the **menu art** it names. This
 API is how any server hands them to any app. Video is never part of it: the app plays media from the
 media server it already uses.
 

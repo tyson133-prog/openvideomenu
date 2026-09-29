@@ -90,7 +90,7 @@ fun ResumeScreen(
             }
             Button(onClick = { onChoose(r) }, modifier = if (i == 0) Modifier.focusRequester(focus) else Modifier) { Text(label) }
         }
-        Button(onClick = { onChoose(null) }) { Text("Disc menu") }
+        Button(onClick = { onChoose(null) }) { Text("Menu") }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     }
 }
@@ -149,7 +149,7 @@ fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit
 fun ChooseSourceScreen(onChoose: (String) -> Unit) = Centered {
     Text("Where are your movies?", style = MaterialTheme.typography.displaySmall)
     Spacer(Modifier.height(12.dp))
-    Text("ovmplayer plays titles from your media server and adds their disc menus.", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
+    Text("ovmplayer plays titles from your media server and adds their menus.", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
     Spacer(Modifier.height(32.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         val focus = remember { FocusRequester() }
@@ -248,7 +248,7 @@ fun QuickConnectScreen(server: String, code: String?, error: String?, onBack: ()
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
 
-/** A title's disc menu, with native playback layered on top when a button plays something. */
+/** A title's menu, with native playback layered on top when a button plays something. */
 @Composable
 fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     val context = LocalContext.current
@@ -348,7 +348,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 ?: open.entry.media.firstOrNull { open.media.containsKey(it.id) }
             Box(Modifier.fillMaxSize().background(Color.Black)) {
                 Centered {
-                    Text("This disc menu couldn't be shown", style = MaterialTheme.typography.headlineSmall)
+                    Text("This menu couldn't be shown", style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(8.dp))
                     // The page reports raw URLs; viewers get plain words (debug builds keep the detail).
                     val loadFailed = message.startsWith("Couldn't load")

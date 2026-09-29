@@ -1,16 +1,16 @@
 # Open Video Menu
 
-**An open, royalty-free format that brings disc-style menus to the media you already have.**
+**An open, royalty-free format that brings menus to the films and shows you already have.**
 
 > v0.1 **draft**. Names and fields may change before v1.0.
 
 ## Why
 
-When movies moved from discs to streaming, bonus features mostly disappeared. It wasn't that people stopped caring. The **menu** was gone, and the menu was what tied the extras to the film. Without it, extras became loose files next to the movie (easy to forget) or were dropped entirely.
+When movies went digital, bonus features mostly disappeared. It wasn't that people stopped caring. The **menu** was gone, and the menu was what tied the extras to the film. Without it, extras became loose files next to the movie (easy to forget) or were dropped entirely.
 
 Open Video Menu brings the menu back as a small JSON file that sits next to your movie:
 
-- a **disc-style menu**: background art, buttons with highlight states, remote-control navigation, submenus, scene selection
+- a **full menu**: background art, buttons with highlight states, remote-control navigation, submenus, scene selection
 - where every button just **points to** files you already have: the film, trailers, featurettes, episodes
 - in a format **any player can support for free**, with a plain list fallback so even the simplest player works
 
@@ -55,7 +55,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 | [`spec/schema/manifest.schema.json`](spec/schema/manifest.schema.json) | JSON Schema |
 | [`spec/server-api.md`](spec/server-api.md) | The API servers use to hand manifests and menu art to apps (draft) |
 | [`spec/COMPATIBILITY.md`](spec/COMPATIBILITY.md) | The backward-compatibility charter |
-| [`spec/profiles/dvd.md`](spec/profiles/dvd.md) | How disc importers map DVD menus into the format |
+| [`spec/profiles/dvd.md`](spec/profiles/dvd.md) | How importers map DVD menus into the format |
 | [`conformance/`](conformance) | Language-neutral test cases: manifests, input events, expected results |
 | [`packages/core`](packages/core) | Validator and navigation state machine (TypeScript, no dependencies) |
 | [`packages/renderer-web`](packages/renderer-web) | Reference web player: 10-foot UI, remote keys, pluggable playback |
@@ -79,9 +79,9 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 
 ## Roadmap
 
-- **Level 2:** motion menus, menu music, timeouts, disc-style variables, and audio/subtitle setup menus
+- **Level 2:** motion menus, menu music, timeouts, variables, and audio/subtitle setup menus
 - **Jellyfin plugin:** menus inside Jellyfin's web, TV and mobile apps
-- **.NET library:** so C# tools, such as disc importers and the Jellyfin plugin, can read and write manifests
+- **.NET library:** so C# tools, such as importers and the Jellyfin plugin, can read and write manifests
 - **Tools:** `openvideomenu init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
 - **v1.0:** a final name, a frozen format, the compatibility charter in force
 

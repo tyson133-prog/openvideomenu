@@ -1,10 +1,10 @@
 {
   "category": "General",
   "changelog": "First version: serves Open Video Menu manifests and menu art (API v1).",
-  "description": "Disc-style menus for your films and shows: serves .openvideomenu.json manifests and their menu art to Open Video Menu players such as ovmplayer, so no separate asset server is needed.",
+  "description": "Menus for your films and shows: serves .openvideomenu.json manifests and their menu art to Open Video Menu players such as ovmplayer, so no separate asset server is needed.",
   "guid": "6d1c3a52-4f0b-4d7e-9a5e-3c2b7f1e8a90",
   "name": "Open Video Menu",
-  "overview": "Disc menus for your library",
+  "overview": "Menus for your library",
   "owner": "openvideomenu",
   "targetAbi": "12.0.0.0",
   "timestamp": "2026-09-27T00:00:00.0000000Z",

@@ -1,6 +1,6 @@
 # Governance
 
-Open Video Menu is an open format for disc-style menus over
+Open Video Menu is an open format for menus over
 existing video files. This document says who decides what, and how that will change as the project grows.
 There is no foundation or company behind it; it doesn't need one yet.
 
@@ -22,7 +22,7 @@ permission or fee is needed (see [spec/LICENSE.md](spec/LICENSE.md)).
 
 ## How the format changes
 
-1. **Issue.** Describe the problem: what a disc (or an author) needs that the format can't express, or where
+1. **Issue.** Describe the problem: what a source (a DVD, a publisher's design) or an author needs that the format can't express, or where
    the spec is unclear.
 2. **Proposal.** A pull request against `spec/` that states the change, why it's needed, how it fits the
    compatibility charter, and the conformance cases that pin it down. A change without cases isn't finished.
@@ -32,7 +32,7 @@ permission or fee is needed (see [spec/LICENSE.md](spec/LICENSE.md)).
    openvideomenu.org are Open Video Menu versions.
 
 The editor aims to decide by what serves viewers and implementers, and to follow sources faithfully: menus
-should behave as close to their source (a disc, a publisher's design) as the format allows.
+should behave as close to their source (a DVD, a publisher's design) as the format allows.
 
 ## Growing up
 
