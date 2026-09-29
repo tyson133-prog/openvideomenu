@@ -60,6 +60,21 @@ describe("menuAssets", () => {
     expect(assets.some((a: string) => a.endsWith(".mkv"))).toBe(false);
   });
 
+  it("follows a resume's otherwise to the transition it plays", async () => {
+    const { menuAssets } = await import("../src/index.js");
+    const manifest = {
+      format: "openvideomenu", version: "0.1", title: { name: "T" },
+      media: { feature: { ref: "f.mp4" } },
+      menus: {
+        main: { canvas: { width: 720, height: 480 }, buttons: [{ id: "b", rect: [0, 0, 1, 1], action: { type: "resume", otherwise: { type: "goto", menu: "pick", transition: "menus/to-pick.mp4" } } }] },
+        pick: { canvas: { width: 720, height: 480 }, buttons: [{ id: "p", rect: [0, 0, 1, 1], action: { type: "play", media: "feature" } }] },
+      },
+      rootMenu: "main",
+      fallback: [{ label: "Movie", items: [{ label: "Play", action: { type: "play", media: "feature" } }] }],
+    };
+    expect(menuAssets(manifest as never)).toEqual(["menus/to-pick.mp4"]);
+  });
+
   it("follows set actions to the transition their then-action plays", async () => {
     const { menuAssets } = await import("../src/index.js");
     const manifest = {

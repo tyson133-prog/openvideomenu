@@ -1,0 +1,54 @@
+{
+  "description": "Resume with a fallback, like a DVD's \"if stopped, LinkRSM, else go to the picker\": with nothing stopped, resume runs its otherwise (a goto that adds history as the button's own goto would); after a stop it resumes and otherwise is ignored; finishing the title clears the stop, so the fallback applies again. In a menu's back, otherwise runs as a step up (history unwinds).",
+  "level": 1,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Resume or Choose" },
+    "media": {
+      "wide": { "ref": "Film (Widescreen).mkv", "kind": "feature" },
+      "full": { "ref": "Film (Fullscreen).mkv", "kind": "feature" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "lang" }, "action": { "type": "play", "media": "wide" } },
+          { "id": "lang", "rect": [100, 160, 200, 40], "nav": { "up": "play" }, "action": { "type": "goto", "menu": "languages" } }
+        ]
+      },
+      "languages": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "buttons": [
+          { "id": "go", "rect": [100, 100, 200, 40], "action": { "type": "resume", "otherwise": { "type": "goto", "menu": "picker", "button": "wide" } } }
+        ]
+      },
+      "picker": {
+        "canvas": { "width": 720, "height": 480, "aspect": "16:9" },
+        "back": { "type": "resume", "otherwise": { "type": "goto", "menu": "main" } },
+        "buttons": [
+          { "id": "wide", "rect": [100, 100, 200, 40], "nav": { "down": "full" }, "action": { "type": "play", "media": "wide" } },
+          { "id": "full", "rect": [100, 160, 200, 40], "nav": { "up": "wide" }, "action": { "type": "play", "media": "full" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Widescreen", "action": { "type": "play", "media": "wide" } }, { "label": "Fullscreen", "action": { "type": "play", "media": "full" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "lang" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "go" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "picker", "focus": "wide", "effects": [{ "type": "activated", "menu": "languages", "button": "go" }] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "effects": [] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "effects": [{ "type": "exit" }] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "wide", "start": 0 }] } },
+    { "event": { "type": "stopped", "position": 95.5 }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "lang" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "languages", "focus": "go" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "languages", "button": "go" }, { "type": "play", "media": "wide", "start": 95.5 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "languages", "focus": "go" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "picker", "focus": "wide", "effects": [{ "type": "activated", "menu": "languages", "button": "go" }] } }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "A resume's otherwise must not be another resume, must reference things that exist, and (when the resume is an after-action) must not start playback.",
+  "level": 1,
+  "valid": false,
+  "errors": ["/menus/main/buttons/0/action/otherwise/type", "/menus/main/buttons/1/action/otherwise/menu", "/menus/main/buttons/2/action/after/otherwise"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Resume" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "resume", "otherwise": { "type": "resume" } } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "resume", "otherwise": { "type": "goto", "menu": "nowhere" } } },
+          { "id": "c", "rect": [0, 40, 10, 10], "action": { "type": "play", "media": "feature", "after": { "type": "resume", "otherwise": { "type": "play", "media": "feature" } } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

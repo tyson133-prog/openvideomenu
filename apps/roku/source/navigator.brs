@@ -249,6 +249,10 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
     else if t = "resume"
         if s.lastStop <> invalid
             msNavStartPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], invalid, effects)
+        else if action["otherwise"] <> invalid
+            ' Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if
+            ' stopped, LinkRSM, else go to the picker").
+            msNavRunOpts(manifest, s, action["otherwise"], effects, pushHistory, up)
         end if
     else if t = "set"
         vars = msCopyAA(s.vars)

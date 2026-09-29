@@ -40,6 +40,9 @@ public sealed partial class Manifest
                 case SetAction s:
                     Walk(s.Then);
                     break;
+                case ResumeAction r:
+                    Walk(r.Otherwise);
+                    break;
             }
         }
 

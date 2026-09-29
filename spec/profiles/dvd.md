@@ -19,6 +19,7 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Highlight subpicture + colour/contrast per state | Render per-button PNGs with alpha: the `selected` colours → `states.selected.image`, the `action` colours → `states.activated.image`. A hard-edged look is authentic. Don't smooth it. |
 | Button command resolving to title/chapter | `play { media, chapter }`, where `media` points to the file that holds that title |
 | Button command resolving to a menu | `goto { menu, button? }` |
+| Resume (`LinkRSM`), including a conditional one such as `if (gN != 0) LinkRSM` else a link elsewhere | `resume`; the path taken when there's nothing to resume becomes its `otherwise` (e.g. `goto` a widescreen/fullscreen picker), so the button works the first time too. |
 | Title that plays other titles first (e.g. intro + episode) | `playAll { items }` |
 | "Play all" titles (one PGC chaining episodes) | `playAll`, or `play` of the combined file if one was written |
 | Button text (e.g. from OCR) | `label`, and `a11yLabel` if the text is unhelpful |

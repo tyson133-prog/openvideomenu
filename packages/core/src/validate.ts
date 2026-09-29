@@ -38,7 +38,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   set: ["type", "var", "value", "then"],
   goto: ["type", "menu", "button", "transition", "history"],
   back: ["type"],
-  resume: ["type"],
+  resume: ["type", "otherwise"],
   activate: ["type", "button"],
 };
 
@@ -427,6 +427,13 @@ class Validator {
         if (!Number.isInteger(value.value)) this.error(`${path}/value`, "Must be an integer.");
         if (value.then !== undefined) this.action(value.then, `${path}/then`, mediaIds, menus, ownButtons);
         break;
+      case "resume":
+        if (value.otherwise !== undefined) {
+          if (isObject(value.otherwise) && value.otherwise.type === "resume")
+            this.error(`${path}/otherwise/type`, "Must not be another resume: there would still be nothing to resume.");
+          else this.action(value.otherwise, `${path}/otherwise`, mediaIds, menus, ownButtons);
+        }
+        break;
       case "activate":
         if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
@@ -448,8 +455,11 @@ class Validator {
     }
     if ((type === "play" || type === "playAll") && value.after !== undefined) {
       const after: unknown = value.after;
+      const otherwise: unknown = isObject(after) && after.type === "resume" ? after.otherwise : undefined;
       if (isObject(after) && (after.type === "play" || after.type === "playAll"))
         this.error(`${path}/after`, "After-playback action must not start another playback; use playAll instead.");
+      else if (isObject(otherwise) && (otherwise.type === "play" || otherwise.type === "playAll"))
+        this.error(`${path}/after/otherwise`, "After-playback action must not start another playback; use playAll instead.");
       else this.action(after, `${path}/after`, mediaIds, menus);
     }
   }

@@ -80,10 +80,16 @@ public sealed class BackAction : MenuAction
     public override string Type => "back";
 }
 
-/// <summary>Continue from where the viewer last stopped.</summary>
+/// <summary>
+/// Continue from where the viewer last stopped. When there's nothing to resume, run
+/// <see cref="Otherwise"/> instead (a DVD's "if stopped, LinkRSM, else go to the picker").
+/// </summary>
 public sealed class ResumeAction : MenuAction
 {
     public override string Type => "resume";
+
+    /// <summary>Runs as if it were the action itself when there's nothing to resume. Not another resume.</summary>
+    public MenuAction? Otherwise { get; set; }
 }
 
 /// <summary>Press a button of the current menu. Only allowed in a menu's <c>back</c>.</summary>

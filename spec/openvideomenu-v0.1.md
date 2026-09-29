@@ -145,7 +145,7 @@ Every action is an object with a `type`:
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
 | `activate` | `button` | Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu's `back` (§6.2). |
 | `set` | `var`, `value`, `then?` | *(Level 2)* Set a variable, then optionally run another action (§6.1). |
-| `resume` | — | Continue the last playback the viewer stopped early, from where they stopped. Otherwise it does nothing. |
+| `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped. When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
 1. **Start:** if `firstPlay` exists, run it. Otherwise open `rootMenu`. A manifest without menus shows the fallback list.
@@ -153,7 +153,7 @@ Every action is an object with a `type`:
 3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the media and position for `resume`.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic.
-6. **`after`** MUST NOT be `play` or `playAll`. Use `playAll` for sequences.
+6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
 
 ### 6.1 Variables and track selection (Level 2)
@@ -204,6 +204,7 @@ On a DVD, the remote's Return key doesn't retrace every menu you visited: each m
 Validators MUST reject a manifest when:
 - a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button` or `nav` target doesn't exist, or
 - `activate` is used anywhere but a menu's `back`, or
+- a `resume`'s `otherwise` is another `resume`, or
 - button ids are duplicated within a menu, or
 - a chapter number is out of range, or
 - `fallback` is empty or all of it is hidden.

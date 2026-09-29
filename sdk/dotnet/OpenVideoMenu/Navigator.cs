@@ -489,10 +489,15 @@ public static class Navigator
             case PlayAllAction pa:
                 StartPlayback(manifest, s, pa.Items, pa.After, effects);
                 break;
-            case ResumeAction:
+            case ResumeAction resume:
                 if (s.LastStop is { } stop)
                 {
                     StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects);
+                }
+                else if (resume.Otherwise is not null)
+                {
+                    // Nothing to resume: the fallback runs as if it were the action itself.
+                    Run(manifest, s, resume.Otherwise, effects, pushHistory, up);
                 }
 
                 break;

@@ -292,6 +292,9 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
       break;
     case "resume":
       if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects);
+      // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
+      // LinkRSM, else go to the picker").
+      else if (action.otherwise) run(manifest, s, action.otherwise, effects, opts);
       break;
     case "set":
       s.vars = { ...s.vars, [action.var]: action.value };

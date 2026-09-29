@@ -36,7 +36,7 @@ internal sealed class Validator
         ("set", ["type", "var", "value", "then"]),
         ("goto", ["type", "menu", "button", "transition", "history"]),
         ("back", ["type"]),
-        ("resume", ["type"]),
+        ("resume", ["type", "otherwise"]),
         ("activate", ["type", "button"]),
     ];
 
@@ -752,6 +752,20 @@ internal sealed class Validator
                 }
 
                 break;
+            case "resume":
+                if (action["otherwise"] is { } otherwise)
+                {
+                    if (Obj.TryFrom(otherwise, out var oo) && oo["type"] is { ValueKind: JsonValueKind.String } ot && ot.GetString() == "resume")
+                    {
+                        Error($"{path}/otherwise/type", "Must not be another resume: there would still be nothing to resume.");
+                    }
+                    else
+                    {
+                        Action(otherwise, $"{path}/otherwise", mediaIds, menus, ownButtons);
+                    }
+                }
+
+                break;
             case "activate":
                 if (ownButtons is null)
                 {
@@ -794,9 +808,14 @@ internal sealed class Validator
 
         if (type is "play" or "playAll" && action["after"] is { } after)
         {
+            var afterOtherwise = Obj.TryFrom(after, out var ra) && ra["type"] is { ValueKind: JsonValueKind.String } rt && rt.GetString() == "resume" ? ra["otherwise"] : null;
             if (Obj.TryFrom(after, out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } at && at.GetString() is "play" or "playAll")
             {
                 Error($"{path}/after", "After-playback action must not start another playback; use playAll instead.");
+            }
+            else if (Obj.TryFrom(afterOtherwise, out var oa) && oa["type"] is { ValueKind: JsonValueKind.String } ot && ot.GetString() is "play" or "playAll")
+            {
+                Error($"{path}/after/otherwise", "After-playback action must not start another playback; use playAll instead.");
             }
             else
             {

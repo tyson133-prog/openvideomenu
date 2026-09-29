@@ -618,6 +618,36 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "resume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "otherwise": {
+                "description": "Runs instead when there's nothing to resume (the viewer hasn't stopped a title partway). Not another resume.",
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/action"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "not": {
+                          "const": "resume"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       ]
     },

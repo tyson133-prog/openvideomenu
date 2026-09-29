@@ -16,6 +16,7 @@ export function menuAssets(manifest: Manifest): string[] {
     if (action.type === "goto") add(action.transition);
     if ((action.type === "play" || action.type === "playAll") && action.after) walkAction(action.after);
     if (action.type === "set") walkAction(action.then);
+    if (action.type === "resume") walkAction(action.otherwise);
   };
 
   for (const menu of Object.values(manifest.menus ?? {})) {

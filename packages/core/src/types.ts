@@ -178,7 +178,8 @@ export type Action =
       history?: "push" | "replace";
     }
   | { type: "back" }
-  | { type: "resume" }
+  /** Continue the last stopped playback; when there's nothing to resume, run `otherwise` (not another resume). */
+  | { type: "resume"; otherwise?: Action }
   /** Press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
   | { type: "activate"; button: string }
   /** Level 2: set a variable, then (optionally) run another action — e.g. choose a soundtrack and return to the menu. */
