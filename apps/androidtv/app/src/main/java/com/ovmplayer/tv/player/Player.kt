@@ -34,6 +34,8 @@ data class PlayRequest(
     val audioTrack: Int? = null,
     /** 1-based subtitle track to show, 0 = subtitles off; null = default. */
     val subtitleTrack: Int? = null,
+    /** 1-based video track (angles kept as video tracks of one file); null = default. */
+    val videoTrack: Int? = null,
 )
 
 /**
@@ -57,8 +59,13 @@ fun selectTracks(
     tracks: androidx.media3.common.Tracks,
     audio: Int?,
     subtitle: Int?,
+    video: Int? = null,
 ): androidx.media3.common.TrackSelectionParameters {
     val b = params.buildUpon()
+    val videoGroups = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
+    if (video != null && video in 1..videoGroups.size && videoGroups[video - 1].isSupported) {
+        b.setOverrideForType(androidx.media3.common.TrackSelectionOverride(videoGroups[video - 1].mediaTrackGroup, 0))
+    }
     val audioGroups = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }
     if (audio != null && audio in 1..audioGroups.size) {
         b.setOverrideForType(androidx.media3.common.TrackSelectionOverride(audioGroups[audio - 1].mediaTrackGroup, 0))
@@ -121,10 +128,10 @@ fun VideoPlayer(
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 if (tracksApplied || tracks.groups.isEmpty()) return
                 tracksApplied = true
-                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack)
+                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack, request.videoTrack)
                 if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d(
                     "ovmplayer",
-                    "tracks: audio=${request.audioTrack} subtitle=${request.subtitleTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
+                    "tracks: audio=${request.audioTrack} subtitle=${request.subtitleTrack} video=${request.videoTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
                 )
             }
 

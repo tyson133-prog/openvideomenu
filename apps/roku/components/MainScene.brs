@@ -548,6 +548,7 @@ sub openWhenReady()
     files = m.opening.files
     if m.opening.movie = invalid then files = manifestEpisodeFiles(m.opening.entry["id"]) ' a TV show's menu: its media are episodes
     m.menuMedia = msResolveMedia(m.opening.entry, files)
+    m.menuAngles = msResolveAngles(m.opening.entry, files)
     ' Stopped partway last time: ask first. Every title the menu plays that
     ' was stopped partway (the film, an extra, an episode), most recently played first; on a movie
     ' menu the film always leads the list ("Play …" when it wasn't started), so it's one press away.
@@ -795,7 +796,17 @@ sub onPlayRequest()
         titleStopped(req.start)
         return
     end if
+    ' Angle 2 and up of angle files is another file; without a match it plays angle 1 (spec 4.1).
+    ' Angles kept as video tracks play the default track: Roku can't switch video tracks.
+    main = target
+    if req.angle <> invalid and req.angle > 1 and m.menuAngles <> invalid and m.menuAngles[req.media] <> invalid
+        other = m.menuAngles[req.media][req.angle - 2]
+        if other <> invalid then target = other
+        print "ovmplayer: angle "; req.angle; " of "; req.media; " -> "; target.path
+    end if
     startTitle(req, target)
+    ' Stops are remembered on the media itself: the angles line up in time.
+    if m.playing <> invalid then m.playing.stopItem = main.item
 end sub
 
 ' Play one file: req { start, audio?, subtitle? } from a menu button or a library tile.
@@ -941,7 +952,7 @@ end sub
 
 sub stopTitle()
     position = playerPosition()
-    if m.playing <> invalid then rememberStop(m.playing.item, position, m.playing.req)
+    if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), position, m.playing.req)
     report("/Sessions/Playing/Stopped")
     closePlayer()
     titleStopped(position)
@@ -1010,7 +1021,7 @@ sub reportProgress()
     if m.playing = invalid or m.player = invalid then return
     report("/Sessions/Playing/Progress")
     ' Home closes the app without warning, so where the viewer is gets saved as they watch.
-    rememberStop(m.playing.item, playerPosition(), m.playing.req)
+    rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)
 end sub
 
 sub onReported(res as object, ctx as dynamic)

@@ -40,7 +40,18 @@ data class CatalogEntry(
 data class CatalogTitle(val name: String, val year: Int? = null)
 
 @Serializable
-data class CatalogMedia(val id: String, val kind: String? = null, val label: String? = null, val ref: JsonElement, val path: String? = null)
+data class CatalogMedia(
+    val id: String,
+    val kind: String? = null,
+    val label: String? = null,
+    val ref: JsonElement,
+    val path: String? = null,
+    /** Level 2: the media's other angles as files (angle 2, 3, …), matched like the media itself. */
+    val angles: List<CatalogAngle> = emptyList(),
+)
+
+@Serializable
+data class CatalogAngle(val ref: JsonElement, val path: String? = null)
 
 /**
  * Talks to the Open Video Menu asset server. [auth] (the viewer's Plex or Jellyfin sign-in, see

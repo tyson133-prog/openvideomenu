@@ -60,6 +60,10 @@ export interface Media {
   /** Seconds. */
   duration?: number;
   chapters?: Chapter[];
+  /** Level 2: the other angles as files; ref is angle 1, angles[0] angle 2, … (spec §4.1). */
+  angles?: MediaRef[];
+  /** Level 2: the file's first N video tracks are angles 1..N (spec §4.1). */
+  angleTracks?: number;
 }
 
 export interface Chapter {
@@ -198,6 +202,8 @@ export interface PlayItem {
   audio?: VarOrNumber;
   /** Level 2: subtitle track, 1-based among the media's subtitle tracks; 0 = off. Default: the player's choice. */
   subtitle?: VarOrNumber;
+  /** Level 2: angle of media with angles, 1-based. Default: @angle. */
+  angle?: VarOrNumber;
 }
 
 export type Action =

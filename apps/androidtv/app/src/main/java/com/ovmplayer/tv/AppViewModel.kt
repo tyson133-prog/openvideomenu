@@ -81,7 +81,14 @@ data class Resume(
     val playedAtMs: Long,
 )
 
-data class OpenMenu(val title: String, val entry: CatalogEntry, val media: Map<String, Playable>, val lastStop: LastStop?)
+data class OpenMenu(
+    val title: String,
+    val entry: CatalogEntry,
+    val media: Map<String, Playable>,
+    val lastStop: LastStop?,
+    /** Level 2: media id → its angle 2, 3, … files (null where the library has no match). */
+    val angles: Map<String, List<Playable?>> = emptyMap(),
+)
 
 data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val manifests: List<Tile.Manifest>)
 
@@ -658,7 +665,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             android.util.Log.d("ovmplayer", "open ${movie.id} -> ${full.id}; files=${files.map { it.first }}")
             android.util.Log.d("ovmplayer", "manifest media=${entry.media.map { it.id + "=" + it.path }}; resolved=${media.mapValues { it.value.item.id + ":" + it.value.file.path }}")
         }
-        openAsking(full.title, entry, media, film = full)
+        openAsking(full.title, entry, media, film = full, angles = MenuMatcher.resolveAngles(entry, files))
     }
 
     /**
@@ -666,7 +673,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * ask first: the most recently played first, at most four. The menu's
      * own Resume button gets the newest either way.
      */
-    private fun openAsking(title: String, entry: CatalogEntry, media: Map<String, Playable>, film: Item?) {
+    private fun openAsking(title: String, entry: CatalogEntry, media: Map<String, Playable>, film: Item?, angles: Map<String, List<Playable?>> = emptyMap()) {
         val all = media.entries.distinctBy { it.value.item.id }.map { (id, p) ->
             val point = resumePointOf(p.item)
             Resume(id, p.item, point.position, entry.media.firstOrNull { it.id == id }?.label ?: p.item.title, point.audio, point.subtitle, point.atMs)
@@ -677,7 +684,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val others = all.filter { it !== filmEntry && it.position > 0 }.sortedByDescending { it.playedAtMs }
         val resumes = ((if (filmEntry != null && (filmEntry.position > 0 || others.isNotEmpty())) listOf(filmEntry) else emptyList()) + others).take(4)
         val newest = resumes.filter { it.position > 0 }.maxByOrNull { it.playedAtMs }
-        val open = OpenMenu(title, entry, media, newest?.let { LastStop(it.mediaId, it.position) })
+        val open = OpenMenu(title, entry, media, newest?.let { LastStop(it.mediaId, it.position) }, angles)
         val justTheFilm = resumes.size == 1 && filmEntry != null && resumes[0] === filmEntry
         go(if (newest != null) Screen.ResumeAsk(open, resumes, justTheFilm) else Screen.Menu(open))
     }
@@ -776,7 +783,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val extras = show?.let { attempt { src.extras(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val files = filesOf(episodes + extras)
         val media = MenuMatcher.resolveMedia(manifest.entry, files)
-        openAsking(manifest.entry.title?.name ?: show?.title ?: "Menu", manifest.entry, media, film = null)
+        openAsking(manifest.entry.title?.name ?: show?.title ?: "Menu", manifest.entry, media, film = null, angles = MenuMatcher.resolveAngles(manifest.entry, files))
     }
 
     /** What plays now outside a menu, so where it stops can be remembered. */
@@ -834,10 +841,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Resolve a menu button's media to something the native player can play. */
-    suspend fun requestFor(open: OpenMenu, mediaId: String, start: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest? {
+    suspend fun requestFor(
+        open: OpenMenu,
+        mediaId: String,
+        start: Double,
+        audio: Int? = null,
+        subtitle: Int? = null,
+        angle: Int? = null,
+        videoTrack: Int? = null,
+    ): PlayRequest? {
         val src = source ?: return null
-        val (item, file) = open.media[mediaId] ?: return null
-        return attempt { src.playRequest(item, file, start, audio, subtitle) }.getOrNull()?.also { touchStop(item) }
+        val main = open.media[mediaId] ?: return null
+        // Angle 2 and up of angle files is another file; without a match it plays angle 1 (spec 4.1).
+        val (item, file) = angle?.takeIf { it > 1 }?.let { open.angles[mediaId]?.getOrNull(it - 2) } ?: main
+        // Stops are remembered on the media itself: the angles line up in time.
+        return attempt { src.playRequest(item, file, start, audio, subtitle) }.getOrNull()
+            ?.copy(videoTrack = videoTrack)
+            ?.also { touchStop(main.item) }
     }
 
     fun imageUrl(image: String?, width: Int, height: Int): String? = image?.let { source?.imageUrl(it, width, height) }

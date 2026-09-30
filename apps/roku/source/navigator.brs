@@ -412,7 +412,25 @@ function msNavPlayEffect(manifest as object, item as object, s as object) as obj
     if subtitle = invalid and msNavIsNumber(s.player["@subtitle"]) then subtitle = s.player["@subtitle"]
     if audio <> invalid then effect.audio = audio
     if subtitle <> invalid then effect.subtitle = subtitle
+    ' Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
+    angles = msNavAngleCount(manifest, item["media"])
+    if angles > 1
+        wanted = msNavVarOrNumber(item["angle"], s)
+        if wanted = invalid then wanted = msNavRead(s, "@angle")
+        if not msNavIsNumber(wanted) then wanted = 1
+        if wanted < 1 or wanted > angles then wanted = 1
+        effect.angle = wanted
+    end if
     return effect
+end function
+
+' How many angles a media item has (spec §4.1): 1 when it has none.
+function msNavAngleCount(manifest as object, media as string) as integer
+    info = manifest["media"][media]
+    if info = invalid then return 1
+    if info["angles"] <> invalid then return 1 + info["angles"].Count()
+    if info["angleTracks"] <> invalid then return info["angleTracks"]
+    return 1
 end function
 
 ' A track number, or {"var": name} holding one.

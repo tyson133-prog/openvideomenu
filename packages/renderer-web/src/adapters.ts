@@ -14,6 +14,13 @@ export interface PlayRequest {
   audio?: number;
   /** Level 2: 1-based subtitle track, 0 = off; undefined = player default. */
   subtitle?: number;
+  /**
+   * Level 2, media with angles (spec §4.1): which angle, 1-based. For angle files, `ref` and `url` are
+   * already that angle's file; hosts that match files by media id pick the matching angle file.
+   */
+  angle?: number;
+  /** Level 2: for media whose angles are video tracks, the 1-based video track to show. */
+  videoTrack?: number;
   label: string;
 }
 

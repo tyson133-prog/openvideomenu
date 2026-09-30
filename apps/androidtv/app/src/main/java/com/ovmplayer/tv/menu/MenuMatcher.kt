@@ -42,11 +42,18 @@ object MenuMatcher {
 
     /** For each manifest media id, the candidate file (from [files]) it refers to, if any. */
     fun <T> resolveMedia(entry: CatalogEntry, files: List<Pair<String, T>>): Map<String, T> =
-        entry.media.mapNotNull { m ->
-            val path = m.path ?: return@mapNotNull null
-            files.map { (file, value) -> suffixScore(path, file) to value }
-                .filter { it.first >= MIN_SEGMENTS }
-                .maxByOrNull { it.first }
-                ?.let { m.id to it.second }
-        }.toMap()
+        entry.media.mapNotNull { m -> m.path?.let { best(it, files) }?.let { m.id to it } }.toMap()
+
+    /**
+     * For each manifest media id with angle files, the candidate file for angle 2, 3, … (null where
+     * none matches; that angle then plays angle 1).
+     */
+    fun <T> resolveAngles(entry: CatalogEntry, files: List<Pair<String, T>>): Map<String, List<T?>> =
+        entry.media.filter { it.angles.isNotEmpty() }.associate { m -> m.id to m.angles.map { a -> a.path?.let { best(it, files) } } }
+
+    private fun <T> best(path: String, files: List<Pair<String, T>>): T? =
+        files.map { (file, value) -> suffixScore(path, file) to value }
+            .filter { it.first >= MIN_SEGMENTS }
+            .maxByOrNull { it.first }
+            ?.second
 }

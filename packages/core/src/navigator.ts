@@ -37,7 +37,16 @@ export type NavEvent =
 
 export type Effect =
   /** Start playing a media item from `start` seconds. */
-  | { type: "play"; media: string; start: number; /** Level 2 */ audio?: number; subtitle?: number }
+  | {
+      type: "play";
+      media: string;
+      start: number;
+      /** Level 2 */
+      audio?: number;
+      subtitle?: number;
+      /** Level 2: which angle, for media with angles (§4.1): 1 = ref, 2 = angles[0] or video track 2, … */
+      angle?: number;
+    }
   /** Briefly show the button's activated state. */
   | { type: "activated"; menu: string; button: string }
   /** "back" was pressed at the top of the menu history; the host may close the player. */
@@ -448,13 +457,30 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState): Effect {
   // like a DVD's SetSTN, or as the player reported them).
   const audio = value(item.audio) ?? (typeof s.player["@audio"] === "number" && s.player["@audio"] > 0 ? s.player["@audio"] : undefined);
   const subtitle = value(item.subtitle) ?? (typeof s.player["@subtitle"] === "number" ? s.player["@subtitle"] : undefined);
+  // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
+  const angles = angleCount(manifest, item.media);
+  let angle: number | undefined;
+  if (angles > 1) {
+    const current = s.player["@angle"];
+    const wanted = value(item.angle) ?? (typeof current === "number" ? current : 1);
+    angle = wanted >= 1 && wanted <= angles ? wanted : 1;
+  }
   return {
     type: "play",
     media: item.media,
     start: startTime(manifest, item),
     ...(audio !== undefined ? { audio } : {}),
     ...(subtitle !== undefined ? { subtitle } : {}),
+    ...(angle !== undefined ? { angle } : {}),
   };
+}
+
+/** How many angles a media item has (§4.1): 1 when it has none. */
+export function angleCount(manifest: Manifest, media: string): number {
+  const m = manifest.media[media];
+  if (!m) return 1;
+  if (m.angles) return 1 + m.angles.length;
+  return m.angleTracks ?? 1;
 }
 
 /** Start offset in seconds for a play item (chapter wins over start). */

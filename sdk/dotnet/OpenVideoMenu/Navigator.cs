@@ -56,8 +56,11 @@ public abstract record NavEvent
 /// <summary>Something the player must do.</summary>
 public abstract record Effect
 {
-    /// <summary>Start playing a media entry from <paramref name="Start"/> seconds, with tracks when given (Level 2).</summary>
-    public sealed record Play(string Media, double Start, int? Audio = null, int? Subtitle = null) : Effect;
+    /// <summary>
+    /// Start playing a media entry from <paramref name="Start"/> seconds, with tracks when given (Level 2).
+    /// <paramref name="Angle"/> is set for media with angles (spec §4.1): 1 = its ref, 2 = Angles[0] or video track 2, ….
+    /// </summary>
+    public sealed record Play(string Media, double Start, int? Audio = null, int? Subtitle = null, int? Angle = null) : Effect;
 
     /// <summary>Briefly show the button's activated state.</summary>
     public sealed record Activated(string Menu, string Button) : Effect;
@@ -735,7 +738,16 @@ public static class Navigator
     {
         var audio = item.Audio?.Resolve(s.Read) ?? (s.Player.TryGetValue("@audio", out var a) && a.Number > 0 ? a.Number : null);
         var subtitle = item.Subtitle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@subtitle", out var t) ? t.Number : null);
-        return new(item.Media, StartTime(manifest, item), audio, subtitle);
+        // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
+        int? angle = null;
+        var angles = manifest.Media.TryGetValue(item.Media, out var m) ? m.AngleCount : 1;
+        if (angles > 1)
+        {
+            var wanted = item.Angle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@angle", out var g) ? g.Number : null) ?? 1;
+            angle = wanted >= 1 && wanted <= angles ? wanted : 1;
+        }
+
+        return new(item.Media, StartTime(manifest, item), audio, subtitle, angle);
     }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>

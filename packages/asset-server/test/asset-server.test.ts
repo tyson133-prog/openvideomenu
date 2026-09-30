@@ -15,7 +15,7 @@ const MANIFEST = {
   title: { name: "Movie", year: 2020 },
   media: {
     feature: { ref: "Movie (2020).mp4", kind: "feature" },
-    trailer: { ref: "Trailers/Trailer.mp4", kind: "trailer" },
+    trailer: { ref: "Trailers/Trailer.mp4", kind: "trailer", angles: ["Trailers/Trailer (angle 2).mp4", { scheme: "plex", id: "9" }] },
     web: { ref: "https://example.com/a.m3u8" },
   },
   menus: {
@@ -73,7 +73,17 @@ describe("Catalog", () => {
     expect(movie.url).toBe("/v1/files/0/Movie%20(2020)/Movie%20(2020).openvideomenu.json");
     expect(movie.media).toEqual([
       { id: "feature", kind: "feature", label: undefined, ref: "Movie (2020).mp4", path: "Movie (2020)/Movie (2020).mp4" },
-      { id: "trailer", kind: "trailer", label: undefined, ref: "Trailers/Trailer.mp4", path: "Movie (2020)/Trailers/Trailer.mp4" },
+      {
+        id: "trailer",
+        kind: "trailer",
+        label: undefined,
+        ref: "Trailers/Trailer.mp4",
+        path: "Movie (2020)/Trailers/Trailer.mp4",
+        angles: [
+          { ref: "Trailers/Trailer (angle 2).mp4", path: "Movie (2020)/Trailers/Trailer (angle 2).mp4" },
+          { ref: { scheme: "plex", id: "9" }, path: undefined },
+        ],
+      },
       { id: "web", kind: undefined, label: undefined, ref: "https://example.com/a.m3u8", path: undefined },
     ]);
     expect(movie.assets).toEqual([

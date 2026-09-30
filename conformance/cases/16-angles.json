@@ -1,0 +1,55 @@
+{
+  "description": "Level 2 angles: media with angle files and with angle video tracks. Playback uses @angle (default 1), a set on @angle (a DVD's SetSTN), or the item's own angle from a variable; an angle the media doesn't have plays angle 1; media without angles gets no angle in the play effect.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Angles" },
+    "vars": { "which": 2 },
+    "media": {
+      "feature": { "ref": "Film.mkv", "angles": ["Film (angle 2).mkv", "Film (angle 3).mkv"] },
+      "sing": { "ref": "Songs.mkv", "angleTracks": 2 },
+      "extra": { "ref": "Extra.mkv" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "p1", "rect": [10, 10, 100, 30], "nav": { "down": "p3" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "p3", "rect": [10, 50, 100, 30], "nav": { "up": "p1", "down": "lyrics" },
+            "action": { "type": "set", "var": "@angle", "value": 3, "then": { "type": "play", "media": "feature" } } },
+          { "id": "lyrics", "rect": [10, 90, 100, 30], "nav": { "up": "p3", "down": "extra" },
+            "action": { "type": "play", "media": "sing", "angle": { "var": "which" } } },
+          { "id": "extra", "rect": [10, 130, 100, 30], "nav": { "up": "lyrics", "down": "big" }, "action": { "type": "play", "media": "extra" } },
+          { "id": "big", "rect": [10, 170, 100, 30], "nav": { "up": "extra" }, "action": { "type": "play", "media": "sing" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "p1" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "p1" }, { "type": "play", "media": "feature", "start": 0, "angle": 1 }] } },
+    { "event": { "type": "stopped", "position": 10 }, "expect": { "mode": "menu", "focus": "p1" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "p3" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "p3" }, { "type": "play", "media": "feature", "start": 0, "angle": 3 }] } },
+    { "event": { "type": "stopped", "position": 20 }, "expect": { "mode": "menu", "focus": "p3" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "lyrics" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "lyrics" }, { "type": "play", "media": "sing", "start": 0, "angle": 2 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "focus": "lyrics" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "extra" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "extra" }, { "type": "play", "media": "extra", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "focus": "extra" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "big" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "big" }, { "type": "play", "media": "sing", "start": 0, "angle": 1 }] } },
+    { "event": { "type": "stopped", "position": 5 }, "expect": { "mode": "menu", "focus": "big" } },
+    { "event": { "type": "player", "values": { "@angle": 2 } } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "extra" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "lyrics" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "p3" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "p1" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "p1" }, { "type": "play", "media": "feature", "start": 0, "angle": 2 }] } }
+  ]
+}

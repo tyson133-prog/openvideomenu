@@ -17,6 +17,8 @@ export interface CatalogMedia {
    * match its trailing segments against the file paths their media server reports.
    */
   path?: string;
+  /** Level 2: the media's other angles as files (angle 2, 3, …), each with its ref and path as above. */
+  angles?: { ref: MediaRef; path?: string }[];
 }
 
 export interface CatalogEntry {
@@ -323,6 +325,9 @@ export class Catalog {
         label: media.label,
         ref: media.ref,
         path: typeof media.ref === "string" && isRelative(media.ref) ? inRoot(media.ref) : undefined,
+        ...(media.angles
+          ? { angles: media.angles.map((ref) => ({ ref, path: typeof ref === "string" && isRelative(ref) ? inRoot(ref) : undefined })) }
+          : {}),
       })),
       assets,
       ...(warnings.length ? { warnings } : {}),

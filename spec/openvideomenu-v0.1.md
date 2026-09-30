@@ -74,6 +74,29 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 - `kind` suggests how to group the media: `feature`, `episode`, `trailer`, `featurette`, `behindthescenes`, `deleted`, `interview`, `scene`, `short` or `other`. Other values are allowed.
 - `chapters` are start times in seconds and MUST increase. Chapter numbers in actions start at **1**.
 
+### 4.1 Angles (Level 2)
+
+The same scene filmed or drawn more than one way: a DVD's multi-angle title, a sing-along with and
+without lyrics, a storyboard beside the finished shot. A media entry says where its angles are in one
+of two ways, the author's choice (not both):
+
+```json
+"feature": { "ref": "Roots (angle 1).mkv", "angles": ["Roots (angle 2).mkv"] }
+"storyboard": { "ref": "Storyboard.mkv", "angleTracks": 3 }
+```
+
+- **`angles`**: the other angles as separate files, each a `ref` (path, URL or `{scheme, id}`). The
+  media's own `ref` is angle 1, `angles[0]` angle 2, and so on. The files MUST line up in time, so
+  changing angle keeps the position. This is how rips of multi-angle titles come out: one whole file per
+  angle.
+- **`angleTracks`**: N (at least 2): the file's first N video tracks are angles 1 to N.
+
+Which angle plays: the play item's `angle` (a number or `{"var": name}`, like `audio`), otherwise
+`@angle` (§6.1). A number outside the media's angles plays angle 1, like a DVD player. A player SHOULD
+let the viewer change angle during playback (a DVD remote's Angle key) and report it as `@angle`. A
+player that can't switch video tracks plays angle 1 of `angleTracks` media. Players without Level 2
+play the `ref` (angle 1).
+
 ## 5. Menus
 
 ```json
@@ -250,6 +273,7 @@ holding a button id. When it doesn't name a button of that menu, the usual defau
   track; `subtitle: 0` turns subtitles off.
 - Without them, playback uses the current `@audio` and `@subtitle` when known, otherwise the player's
   default. A number outside the media's tracks is ignored.
+- `angle: N` plays angle N of media that has angles (§4.1); without it, `@angle` decides.
 
 **Randomness.** `random` draws from a generator the player seeds at start. The reference navigator uses
 `seed = (seed × 1103515245 + 12345) mod 2³¹`, result `1 + seed mod value`, so conformance cases can
@@ -317,6 +341,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection. Menus per language are separate menus chosen with `@menuLanguage`. *(Next drafts)* Angles, buttons and actions during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1). Menus per language are separate menus chosen with `@menuLanguage`. *(Next drafts)* Buttons and actions during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

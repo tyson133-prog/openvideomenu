@@ -89,6 +89,16 @@ public sealed class MediaEntry
 
     public List<Chapter>? Chapters { get; set; }
 
+    /// <summary>Level 2: the other angles as files; <see cref="Ref"/> is angle 1, Angles[0] angle 2, … (spec §4.1).</summary>
+    public List<MediaRef>? Angles { get; set; }
+
+    /// <summary>Level 2: the file's first N video tracks are angles 1..N (spec §4.1).</summary>
+    public int? AngleTracks { get; set; }
+
+    /// <summary>How many angles this media has: 1 when it has none.</summary>
+    [JsonIgnore]
+    public int AngleCount => Angles is { Count: > 0 } a ? 1 + a.Count : AngleTracks ?? 1;
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }
@@ -417,6 +427,9 @@ public sealed class PlayItem
 
     /// <summary>Level 2: subtitle track, 1-based; 0 = off.</summary>
     public IntOrVar? Subtitle { get; set; }
+
+    /// <summary>Level 2: angle of media with angles, 1-based; default @angle.</summary>
+    public IntOrVar? Angle { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

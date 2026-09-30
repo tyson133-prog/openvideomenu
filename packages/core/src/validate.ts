@@ -21,7 +21,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "label", "kind", "duration", "chapters"],
+  media: ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks"],
   chapter: ["time", "label", "thumbnail"],
   menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
   timeout: ["after", "action", "restartOnInput"],
@@ -35,7 +35,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "after", "audio", "subtitle"],
+  play: ["type", "media", "chapter", "start", "after", "audio", "subtitle", "angle"],
   playAll: ["type", "items", "after"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
@@ -122,6 +122,9 @@ class Validator {
 
   /** Declared variables and their types (a variable keeps the type of its starting value). */
   private varTypes = new Map<string, "number" | "string">();
+
+  /** Media id → how many angles it has (1 without angles). */
+  private angleCounts = new Map<string, number>();
 
   private vars(value: unknown) {
     if (value === undefined) return;
@@ -264,13 +267,21 @@ class Validator {
         continue;
       }
       this.unknownKeys(m, KNOWN_KEYS.media!, path);
-      const ref = m.ref;
-      if (isObject(ref)) {
-        if (!isNonEmptyString(ref.scheme) || !isNonEmptyString(ref.id))
-          this.error(`${path}/ref`, "Object refs need non-empty scheme and id.");
-      } else if (!isNonEmptyString(ref)) {
-        this.error(`${path}/ref`, "Required: a relative path, URL, or {scheme, id}.");
+      this.mediaRef(m.ref, `${path}/ref`);
+      let angles = 1;
+      if (m.angles !== undefined) {
+        if (!Array.isArray(m.angles) || m.angles.length === 0) this.error(`${path}/angles`, "Must be a list of at least one media ref.");
+        else {
+          m.angles.forEach((a, i) => this.mediaRef(a, `${path}/angles/${i}`));
+          angles = 1 + m.angles.length;
+        }
       }
+      if (m.angleTracks !== undefined) {
+        if (m.angles !== undefined) this.error(`${path}/angleTracks`, "Give angles as files (angles) or as video tracks (angleTracks), not both.");
+        else if (!Number.isInteger(m.angleTracks) || (m.angleTracks as number) < 2) this.error(`${path}/angleTracks`, "Must be an integer ≥ 2.");
+        else angles = m.angleTracks as number;
+      }
+      this.angleCounts.set(id, angles);
       if (m.label !== undefined && typeof m.label !== "string") this.error(`${path}/label`, "Must be a string.");
       if (m.kind !== undefined && typeof m.kind !== "string") this.error(`${path}/kind`, "Must be a string.");
       if (m.duration !== undefined && !(isFiniteNumber(m.duration) && m.duration >= 0))
@@ -303,6 +314,14 @@ class Validator {
       ids.set(id, chapterCount);
     }
     return ids;
+  }
+
+  private mediaRef(ref: unknown, path: string) {
+    if (isObject(ref)) {
+      if (!isNonEmptyString(ref.scheme) || !isNonEmptyString(ref.id)) this.error(path, "Object refs need non-empty scheme and id.");
+    } else if (!isNonEmptyString(ref)) {
+      this.error(path, "Required: a relative path, URL, or {scheme, id}.");
+    }
   }
 
   /** Returns menu id → set of its button ids. */
@@ -478,6 +497,12 @@ class Validator {
       this.error(`${path}/start`, "Must be a non-negative number of seconds.");
     if (value.audio !== undefined) this.varOrNumber(value.audio, `${path}/audio`, 1);
     if (value.subtitle !== undefined) this.varOrNumber(value.subtitle, `${path}/subtitle`, 0);
+    if (value.angle !== undefined) {
+      this.varOrNumber(value.angle, `${path}/angle`, 1);
+      const count = this.angleCounts.get(value.media) ?? 1;
+      if (Number.isInteger(value.angle) && (value.angle as number) > count)
+        this.error(`${path}/angle`, `Media "${value.media}" has ${count} angle(s).`);
+    }
   }
 
   /** `ownButtons`: set when checking a menu's `back`, the only place `activate` may appear. */

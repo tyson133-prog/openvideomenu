@@ -121,6 +121,7 @@ Signed in. Every manifest the server found, and the media each one references.
 | `hasMenus` | if valid | Whether it has any menus. A manifest with only a fallback list is still valid. |
 | `media` | if valid | One entry per media item: `id`, `kind`, `label` and `ref` from the manifest, plus `path`. |
 | `media[].path` | when `ref` is a relative path | The media file's path under the same folder, with forward slashes. Apps match it against the media server's file paths by their **trailing segments** (at least the folder and file name), because the two machines may mount the folder at different places. |
+| `media[].angles` | when the media has angle files | *(Level 2)* One `{ ref, path }` per other angle (angle 2, 3, …), `path` as for the media itself, so apps can match those files too. |
 | `modified` | yes | When the manifest last changed (ISO 8601). |
 
 The index MUST NOT list menu asset paths; the server keeps its allowlist to itself. Apps MUST

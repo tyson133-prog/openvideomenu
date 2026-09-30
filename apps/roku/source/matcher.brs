@@ -54,18 +54,38 @@ end function
 function msResolveMedia(entry as object, files as object) as object
     resolved = {}
     for each media in entry["media"]
-        if media["path"] <> invalid
-            best = invalid
-            bestScore = 1
-            for each f in files
-                score = msSuffixScore(media["path"], f.path)
-                if score > bestScore
-                    bestScore = score
-                    best = f
-                end if
+        best = msBestFile(media["path"], files)
+        if best <> invalid then resolved[media["id"]] = best
+    end for
+    return resolved
+end function
+
+' For each manifest media id with angle files (Level 2), the file for angle 2, 3, … (invalid where
+' none matches; that angle then plays angle 1).
+function msResolveAngles(entry as object, files as object) as object
+    resolved = {}
+    for each media in entry["media"]
+        if media["angles"] <> invalid
+            list = []
+            for each angle in media["angles"]
+                list.push(msBestFile(angle["path"], files))
             end for
-            if best <> invalid then resolved[media["id"]] = best
+            resolved[media["id"]] = list
         end if
     end for
     return resolved
+end function
+
+function msBestFile(path as dynamic, files as object) as dynamic
+    if path = invalid then return invalid
+    best = invalid
+    bestScore = 1
+    for each f in files
+        score = msSuffixScore(path, f.path)
+        if score > bestScore
+            bestScore = score
+            best = f
+        end if
+    end for
+    return best
 end function

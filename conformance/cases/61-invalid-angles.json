@@ -1,0 +1,40 @@
+{
+  "description": "Invalid angles: both angle files and angle tracks, an empty angle list, a bad angle ref, a single angle track, an angle the media doesn't have (with and without angles), and an angle from a text variable.",
+  "level": 2,
+  "valid": false,
+  "errors": [
+    "/media/both/angleTracks",
+    "/media/empty/angles",
+    "/media/badref/angles/0",
+    "/media/one/angleTracks",
+    "/menus/main/buttons/0/action/angle",
+    "/menus/main/buttons/1/action/angle",
+    "/menus/main/buttons/2/action/angle/var"
+  ],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Angles" },
+    "vars": { "name": "x" },
+    "media": {
+      "both": { "ref": "a.mkv", "angles": ["b.mkv"], "angleTracks": 2 },
+      "empty": { "ref": "a.mkv", "angles": [] },
+      "badref": { "ref": "a.mkv", "angles": [{ "scheme": "plex" }] },
+      "one": { "ref": "a.mkv", "angleTracks": 1 },
+      "two": { "ref": "a.mkv", "angles": ["b.mkv"] },
+      "plain": { "ref": "c.mkv" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "b0", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "two", "angle": 3 } },
+          { "id": "b1", "rect": [0, 20, 10, 10], "action": { "type": "play", "media": "plain", "angle": 2 } },
+          { "id": "b2", "rect": [0, 40, 10, 10], "action": { "type": "play", "media": "two", "angle": { "var": "name" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "plain" } }] }]
+  }
+}

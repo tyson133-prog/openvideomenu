@@ -16,7 +16,7 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "label", "kind", "duration", "chapters"],
+        ["media"] = ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks"],
         ["chapter"] = ["time", "label", "thumbnail"],
         ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
         ["timeout"] = ["after", "action", "restartOnInput"],
@@ -32,7 +32,7 @@ internal sealed class Validator
     // Insertion order matters: it's the order "Expected …" lists the types in.
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
-        ("play", ["type", "media", "chapter", "start", "after", "audio", "subtitle"]),
+        ("play", ["type", "media", "chapter", "start", "after", "audio", "subtitle", "angle"]),
         ("playAll", ["type", "items", "after"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
@@ -50,6 +50,9 @@ internal sealed class Validator
     private readonly List<Issue> _warnings = [];
     /// <summary>Declared variables and their types (true = text); a variable keeps the type of its starting value.</summary>
     private readonly Dictionary<string, bool> _varTypes = new(StringComparer.Ordinal);
+
+    /// <summary>Media id → how many angles it has (1 without angles).</summary>
+    private readonly Dictionary<string, int> _angleCounts = new(StringComparer.Ordinal);
 
     public static (List<Issue> Errors, List<Issue> Warnings) Run(JsonElement data)
     {
@@ -402,18 +405,43 @@ internal sealed class Validator
             }
 
             UnknownKeys(m, KnownKeys["media"], path);
-            var reference = m["ref"];
-            if (Obj.TryFrom(reference, out var r))
+            MediaRef(m["ref"], $"{path}/ref");
+            var angleCount = 1;
+            if (m["angles"] is { } angles)
             {
-                if (!IsNonEmptyString(r["scheme"]) || !IsNonEmptyString(r["id"]))
+                if (angles.ValueKind != JsonValueKind.Array || angles.GetArrayLength() == 0)
                 {
-                    Error($"{path}/ref", "Object refs need non-empty scheme and id.");
+                    Error($"{path}/angles", "Must be a list of at least one media ref.");
+                }
+                else
+                {
+                    var i = 0;
+                    foreach (var a in angles.EnumerateArray())
+                    {
+                        MediaRef(a, $"{path}/angles/{i++}");
+                    }
+
+                    angleCount = 1 + angles.GetArrayLength();
                 }
             }
-            else if (!IsNonEmptyString(reference))
+
+            if (m["angleTracks"] is { } angleTracks)
             {
-                Error($"{path}/ref", "Required: a relative path, URL, or {scheme, id}.");
+                if (m["angles"] is not null)
+                {
+                    Error($"{path}/angleTracks", "Give angles as files (angles) or as video tracks (angleTracks), not both.");
+                }
+                else if (!IsInteger(angleTracks) || angleTracks.GetDouble() < 2)
+                {
+                    Error($"{path}/angleTracks", "Must be an integer ≥ 2.");
+                }
+                else
+                {
+                    angleCount = (int)angleTracks.GetDouble();
+                }
             }
+
+            _angleCounts[id] = angleCount;
 
             if (m["label"] is { } label && label.ValueKind != JsonValueKind.String)
             {
@@ -848,6 +876,31 @@ internal sealed class Validator
         if (value["subtitle"] is { } subtitle)
         {
             VarOrNumber(subtitle, $"{path}/subtitle", 0);
+        }
+
+        if (value["angle"] is { } angle)
+        {
+            VarOrNumber(angle, $"{path}/angle", 1);
+            var count = _angleCounts.GetValueOrDefault(mediaId, 1);
+            if (IsInteger(angle) && angle.GetDouble() > count)
+            {
+                Error($"{path}/angle", $"Media \"{mediaId}\" has {count} angle(s).");
+            }
+        }
+    }
+
+    private void MediaRef(JsonElement? reference, string path)
+    {
+        if (Obj.TryFrom(reference, out var r))
+        {
+            if (!IsNonEmptyString(r["scheme"]) || !IsNonEmptyString(r["id"]))
+            {
+                Error(path, "Object refs need non-empty scheme and id.");
+            }
+        }
+        else if (!IsNonEmptyString(reference))
+        {
+            Error(path, "Required: a relative path, URL, or {scheme, id}.");
         }
     }
 

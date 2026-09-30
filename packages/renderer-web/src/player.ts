@@ -223,7 +223,7 @@ export class MenuPlayer {
   private perform(effect: Effect) {
     switch (effect.type) {
       case "play":
-        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle);
+        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle);
         break;
       case "exit":
         if (this.options.onExit) this.options.onExit();
@@ -253,17 +253,21 @@ export class MenuPlayer {
     this.menuTimer = setTimeout(fire, after * 1000);
   }
 
-  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number) {
+  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number) {
     const { manifest, manifestUrl, resolvers } = this.options;
     const media = manifest.media[mediaId]!;
+    // Angle 2 and up of angle files is its own file; angle tracks are chosen inside the one file.
+    const ref = angle !== undefined && angle > 1 && media.angles ? media.angles[angle - 2]! : media.ref;
     const request: PlayRequest = {
       mediaId,
-      ref: media.ref,
-      url: resolveMedia(media.ref, manifestUrl, resolvers),
+      ref,
+      url: resolveMedia(ref, manifestUrl, resolvers),
       start,
       label: media.label ?? manifest.title.name,
       ...(audio !== undefined ? { audio } : {}),
       ...(subtitle !== undefined ? { subtitle } : {}),
+      ...(angle !== undefined ? { angle } : {}),
+      ...(angle !== undefined && media.angleTracks ? { videoTrack: angle } : {}),
     };
     this.playback.play(request);
   }

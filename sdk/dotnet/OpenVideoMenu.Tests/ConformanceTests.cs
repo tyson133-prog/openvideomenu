@@ -154,7 +154,7 @@ public sealed class ConformanceTests
         int? Int(string name) => e.TryGetProperty(name, out var v) ? v.GetInt32() : null;
         return e.GetProperty("type").GetString() switch
         {
-            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle")),
+            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle")),
             "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),
             "exit" => new Effect.Exit(),
             "transition" => new Effect.Transition(e.GetProperty("src").GetString()!),

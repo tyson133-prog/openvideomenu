@@ -30,7 +30,10 @@ public sealed record CatalogEntry
     public List<string> Assets { get; init; } = [];
 }
 
-public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonElement Ref, string? Path);
+public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonElement Ref, string? Path, List<CatalogAngle>? Angles = null);
+
+/// <summary>Level 2: another angle of a media item as a file (angle 2, 3, …), with its ref and path like the media's own.</summary>
+public sealed record CatalogAngle(JsonElement Ref, string? Path);
 
 /// <summary>
 /// The manifests under the libraries' folders, and the exact set of files that may be served: the
@@ -325,7 +328,14 @@ public sealed class MenuCatalog
                 {
                     var r = p.Value.TryGetProperty("ref", out var refEl) ? refEl.Clone() : default;
                     var relPath = r.ValueKind == JsonValueKind.String && IsRelative(r.GetString()!) ? InRoot(r.GetString()!) : null;
-                    return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath);
+                    List<CatalogAngle>? angles = null;
+                    if (p.Value.TryGetProperty("angles", out var anglesEl) && anglesEl.ValueKind == JsonValueKind.Array)
+                    {
+                        angles = [.. anglesEl.EnumerateArray().Select(a => new CatalogAngle(
+                            a.Clone(), a.ValueKind == JsonValueKind.String && IsRelative(a.GetString()!) ? InRoot(a.GetString()!) : null))];
+                    }
+
+                    return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath, angles);
                 }).ToList(),
                 Assets = result.Manifest.MenuAssets().Select(AssetInRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
                 Modified = modified.ToString("O"),
