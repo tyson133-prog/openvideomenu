@@ -16,7 +16,8 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+        ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
         ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
         ["timeout"] = ["after", "action", "restartOnInput"],
@@ -422,7 +423,20 @@ internal sealed class Validator
             }
 
             UnknownKeys(m, KnownKeys["media"], path);
-            MediaRef(m["ref"], $"{path}/ref");
+            // Level 2: made of segments of other media (checked below, once every id is known) or a ref.
+            if (m["segments"] is null)
+            {
+                MediaRef(m["ref"], $"{path}/ref");
+            }
+            else if (m["ref"] is not null)
+            {
+                Error($"{path}/segments", "Give a ref or segments, not both.");
+            }
+            else if (m["angles"] is not null || m["angleTracks"] is not null)
+            {
+                Error($"{path}/{(m["angles"] is not null ? "angles" : "angleTracks")}", "A media made of segments has no angles of its own; its segments' media do.");
+            }
+
             var angleCount = 1;
             if (m["angles"] is { } angles)
             {
@@ -527,7 +541,81 @@ internal sealed class Validator
             ids[id] = chapterCount;
         }
 
+        foreach (var (id, entry) in media.Entries)
+        {
+            if (Obj.TryFrom(entry, out var m) && m["segments"] is { } segments)
+            {
+                Segments(segments, id, media);
+            }
+        }
+
         return ids;
+    }
+
+    /// <summary>Level 2: a media made of segments of other media (spec §4.2).</summary>
+    private void Segments(JsonElement value, string id, Obj media)
+    {
+        var path = $"/media/{id}/segments";
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() == 0)
+        {
+            Error(path, "Must be a list of at least one segment {media, start?, end?}.");
+            return;
+        }
+
+        var angles = 1;
+        var count = value.GetArrayLength();
+        var i = 0;
+        foreach (var segValue in value.EnumerateArray())
+        {
+            var sp = $"{path}/{i}";
+            if (!Obj.TryFrom(segValue, out var seg))
+            {
+                Error(sp, "Must be a segment {media, start?, end?}.");
+                i++;
+                continue;
+            }
+
+            UnknownKeys(seg, KnownKeys["segment"], sp);
+            var mediaEl = seg["media"];
+            Obj? source = null;
+            var found = IsNonEmptyString(mediaEl) && Obj.TryFrom(media[mediaEl!.Value.GetString()!], out source);
+            if (!found || source is null)
+            {
+                Error($"{sp}/media", $"No media \"{JsString(mediaEl)}\".");
+            }
+            else if (source["segments"] is not null)
+            {
+                Error($"{sp}/media", $"Media \"{JsString(mediaEl)}\" is made of segments; segments don't nest.");
+            }
+            else
+            {
+                angles = Math.Max(angles, _angleCounts.GetValueOrDefault(mediaEl!.Value.GetString()!, 1));
+            }
+
+            var start = seg["start"];
+            var okStart = start is null || (IsFiniteNumber(start.Value) && start.Value.GetDouble() >= 0);
+            if (!okStart)
+            {
+                Error($"{sp}/start", "Must be a non-negative number of seconds.");
+            }
+
+            if (seg["end"] is not { } end)
+            {
+                if (i < count - 1)
+                {
+                    Error($"{sp}/end", "Required on every segment but the last.");
+                }
+            }
+            else if (!(IsFiniteNumber(end) && end.GetDouble() > (okStart && start is { } st && IsFiniteNumber(st) ? st.GetDouble() : 0)))
+            {
+                Error($"{sp}/end", "Must be a number of seconds after start.");
+            }
+
+            i++;
+        }
+
+        // A play's angle applies to the segments whose media have angles.
+        _angleCounts[id] = angles;
     }
 
     /// <summary>Returns menu id → its button ids.</summary>

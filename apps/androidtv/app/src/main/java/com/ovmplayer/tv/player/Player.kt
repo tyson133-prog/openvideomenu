@@ -36,6 +36,21 @@ data class PlayRequest(
     val subtitleTrack: Int? = null,
     /** 1-based video track (angles kept as video tracks of one file); null = default. */
     val videoTrack: Int? = null,
+    /**
+     * Level 2 (spec 4.2): a title made of segments, played in order as one title. [url] is then the first
+     * clip's, and [startSeconds] and every reported position are on the title's own timeline.
+     */
+    val segments: List<Clip> = emptyList(),
+)
+
+/** One segment of a title: a range of a file (seconds into it), with its angle's video track if any. */
+data class Clip(
+    val url: String,
+    val startSeconds: Double,
+    val endSeconds: Double?,
+    val videoTrack: Int? = null,
+    /** This clip's own request headers (a Plex stream must carry the session its play decision was made under). */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -43,10 +58,14 @@ data class PlayRequest(
  * the bundled FFmpeg decoder only covers audio the device can't handle itself, such as DTS on many boxes.
  */
 @OptIn(UnstableApi::class)
-fun buildPlayer(context: Context, headers: Map<String, String>): ExoPlayer {
+fun buildPlayer(context: Context, headers: Map<String, String>, clipHeaders: Map<String, Map<String, String>> = emptyMap()): ExoPlayer {
     val renderers = DefaultRenderersFactory(context).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
     val http = DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers).setAllowCrossProtocolRedirects(false)
-    return ExoPlayer.Builder(context, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(http)).build()
+    // Segments (Level 2): each file is requested with its own clip's headers.
+    val source = if (clipHeaders.isEmpty()) http else androidx.media3.datasource.ResolvingDataSource.Factory(http) { spec ->
+        clipHeaders[spec.uri.toString()]?.let { spec.withAdditionalHeaders(it) } ?: spec
+    }
+    return ExoPlayer.Builder(context, renderers).setMediaSourceFactory(DefaultMediaSourceFactory(source)).build()
 }
 
 /**
@@ -80,9 +99,10 @@ fun selectTracks(
     return b.build()
 }
 
-class PlayerHandle(val player: ExoPlayer) {
-    /** Current position in seconds, for "stopped" and resume. */
-    fun positionSeconds(): Double = player.currentPosition / 1000.0
+/** [offsets]: where each clip starts on the title's timeline (a single file is one clip at 0). */
+class PlayerHandle(val player: ExoPlayer, private val offsets: List<Double> = listOf(0.0)) {
+    /** Current position in seconds on the title's timeline, for "stopped", resume and cues. */
+    fun positionSeconds(): Double = (offsets.getOrNull(player.currentMediaItemIndex) ?: 0.0) + player.currentPosition / 1000.0
 }
 
 @OptIn(UnstableApi::class)
@@ -95,9 +115,24 @@ fun VideoPlayer(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // Segments play as clipped items in one playlist (gapless where the formats allow); each clip's
+    // place on the title's timeline is the sum of the lengths before it.
+    val offsets = remember(request) {
+        request.segments.runningFold(0.0) { at, clip -> at + ((clip.endSeconds ?: Double.MAX_VALUE) - clip.startSeconds) }.dropLast(1)
+    }
     val player = remember(request) {
-        buildPlayer(context, request.headers).apply {
-            setMediaItem(MediaItem.Builder().setUri(request.url).build(), (request.startSeconds * 1000).toLong())
+        buildPlayer(context, request.headers, request.segments.associate { it.url to it.headers }).apply {
+            if (request.segments.isEmpty()) {
+                setMediaItem(MediaItem.Builder().setUri(request.url).build(), (request.startSeconds * 1000).toLong())
+            } else {
+                val items = request.segments.map { clip ->
+                    val clipping = MediaItem.ClippingConfiguration.Builder().setStartPositionMs((clip.startSeconds * 1000).toLong())
+                    clip.endSeconds?.let { clipping.setEndPositionMs((it * 1000).toLong()) }
+                    MediaItem.Builder().setUri(clip.url).setClippingConfiguration(clipping.build()).build()
+                }
+                val index = offsets.indexOfLast { it <= request.startSeconds }.coerceAtLeast(0)
+                setMediaItems(items, index, ((request.startSeconds - offsets[index]) * 1000).toLong())
+            }
             playWhenReady = true
             prepare()
         }
@@ -124,11 +159,17 @@ fun VideoPlayer(
             }
             private var tracksApplied = false
 
+            /** Each segment is its own file: its tracks are chosen again. */
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                tracksApplied = false
+            }
+
             /** Apply the menu's track choices once the file's tracks are known. */
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 if (tracksApplied || tracks.groups.isEmpty()) return
                 tracksApplied = true
-                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack, request.videoTrack)
+                val video = request.segments.getOrNull(player.currentMediaItemIndex)?.videoTrack ?: request.videoTrack
+                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack, video)
                 if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d(
                     "ovmplayer",
                     "tracks: audio=${request.audioTrack} subtitle=${request.subtitleTrack} video=${request.videoTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
@@ -163,7 +204,7 @@ fun VideoPlayer(
             }
         }
         player.addListener(listener)
-        onReady(PlayerHandle(player))
+        onReady(PlayerHandle(player, if (request.segments.isEmpty()) listOf(0.0) else offsets))
         onDispose {
             if (player.playbackState != Player.STATE_ENDED) report("stopped")
             lifecycle.removeObserver(lifecycleObserver)

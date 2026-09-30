@@ -1,6 +1,6 @@
 # DVD import profile (early draft)
 
-This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup, angles and cues during playback) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
+This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup, angles, segments and cues during playback) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
 
 ## Mapping
 
@@ -37,6 +37,7 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Title that ends at a cell (a cell command `LinkTailPGC`/`Exit`, e.g. one song of a concert) | Play item `end` at that cell's end time. |
 | Other cell commands during a title (SetGPRM, CallSS to a menu, conditional links) | Point cues `{ at, action }` at the cell's end time: `set`, `goto`, `if`. Jumps within the title (LinkCN/LinkPGN) wait for segment playlists. |
 | Buttons in a title's navigation packets (highlights shown over the film) | Overlays `{ from, to, buttons }` on the media, one per run of VOBUs with the same buttons; a button that calls a featurette (and resumes with RSM) is a `play` from the overlay, which returns to the film. |
+| Titles that share video, or play it out of order (a play-all and its episodes, songs of a concert, cuts of a film; seamless branching's interleaved cells) | Either one file per title as the rip made them, or, to keep one copy of shared video, a media with `segments` per title over the ranges of the files that hold each run of cells. Chapters and cues then count on the title's own timeline. |
 | SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
 | Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |
@@ -57,9 +58,8 @@ On a button:
 
 ## Not supported yet
 
-These disc features have no manifest form yet. Importers should keep what they know in `x-dvd`, label the affected buttons honestly, and play the film normally instead.
-
-- **Seamless branching** (multi-path titles such as a theatrical and an extended cut sharing segments). The format can express this as a playlist of time ranges from one file, and players can join them gaplessly. The usual obstacle is the rip: many rips follow one path through the disc, so the other path's segments aren't in the file. A branching manifest needs a rip that keeps every segment. This is planned for a later draft.
+Every feature found in an audit of 954 discs now has a manifest form. Importers still keep the disc's
+own numbers in `x-dvd` (above) so an export can be traced back to the disc.
 
 ## Assets
 

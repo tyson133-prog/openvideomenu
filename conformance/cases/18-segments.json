@@ -1,0 +1,63 @@
+{
+  "description": "Level 2 segments: a media made of pieces of other media plays as one title with its own timeline. Its chapters start playback on that timeline, a stop is remembered there for resume and @lastChapter, its cues are listed for it (not its segments' media), and a play's angle applies when a segment's media has angles.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Segments" },
+    "vars": { "done": 0 },
+    "media": {
+      "film": { "ref": "Film.mkv", "chapters": [{ "time": 0 }, { "time": 600 }],
+        "cues": [{ "at": 30, "action": { "type": "set", "var": "done", "value": 9 } }] },
+      "scenes": { "ref": "Scenes (angle 1).mkv", "angles": ["Scenes (angle 2).mkv"] },
+      "extended": {
+        "label": "Extended cut",
+        "segments": [
+          { "media": "film", "end": 3120 },
+          { "media": "scenes", "start": 10, "end": 105 },
+          { "media": "film", "start": 3120 }
+        ],
+        "chapters": [{ "time": 0 }, { "time": 3120 }, { "time": 3215 }],
+        "cues": [{ "at": 3150, "action": { "type": "set", "var": "done", "value": 1 } }]
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "cut", "rect": [10, 10, 100, 30], "nav": { "down": "scene" }, "action": { "type": "play", "media": "extended" } },
+          { "id": "scene", "rect": [10, 50, 100, 30], "nav": { "up": "cut", "down": "resume" },
+            "action": { "type": "play", "media": "extended", "chapter": 2, "angle": 2 } },
+          { "id": "resume", "rect": [10, 90, 100, 30], "nav": { "up": "scene", "down": "check" }, "action": { "type": "resume" } },
+          { "id": "check", "rect": [10, 130, 100, 30], "nav": { "up": "resume" },
+            "action": { "type": "if", "test": { "all": [{ "var": "done", "eq": 1 }, { "var": "@lastChapter", "eq": 3 }] }, "then": { "type": "play", "media": "film", "chapter": 2 } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Extended cut", "action": { "type": "play", "media": "extended" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "cut" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "main", "button": "cut" },
+      { "type": "play", "media": "extended", "start": 0, "angle": 1, "cues": [{ "id": "media/0", "at": 3150 }] }] } },
+    { "event": { "type": "stopped", "position": 100 }, "expect": { "mode": "menu", "focus": "cut" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "scene" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "main", "button": "scene" },
+      { "type": "play", "media": "extended", "start": 3120, "angle": 2, "cues": [{ "id": "media/0", "at": 3150 }] }] } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "mode": "playing", "effects": [] } },
+    { "event": { "type": "stopped", "position": 3300 }, "expect": { "mode": "menu", "focus": "scene" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "main", "button": "resume" },
+      { "type": "play", "media": "extended", "start": 3300, "angle": 1, "cues": [{ "id": "media/0", "at": 3150 }] }] } },
+    { "event": { "type": "stopped", "position": 3310 }, "expect": { "mode": "menu", "focus": "resume" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "check" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "main", "button": "check" },
+      { "type": "play", "media": "film", "start": 600, "cues": [{ "id": "media/0", "at": 30 }] }] } }
+  ]
+}

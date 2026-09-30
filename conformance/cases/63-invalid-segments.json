@@ -1,0 +1,30 @@
+{
+  "description": "Invalid segments: both a ref and segments, an empty list, a segment of an unknown media, nested segments, a missing end on a segment that isn't the last, an end before start, and angles on a media made of segments.",
+  "level": 2,
+  "valid": false,
+  "errors": [
+    "/media/both/segments",
+    "/media/empty/segments",
+    "/media/unknown/segments/0/media",
+    "/media/nested/segments/0/media",
+    "/media/open/segments/0/end",
+    "/media/backwards/segments/0/end",
+    "/media/angled/angles"
+  ],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Segments" },
+    "media": {
+      "film": { "ref": "Film.mkv" },
+      "both": { "ref": "Film.mkv", "segments": [{ "media": "film" }] },
+      "empty": { "segments": [] },
+      "unknown": { "segments": [{ "media": "nope" }] },
+      "nested": { "segments": [{ "media": "both" }] },
+      "open": { "segments": [{ "media": "film" }, { "media": "film", "start": 10 }] },
+      "backwards": { "segments": [{ "media": "film", "start": 50, "end": 40 }] },
+      "angled": { "segments": [{ "media": "film" }], "angles": ["Other.mkv"] }
+    },
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  }
+}

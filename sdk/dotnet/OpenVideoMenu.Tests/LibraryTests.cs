@@ -89,7 +89,7 @@ public sealed class LibraryTests : IDisposable
         var result = Manifest.Parse(json);
         Assert.True(result.Ok, string.Join("\n", result.Errors));
         var m = result.Manifest!;
-        Assert.Equal("jellyfin", m.Media["f"].Ref.Scheme);
+        Assert.Equal("jellyfin", m.Media["f"].Ref!.Scheme);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(m.ToJson())), m.ToJson());
     }
 

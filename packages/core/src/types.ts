@@ -38,6 +38,14 @@ export interface Source {
   generator?: string;
 }
 
+/** Level 2: a range of a media entry that has a ref; `end` is required on every segment but the last. */
+export interface Segment {
+  media: string;
+  /** Seconds; default 0. */
+  start?: number;
+  end?: number;
+}
+
 /** A relative path or URL string, or an opaque reference the host player resolves. */
 export type MediaRef = string | { scheme: string; id: string };
 
@@ -54,7 +62,10 @@ export type MediaKind =
   | "other";
 
 export interface Media {
-  ref: MediaRef;
+  /** The file (or server item). Absent when the media is made of `segments` (Level 2). */
+  ref?: MediaRef;
+  /** Level 2: pieces of other media, played as one title with its own timeline (spec §4.2). */
+  segments?: Segment[];
   label?: string;
   kind?: MediaKind | string;
   /** Seconds. */

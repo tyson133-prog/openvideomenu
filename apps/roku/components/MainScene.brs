@@ -807,6 +807,13 @@ sub onPlayRequest()
         report("/Sessions/Playing/Stopped")
         closePlayer()
     end if
+    m.segPlay = invalid
+    ' Level 2: a title made of segments of other media (spec 4.2).
+    info = m.menu.manifest["media"][req.media]
+    if info <> invalid and info["segments"] <> invalid
+        startSegments(req, info["segments"])
+        return
+    end if
     target = m.menuMedia[req.media]
     if target = invalid
         setStatus("That title isn't in your library.")
@@ -903,9 +910,11 @@ sub openPlayer(content as object)
         m.top.removeChild(m.menu)
         m.top.appendChild(m.menu)
         req = m.playing.req
-        if req.cues <> invalid or req["end"] <> invalid
-            ' floor: readings before where playback was asked to start (the Video node starts at the
-            ' keyframe before it) are ignored, so a cue there doesn't fire again.
+        if m.segPlay <> invalid
+            m.cueClock = m.segClock
+            m.player.notificationInterval = 0.25
+            m.player.observeField("position", "onPlayerPosition")
+        else if req.cues <> invalid or req["end"] <> invalid
             m.cueClock = { cues: msOr(req.cues, []), end: req["end"], last: req.start, floor: req.start, inside: {} }
             m.player.notificationInterval = 0.25
             m.player.observeField("position", "onPlayerPosition")
@@ -919,9 +928,18 @@ end sub
 ' when playback passes them in ordinary play (not seeking), overlays while inside their window, and
 ' the item's end as the title ending.
 sub onPlayerPosition()
+    if m.player = invalid or m.menu = invalid then return
+    ' A segment that ends inside its file hands over to the next one there.
+    if m.segPlay <> invalid
+        piece = m.segPlay.pieces[m.segPlay.index]
+        if piece["end"] <> invalid and playerPosition() >= piece["end"]
+            nextSegment()
+            return
+        end if
+    end if
     clock = m.cueClock
-    if clock = invalid or m.player = invalid or m.menu = invalid then return
-    position = playerPosition()
+    if clock = invalid then return
+    position = titlePosition()
     if clock.floor <> invalid
         if position < clock.floor then return
         clock.floor = invalid
@@ -960,6 +978,7 @@ sub onMenuStop()
     if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)
     report("/Sessions/Playing/Stopped")
     closePlayer()
+    m.segPlay = invalid
     m.menu.setFocus(true)
 end sub
 
@@ -1021,6 +1040,8 @@ sub onPlayerState()
         m.progressTimer.control = "start"
     else if (state = "paused" or state = "playing") and m.playing.started
         reportProgress()
+    else if state = "finished" and m.segPlay <> invalid
+        nextSegment()
     else if state = "finished"
         report("/Sessions/Playing/Stopped")
         forgetStop(m.playing.item)
@@ -1038,14 +1059,17 @@ end sub
 sub stopTitle()
     position = playerPosition()
     if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), position, m.playing.req)
+    ' The menu gets the stop on the title's timeline (they differ for a title made of segments).
+    stoppedAt = titlePosition()
     report("/Sessions/Playing/Stopped")
     closePlayer()
-    titleStopped(position)
+    titleStopped(stoppedAt)
 end sub
 
 ' Playback is over: back to the menu that asked for it, or to the tile that was picked (whose
 ' resume point and watched mark are updated here, as the server now has them).
 sub titleStopped(position as float)
+    m.segPlay = invalid
     if m.menu <> invalid
         m.menu.playbackStopped = position
     else
@@ -1054,6 +1078,7 @@ sub titleStopped(position as float)
 end sub
 
 sub titleEnded()
+    m.segPlay = invalid
     if m.menu <> invalid
         m.menu.playbackEnded = true
     else
@@ -1095,6 +1120,69 @@ end sub
 
 '  Where playback is in the file (seconds). Right after a chapter start the player still says 0
 ' until its seek lands, so until then it's where playback was asked to start.
+' Level 2: a title made of segments plays them one after another (the Video node can't clip a file,
+' so there's a short pause at each join, which the spec allows). m.segPlay: the pieces with their files
+' and places on the title's timeline, and which one plays; the cue clock spans the whole title.
+sub startSegments(req as object, segments as object)
+    pieces = []
+    offset = 0
+    for each seg in segments
+        target = m.menuMedia[seg["media"]]
+        ' The play's angle applies to segments whose media have angle files.
+        if req.angle <> invalid and req.angle > 1 and m.menuAngles <> invalid and m.menuAngles[seg["media"]] <> invalid
+            other = m.menuAngles[seg["media"]][req.angle - 2]
+            if other <> invalid then target = other
+        end if
+        if target = invalid
+            setStatus("That title isn't in your library.")
+            titleStopped(req.start)
+            return
+        end if
+        start = msOr(seg["start"], 0)
+        pieces.push({ target: target, start: start, end: seg["end"], offset: offset })
+        if seg["end"] <> invalid then offset = offset + seg["end"] - start
+    end for
+    m.segPlay = { pieces: pieces, index: 0, req: req }
+    m.segClock = invalid
+    if req.cues <> invalid or req["end"] <> invalid
+        m.segClock = { cues: msOr(req.cues, []), end: req["end"], last: req.start, floor: req.start, inside: {} }
+    end if
+    i = 0
+    while i < pieces.Count() - 1 and req.start >= pieces[i + 1].offset
+        i = i + 1
+    end while
+    playSegment(i, req.start - pieces[i].offset)
+end sub
+
+sub playSegment(i as integer, into as float)
+    piece = m.segPlay.pieces[i]
+    m.segPlay.index = i
+    req = m.segPlay.req
+    startTitle({ start: piece.start + into, audio: req.audio, subtitle: req.subtitle }, piece.target)
+end sub
+
+' The segment playing reached its end (or its file finished): the next one, or the title has ended.
+sub nextSegment()
+    report("/Sessions/Playing/Stopped")
+    m.playing = invalid
+    closePlayer()
+    i = m.segPlay.index + 1
+    if i < m.segPlay.pieces.Count()
+        playSegment(i, 0)
+    else
+        titleEnded()
+    end if
+end sub
+
+' Where playback is on the title's timeline (for a title made of segments), else in the file.
+function titlePosition() as float
+    if m.segPlay = invalid then return playerPosition()
+    piece = m.segPlay.pieces[m.segPlay.index]
+    into = playerPosition() - piece.start
+    if into < 0 then into = 0
+    return piece.offset + into
+end function
+
 function playerPosition() as float
     if m.player = invalid or m.playing = invalid then return 0
     offset = 0

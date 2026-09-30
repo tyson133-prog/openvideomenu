@@ -11,7 +11,10 @@ export interface CatalogMedia {
   id: string;
   kind?: string;
   label?: string;
-  ref: MediaRef;
+  /** Absent for media made of segments (Level 2): see `segments`. */
+  ref?: MediaRef;
+  /** Level 2: the media ids a media made of segments plays, in order (spec 4.2). */
+  segments?: string[];
   /**
    * For relative-path refs: the file's path relative to the media root, forward slashes. TV apps
    * match its trailing segments against the file paths their media server reports.
@@ -325,6 +328,7 @@ export class Catalog {
         label: media.label,
         ref: media.ref,
         path: typeof media.ref === "string" && isRelative(media.ref) ? inRoot(media.ref) : undefined,
+        ...(media.segments ? { segments: media.segments.map((seg) => seg.media) } : {}),
         ...(media.angles
           ? { angles: media.angles.map((ref) => ({ ref, path: typeof ref === "string" && isRelative(ref) ? inRoot(ref) : undefined })) }
           : {}),

@@ -849,8 +849,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         subtitle: Int? = null,
         angle: Int? = null,
         videoTrack: Int? = null,
+        segments: List<com.ovmplayer.tv.menu.PageSegment> = emptyList(),
     ): PlayRequest? {
         val src = source ?: return null
+        // Level 2: a title made of segments of other media, each resolved to its file (or angle file).
+        if (segments.isNotEmpty()) {
+            val clips = segments.map { seg ->
+                val base = open.media[seg.mediaId] ?: return null
+                val (item, file) = seg.angle?.takeIf { it > 1 }?.let { open.angles[seg.mediaId]?.getOrNull(it - 2) } ?: base
+                val req = attempt { src.playRequest(item, file, 0.0, audio, subtitle) }.getOrNull() ?: return null
+                req to com.ovmplayer.tv.player.Clip(req.url, seg.start, seg.end, seg.videoTrack, req.headers)
+            }
+            val first = clips.first().first
+            // Progress isn't reported to the server: the title isn't one of its items.
+            return first.copy(startSeconds = start, reporter = null, segments = clips.map { it.second })
+        }
         val main = open.media[mediaId] ?: return null
         // Angle 2 and up of angle files is another file; without a match it plays angle 1 (spec 4.1).
         val (item, file) = angle?.takeIf { it > 1 }?.let { open.angles[mediaId]?.getOrNull(it - 2) } ?: main

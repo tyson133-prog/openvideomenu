@@ -30,7 +30,8 @@ public sealed record CatalogEntry
     public List<string> Assets { get; init; } = [];
 }
 
-public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonElement Ref, string? Path, List<CatalogAngle>? Angles = null);
+/// <summary>A media item of a manifest. <paramref name="Ref"/> is null for media made of <paramref name="Segments"/> (Level 2).</summary>
+public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonElement? Ref, string? Path, List<CatalogAngle>? Angles = null, List<string>? Segments = null);
 
 /// <summary>Level 2: another angle of a media item as a file (angle 2, 3, …), with its ref and path like the media's own.</summary>
 public sealed record CatalogAngle(JsonElement Ref, string? Path);
@@ -326,8 +327,8 @@ public sealed class MenuCatalog
                 HasMenus = hasMenus,
                 Media = media.EnumerateObject().Select(p =>
                 {
-                    var r = p.Value.TryGetProperty("ref", out var refEl) ? refEl.Clone() : default;
-                    var relPath = r.ValueKind == JsonValueKind.String && IsRelative(r.GetString()!) ? InRoot(r.GetString()!) : null;
+                    JsonElement? r = p.Value.TryGetProperty("ref", out var refEl) ? refEl.Clone() : null;
+                    var relPath = r is { ValueKind: JsonValueKind.String } s && IsRelative(s.GetString()!) ? InRoot(s.GetString()!) : null;
                     List<CatalogAngle>? angles = null;
                     if (p.Value.TryGetProperty("angles", out var anglesEl) && anglesEl.ValueKind == JsonValueKind.Array)
                     {
@@ -335,7 +336,13 @@ public sealed class MenuCatalog
                             a.Clone(), a.ValueKind == JsonValueKind.String && IsRelative(a.GetString()!) ? InRoot(a.GetString()!) : null))];
                     }
 
-                    return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath, angles);
+                    List<string>? segments = null;
+                    if (p.Value.TryGetProperty("segments", out var segEl) && segEl.ValueKind == JsonValueKind.Array)
+                    {
+                        segments = [.. segEl.EnumerateArray().Select(seg => seg.TryGetProperty("media", out var id) ? id.GetString() ?? "" : "")];
+                    }
+
+                    return new CatalogMedia(p.Name, Str(p.Value, "kind"), Str(p.Value, "label"), r, relPath, angles, segments);
                 }).ToList(),
                 Assets = result.Manifest.MenuAssets().Select(AssetInRoot).OfType<string>().Distinct().Order(StringComparer.Ordinal).ToList(),
                 Modified = modified.ToString("O"),

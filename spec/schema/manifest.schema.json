@@ -163,9 +163,6 @@
     },
     "media": {
       "type": "object",
-      "required": [
-        "ref"
-      ],
       "properties": {
         "ref": {
           "$ref": "#/$defs/mediaRef"
@@ -219,6 +216,14 @@
             "$ref": "#/$defs/cue"
           },
           "description": "Level 2: cues whenever this media plays (spec 6.3)."
+        },
+        "segments": {
+          "description": "Level 2: pieces of other media played as one title with its own timeline (spec 4.2).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
         }
       },
       "not": {
@@ -226,7 +231,38 @@
           "angles",
           "angleTracks"
         ]
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "ref"
+          ]
+        },
+        {
+          "required": [
+            "segments"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "ref"
+                ]
+              },
+              {
+                "required": [
+                  "angles"
+                ]
+              },
+              {
+                "required": [
+                  "angleTracks"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     "rect": {
       "description": "[x, y, width, height] in canvas pixels.",
@@ -1044,6 +1080,23 @@
           }
         }
       ]
+    },
+    "segment": {
+      "type": "object",
+      "required": [
+        "media"
+      ],
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        },
+        "end": {
+          "$ref": "#/$defs/seconds"
+        }
+      }
     }
   }
 }

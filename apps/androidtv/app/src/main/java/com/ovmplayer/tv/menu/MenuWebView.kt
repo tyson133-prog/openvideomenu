@@ -41,6 +41,8 @@ sealed interface PageMessage {
         /** Level 2: stop here (seconds) as if the title ended, and cues to report while it plays. */
         val end: Double? = null,
         val cues: List<com.ovmplayer.tv.player.CueWatch> = emptyList(),
+        /** Level 2: the title is made of these pieces of other media (spec 4.2); [start], [end], cues are on its timeline. */
+        val segments: List<PageSegment> = emptyList(),
     ) : PageMessage
     /** Level 2: stop playback without reporting it (a cue opened a menu). */
     data object Stop : PageMessage
@@ -49,6 +51,9 @@ sealed interface PageMessage {
     data object Exit : PageMessage
     data class Error(val message: String) : PageMessage
 }
+
+/** A piece of a title made of segments: a range (seconds) of a manifest media id, with its angle. */
+data class PageSegment(val mediaId: String, val start: Double, val end: Double?, val angle: Int? = null, val videoTrack: Int? = null)
 
 @Serializable
 data class LastStop(val media: String, val position: Double)
@@ -180,6 +185,17 @@ class MenuWebView(
                         fun num(key: String) = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
                         val id = (o["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
                         com.ovmplayer.tv.player.CueWatch(id, num("at"), num("from"), num("to"))
+                    },
+                    (msg["segments"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
+                        val o = e as? JsonObject ?: return@mapNotNull null
+                        fun prim(key: String) = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                        PageSegment(
+                            prim("mediaId") ?: return@mapNotNull null,
+                            prim("start")?.toDoubleOrNull() ?: 0.0,
+                            prim("end")?.toDoubleOrNull(),
+                            prim("angle")?.toDoubleOrNull()?.toInt(),
+                            prim("videoTrack")?.toDoubleOrNull()?.toInt(),
+                        )
                     },
                 ),
             )

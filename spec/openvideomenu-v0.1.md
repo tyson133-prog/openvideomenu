@@ -68,7 +68,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 }
 ```
 
-- `ref` (required) is either:
+- `ref` (required, unless the media is made of `segments`, §4.2) is either:
   - a relative path or URL, or
   - `{ "scheme": "...", "id": "..." }`, an opaque reference the host player resolves. For example, a media server can use its own item ids. A player that doesn't know a scheme treats that media as unavailable.
 - `kind` suggests how to group the media: `feature`, `episode`, `trailer`, `featurette`, `behindthescenes`, `deleted`, `interview`, `scene`, `short` or `other`. Other values are allowed.
@@ -96,6 +96,36 @@ Which angle plays: the play item's `angle` (a number or `{"var": name}`, like `a
 let the viewer change angle during playback (a DVD remote's Angle key) and report it as `@angle`. A
 player that can't switch video tracks plays angle 1 of `angleTracks` media. Players without Level 2
 play the `ref` (angle 1).
+
+### 4.2 Segments (Level 2)
+
+A title can be made of pieces of other media and still play as one title: an extended cut that
+splices scenes into the film, a disc's "play all" over separately ripped episodes, a playlist that
+plays a concert's songs in another order. Such a media entry has `segments` instead of `ref`:
+
+```json
+"extended": {
+  "label": "Extended cut",
+  "segments": [
+    { "media": "film", "end": 3120 },
+    { "media": "extra-scenes", "end": 95 },
+    { "media": "film", "start": 3120 }
+  ],
+  "chapters": [{ "time": 0 }, { "time": 3120 }, { "time": 3215 }]
+}
+```
+
+- Each segment is `{ media, start?, end? }`: a range, in seconds, of a media entry that has a `ref`
+  (segments don't nest). `start` defaults to 0. `end` is required on every segment but the last, which
+  may run to the end of its media.
+- The media plays its segments in order as **one title with its own timeline**, starting at 0 with the
+  first segment: its `chapters`, `cues` (§6.3), `duration`, the viewer's seek bar, a play's `start`, and
+  where it stops (for `resume`) are all on that timeline. The segments' own media keep their chapters and
+  cues for when they play by themselves; inside the composite they don't apply.
+- Players SHOULD join segments without a gap. A player that can't MAY show a brief pause between them.
+- A composite media has no `angles` or `angleTracks` of its own. A play's `angle` (or `@angle`) applies to
+  each segment whose media has angles (§4.1); a segment whose media lacks that angle plays angle 1.
+- Players without Level 2 can't play segments: they treat the media as unavailable.
 
 ## 5. Menus
 
@@ -382,6 +412,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), cues and buttons during playback and stopping at `end` (§6.3). Menus per language are separate menus chosen with `@menuLanguage`. *(Next draft)* Segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

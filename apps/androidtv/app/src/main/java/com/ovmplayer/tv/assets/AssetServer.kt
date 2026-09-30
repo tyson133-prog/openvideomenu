@@ -44,8 +44,11 @@ data class CatalogMedia(
     val id: String,
     val kind: String? = null,
     val label: String? = null,
-    val ref: JsonElement,
+    /** Absent for media made of segments (Level 2): see [segments]. */
+    val ref: JsonElement? = null,
     val path: String? = null,
+    /** Level 2: the media ids a media made of segments plays, in order. */
+    val segments: List<String> = emptyList(),
     /** Level 2: the media's other angles as files (angle 2, 3, …), matched like the media itself. */
     val angles: List<CatalogAngle> = emptyList(),
 )

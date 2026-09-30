@@ -77,7 +77,11 @@ public sealed class Source
 /// <summary>A title the menus play.</summary>
 public sealed class MediaEntry
 {
-    public MediaRef Ref { get; set; } = new("");
+    /// <summary>The file (or server item). Null when the media is made of <see cref="Segments"/> (Level 2).</summary>
+    public MediaRef? Ref { get; set; }
+
+    /// <summary>Level 2: pieces of other media, played as one title with its own timeline (spec §4.2).</summary>
+    public List<Segment>? Segments { get; set; }
 
     public string? Label { get; set; }
 
@@ -95,12 +99,29 @@ public sealed class MediaEntry
     /// <summary>Level 2: the file's first N video tracks are angles 1..N (spec §4.1).</summary>
     public int? AngleTracks { get; set; }
 
-    /// <summary>How many angles this media has: 1 when it has none.</summary>
+    /// <summary>
+    /// How many angles this media has: 1 when it has none. For media made of segments, see
+    /// <see cref="Navigator.AngleCount"/> (its segments' media decide).
+    /// </summary>
     [JsonIgnore]
     public int AngleCount => Angles is { Count: > 0 } a ? 1 + a.Count : AngleTracks ?? 1;
 
     /// <summary>Level 2: cues whenever this media plays (spec §6.3).</summary>
     public List<Cue>? Cues { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+}
+
+/// <summary>Level 2: a range of a media entry that has a ref; <see cref="End"/> is required on every segment but the last.</summary>
+public sealed class Segment
+{
+    public string Media { get; set; } = "";
+
+    /// <summary>Seconds into the media; default 0.</summary>
+    public double? Start { get; set; }
+
+    public double? End { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

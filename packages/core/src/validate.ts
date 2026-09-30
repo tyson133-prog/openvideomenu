@@ -21,7 +21,8 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+  segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
   menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
   timeout: ["after", "action", "restartOnInput"],
@@ -276,7 +277,11 @@ class Validator {
         continue;
       }
       this.unknownKeys(m, KNOWN_KEYS.media!, path);
-      this.mediaRef(m.ref, `${path}/ref`);
+      // Level 2: made of segments of other media (checked below, once every id is known) or a ref.
+      if (m.segments === undefined) this.mediaRef(m.ref, `${path}/ref`);
+      else if (m.ref !== undefined) this.error(`${path}/segments`, "Give a ref or segments, not both.");
+      else if (m.angles !== undefined || m.angleTracks !== undefined)
+        this.error(`${path}/${m.angles !== undefined ? "angles" : "angleTracks"}`, "A media made of segments has no angles of its own; its segments' media do.");
       let angles = 1;
       if (m.angles !== undefined) {
         if (!Array.isArray(m.angles) || m.angles.length === 0) this.error(`${path}/angles`, "Must be a list of at least one media ref.");
@@ -322,7 +327,38 @@ class Validator {
       }
       ids.set(id, chapterCount);
     }
+    for (const [id, m] of Object.entries(value)) if (isObject(m) && m.segments !== undefined) this.segments(m.segments, id, value);
     return ids;
+  }
+
+  /** Level 2: a media made of segments of other media (spec 4.2). */
+  private segments(value: unknown, id: string, media: Record<string, unknown>) {
+    const path = `/media/${id}/segments`;
+    if (!Array.isArray(value) || value.length === 0) {
+      this.error(path, "Must be a list of at least one segment {media, start?, end?}.");
+      return;
+    }
+    let angles = 1;
+    value.forEach((seg, i) => {
+      const sp = `${path}/${i}`;
+      if (!isObject(seg)) {
+        this.error(sp, "Must be a segment {media, start?, end?}.");
+        return;
+      }
+      this.unknownKeys(seg, KNOWN_KEYS.segment!, sp);
+      const source = isNonEmptyString(seg.media) ? media[seg.media] : undefined;
+      if (!isObject(source)) this.error(`${sp}/media`, `No media "${String(seg.media)}".`);
+      else if (source.segments !== undefined) this.error(`${sp}/media`, `Media "${String(seg.media)}" is made of segments; segments don't nest.`);
+      else angles = Math.max(angles, this.angleCounts.get(seg.media as string) ?? 1);
+      const okStart = seg.start === undefined || (isFiniteNumber(seg.start) && seg.start >= 0);
+      if (!okStart) this.error(`${sp}/start`, "Must be a non-negative number of seconds.");
+      if (seg.end === undefined) {
+        if (i < value.length - 1) this.error(`${sp}/end`, "Required on every segment but the last.");
+      } else if (!(isFiniteNumber(seg.end) && seg.end > (okStart && isFiniteNumber(seg.start) ? seg.start : 0)))
+        this.error(`${sp}/end`, "Must be a number of seconds after start.");
+    });
+    // A play's angle applies to the segments whose media have angles.
+    this.angleCounts.set(id, angles);
   }
 
   private mediaRef(ref: unknown, path: string) {

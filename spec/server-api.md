@@ -119,8 +119,9 @@ Signed in. Every manifest the server found, and the media each one references.
 | `valid` | yes | Whether the manifest could be read. Invalid entries carry `errors` (strings) instead of the fields below. |
 | `version`, `title`, `source` | if valid | Copied from the manifest. |
 | `hasMenus` | if valid | Whether it has any menus. A manifest with only a fallback list is still valid. |
-| `media` | if valid | One entry per media item: `id`, `kind`, `label` and `ref` from the manifest, plus `path`. |
+| `media` | if valid | One entry per media item: `id`, `kind`, `label` and `ref` (when it has one) from the manifest, plus `path`. |
 | `media[].path` | when `ref` is a relative path | The media file's path under the same folder, with forward slashes. Apps match it against the media server's file paths by their **trailing segments** (at least the folder and file name), because the two machines may mount the folder at different places. |
+| `media[].segments` | when the media is made of segments | *(Level 2)* The media ids it plays, in order; such media have no `ref` or `path` (the files are those of the media listed). |
 | `media[].angles` | when the media has angle files | *(Level 2)* One `{ ref, path }` per other angle (angle 2, 3, …), `path` as for the media itself, so apps can match those files too. |
 | `modified` | yes | When the manifest last changed (ISO 8601). |
 

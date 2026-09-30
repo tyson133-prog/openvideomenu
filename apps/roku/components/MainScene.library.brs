@@ -463,6 +463,8 @@ end function
 ' playback; a brief or accidental play leaves the previous point as it was.
 sub rememberStop(item as object, position as float, req as object)
     if position < 5 or m.playing = invalid or m.playing.startedAt = invalid then return
+    ' A title made of segments isn't one of the server's items: the menu remembers where it stopped.
+    if m.segPlay <> invalid then return
     if UpTime(0) - m.playing.startedAt < 10 then return
     stops = stopsRead()
     now = CreateObject("roDateTime").AsSeconds()

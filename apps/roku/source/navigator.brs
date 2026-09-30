@@ -580,6 +580,18 @@ end function
 function msNavAngleCount(manifest as object, media as string) as integer
     info = manifest["media"][media]
     if info = invalid then return 1
+    ' Made of segments: a play's angle applies to the segments whose media have angles (spec 4.2).
+    if info["segments"] <> invalid
+        most = 1
+        for each seg in info["segments"]
+            src = manifest["media"][seg["media"]]
+            if src <> invalid and src["segments"] = invalid
+                n = msNavAngleCount(manifest, seg["media"])
+                if n > most then most = n
+            end if
+        end for
+        return most
+    end if
     if info["angles"] <> invalid then return 1 + info["angles"].Count()
     if info["angleTracks"] <> invalid then return info["angleTracks"]
     return 1

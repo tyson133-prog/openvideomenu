@@ -363,7 +363,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             when (msg) {
                 PageMessage.Ready -> web.init(open.entry.url, open.lastStop)
                 is PageMessage.Play -> scope.launch {
-                    val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle, msg.angle, msg.videoTrack)
+                    val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle, msg.angle, msg.videoTrack, msg.segments)
                     if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else {
                         // A cue may start this while something plays (it returns there afterwards).
                         handle = null

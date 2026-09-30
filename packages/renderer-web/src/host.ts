@@ -6,7 +6,10 @@
  *
  * page → native
  *   {type:"ready"}                                       page loaded, send "init"
- *   {type:"play", mediaId, ref, url?, start, label, audio?, subtitle?, angle?, videoTrack?, end?, cues?}
+ *   {type:"play", mediaId, ref?, url?, start, label, audio?, subtitle?, angle?, videoTrack?, end?, cues?, segments?}
+ *                                                        segments (Level 2): [{mediaId, ref, url?, start, end?,
+ *                                                        angle?, videoTrack?}] played as one title; start, end,
+ *                                                        cues and stop positions are on its timeline
  *                                                        play this in the native player (audio: 1-based
  *                                                        track; subtitle: 1-based, 0 = off; angle: which
  *                                                        angle file, ref/url already that file's;
@@ -54,8 +57,8 @@ export class BridgePlayback implements PlaybackAdapter {
   onCue?: (id: string) => void;
   onCueEnd?: (id: string) => void;
 
-  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues }: PlayRequest) {
-    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues });
+  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments }: PlayRequest) {
+    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments });
   }
 
   /** The navigator left playback by itself (a cue opened a menu); the native player owns the position. */

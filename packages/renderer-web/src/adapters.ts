@@ -4,12 +4,21 @@ import type { CueWatch, Key, MediaRef } from "@openvideomenu/core";
 export interface PlayRequest {
   /** Manifest media id. */
   mediaId: string;
-  /** The media's ref exactly as written in the manifest (hosts that match files themselves use this). */
-  ref: MediaRef;
+  /**
+   * The media's ref exactly as written in the manifest (hosts that match files themselves use this).
+   * Absent for media made of segments: see `segments`.
+   */
+  ref?: MediaRef;
   /** Resolved URL for string refs and known schemes; undefined when only the host can resolve it. */
   url?: string;
-  /** Seconds. */
+  /** Seconds (on the title's own timeline when it is made of segments). */
   start: number;
+  /**
+   * Level 2 (spec 4.2): the pieces to play in order as one title, each a range of a file. Positions,
+   * `end`, cues and the reported stop are on the title's timeline: segment i starts at the sum of the
+   * lengths (end - start) of the segments before it.
+   */
+  segments?: SegmentRequest[];
   /** Level 2: 1-based audio track; undefined = player default. */
   audio?: number;
   /** Level 2: 1-based subtitle track, 0 = off; undefined = player default. */
@@ -26,6 +35,20 @@ export interface PlayRequest {
   /** Level 2: cues to report with onCue / onCueEnd while this plays (spec 6.3). */
   cues?: CueWatch[];
   label: string;
+}
+
+/** One piece of a title made of segments: a range of a media entry that has a file. */
+export interface SegmentRequest {
+  mediaId: string;
+  ref: MediaRef;
+  url?: string;
+  /** Seconds into the file. */
+  start: number;
+  /** Seconds into the file; absent on a last segment that runs to the end of its file. */
+  end?: number;
+  /** For segment media with angles: which angle (ref/url are already that angle's file), or its video track. */
+  angle?: number;
+  videoTrack?: number;
 }
 
 /**
@@ -157,6 +180,10 @@ export class Html5Playback implements PlaybackAdapter {
   onCueEnd?: (id: string) => void;
   private readonly video: HTMLVideoElement;
   private clock?: CueClock;
+  /** What plays: one piece for a single file, several for a title made of segments (spec 4.2). */
+  private pieces: { url?: string; start: number; end?: number; offset: number }[] = [];
+  private piece = 0;
+  private label = "";
 
   constructor(container: HTMLElement) {
     this.video = document.createElement("video");
@@ -165,11 +192,13 @@ export class Html5Playback implements PlaybackAdapter {
     this.video.playsInline = true;
     this.video.hidden = true;
     container.appendChild(this.video);
-    this.video.addEventListener("ended", () => {
-      this.hide();
-      this.onEnded?.();
+    this.video.addEventListener("ended", () => this.nextPiece());
+    this.video.addEventListener("timeupdate", () => {
+      const p = this.pieces[this.piece];
+      // A segment that ends inside its file hands over to the next one there.
+      if (p?.end !== undefined && this.video.currentTime >= p.end) return this.nextPiece();
+      this.clock?.tick(this.position());
     });
-    this.video.addEventListener("timeupdate", () => this.clock?.tick(this.video.currentTime));
     this.video.addEventListener("error", () => {
       if (this.video.hidden) return;
       const code = this.video.error?.code;
@@ -182,10 +211,18 @@ export class Html5Playback implements PlaybackAdapter {
     });
   }
 
-  play({ url, start, label, audio, end, cues }: PlayRequest) {
-    const v = this.video;
+  play({ url, start, label, audio, end, cues, segments }: PlayRequest) {
     this.pendingAudio = audio;
     this.clock = undefined;
+    this.label = label;
+    // Each piece's place on the title's timeline.
+    let offset = 0;
+    const parts: { url?: string; start: number; end?: number }[] = segments ?? [{ url, start: 0 }];
+    this.pieces = parts.map((seg) => {
+      const piece = { url: seg.url, start: seg.start, end: seg.end, offset };
+      offset += (seg.end ?? Infinity) - seg.start;
+      return piece;
+    });
     if (end !== undefined || cues?.length) {
       const clock: CueClock = new CueClock(cues ?? [], end, {
         cue: (id) => this.onCue?.(id),
@@ -200,15 +237,33 @@ export class Html5Playback implements PlaybackAdapter {
       clock.start(start);
       this.clock = clock;
     }
-    if (!url) {
-      queueMicrotask(() => this.onError?.(`Can't find "${label}".`));
+    // The piece holding `start` (the last one runs to the end of its file).
+    let i = 0;
+    while (i < this.pieces.length - 1 && start >= this.pieces[i + 1]!.offset) i++;
+    this.load(i, start - this.pieces[i]!.offset);
+  }
+
+  /** Where playback is on the title's timeline. */
+  private position(): number {
+    const p = this.pieces[this.piece];
+    return p ? p.offset + Math.max(0, (this.video.currentTime || 0) - p.start) : 0;
+  }
+
+  /** Play piece i from `into` seconds after its start. */
+  private load(i: number, into: number) {
+    const v = this.video;
+    const p = this.pieces[i]!;
+    this.piece = i;
+    if (!p.url) {
+      queueMicrotask(() => this.onError?.(`Can't find "${this.label}".`));
       return;
     }
     v.hidden = false;
-    v.title = label;
-    v.src = url;
+    v.title = this.label;
+    v.src = p.url;
     const seek = () => {
-      if (start > 0) v.currentTime = start;
+      const at = p.start + into;
+      if (at > 0) v.currentTime = at;
       this.applyAudioTrack();
       void v.play().catch(() => {
         /* autoplay may need a gesture; controls are visible */
@@ -217,6 +272,14 @@ export class Html5Playback implements PlaybackAdapter {
     if (v.readyState >= HTMLMediaElement.HAVE_METADATA) seek();
     else v.addEventListener("loadedmetadata", seek, { once: true });
     v.focus({ preventScroll: true });
+  }
+
+  /** The piece playing ran out: the next one, or the title has ended. */
+  private nextPiece() {
+    if (this.video.hidden) return;
+    if (this.piece + 1 < this.pieces.length) return this.load(this.piece + 1, 0);
+    this.hide();
+    this.onEnded?.();
   }
 
   private pendingAudio?: number;
@@ -230,7 +293,7 @@ export class Html5Playback implements PlaybackAdapter {
   }
 
   stop(): number {
-    const position = this.video.currentTime || 0;
+    const position = this.position();
     this.hide();
     return position;
   }

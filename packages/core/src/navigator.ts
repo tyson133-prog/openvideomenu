@@ -615,6 +615,8 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: numb
 export function angleCount(manifest: Manifest, media: string): number {
   const m = manifest.media[media];
   if (!m) return 1;
+  // Made of segments: a play's angle applies to the segments whose media have angles (§4.2).
+  if (m.segments) return Math.max(1, ...m.segments.map((s) => (manifest.media[s.media]?.segments ? 1 : angleCount(manifest, s.media))));
   if (m.angles) return 1 + m.angles.length;
   return m.angleTracks ?? 1;
 }

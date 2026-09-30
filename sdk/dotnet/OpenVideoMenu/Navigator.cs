@@ -881,6 +881,25 @@ public static class Navigator
         return effect;
     }
 
+    /// <summary>
+    /// How many angles a media has (1 when none). Made of segments: the most of its segments' media, as a
+    /// play's angle applies to the segments whose media have angles (spec §4.2).
+    /// </summary>
+    public static int AngleCount(Manifest manifest, string media)
+    {
+        if (!manifest.Media.TryGetValue(media, out var m))
+        {
+            return 1;
+        }
+
+        if (m.Segments is { } segments)
+        {
+            return segments.Select(s => manifest.Media.TryGetValue(s.Media, out var src) && src.Segments is null ? src.AngleCount : 1).Append(1).Max();
+        }
+
+        return m.AngleCount;
+    }
+
     /// <summary>The 1-based chapter a time falls in (0 when the media has no chapters).</summary>
     public static int ChapterAt(Manifest manifest, string media, double seconds)
     {
@@ -957,7 +976,7 @@ public static class Navigator
         var subtitle = item.Subtitle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@subtitle", out var t) ? t.Number : null);
         // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
         int? angle = null;
-        var angles = manifest.Media.TryGetValue(item.Media, out var m) ? m.AngleCount : 1;
+        var angles = AngleCount(manifest, item.Media);
         if (angles > 1)
         {
             var wanted = item.Angle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@angle", out var g) ? g.Number : null) ?? 1;

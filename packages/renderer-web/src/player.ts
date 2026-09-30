@@ -19,7 +19,7 @@ import {
   type NavState,
   type PlayItem,
 } from "@openvideomenu/core";
-import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
+import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter, type SegmentRequest } from "./adapters.js";
 import { injectStyles } from "./styles.js";
 
 export interface PlayerOptions {
@@ -287,24 +287,46 @@ export class MenuPlayer {
   }
 
   private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number, end?: number, cues?: CueWatch[]) {
-    const { manifest, manifestUrl, resolvers } = this.options;
+    const { manifest } = this.options;
     const media = manifest.media[mediaId]!;
-    // Angle 2 and up of angle files is its own file; angle tracks are chosen inside the one file.
-    const ref = angle !== undefined && angle > 1 && media.angles ? media.angles[angle - 2]! : media.ref;
-    const request: PlayRequest = {
-      mediaId,
-      ref,
-      url: resolveMedia(ref, manifestUrl, resolvers),
+    const common = {
       start,
       label: media.label ?? manifest.title.name,
       ...(audio !== undefined ? { audio } : {}),
       ...(subtitle !== undefined ? { subtitle } : {}),
-      ...(angle !== undefined ? { angle } : {}),
-      ...(angle !== undefined && media.angleTracks ? { videoTrack: angle } : {}),
       ...(end !== undefined ? { end } : {}),
       ...(cues?.length ? { cues } : {}),
     };
-    this.playback.play(request);
+    // Level 2: made of segments, each a range of a file (with the play's angle where it has angles).
+    if (media.segments) {
+      const segments: SegmentRequest[] = media.segments.map((seg) => ({
+        mediaId: seg.media,
+        ...this.source(seg.media, angle),
+        start: seg.start ?? 0,
+        ...(seg.end !== undefined ? { end: seg.end } : {}),
+      }));
+      this.playback.play({ mediaId, segments, ...(angle !== undefined ? { angle } : {}), ...common });
+      return;
+    }
+    this.playback.play({ mediaId, ...this.source(mediaId, angle), ...common });
+  }
+
+  /**
+   * A media entry's file for a play: angle 2 and up of angle files is its own file; angle tracks are
+   * chosen inside the one file. An angle the media doesn't have plays angle 1.
+   */
+  private source(mediaId: string, angle: number | undefined): Pick<SegmentRequest, "ref" | "url" | "angle" | "videoTrack"> {
+    const { manifest, manifestUrl, resolvers } = this.options;
+    const media = manifest.media[mediaId]!;
+    const count = media.angles ? 1 + media.angles.length : (media.angleTracks ?? 1);
+    const a = count > 1 && angle !== undefined ? (angle <= count ? angle : 1) : undefined;
+    const ref = a !== undefined && a > 1 && media.angles ? media.angles[a - 2]! : media.ref!;
+    return {
+      ref,
+      url: resolveMedia(ref, manifestUrl, resolvers),
+      ...(a !== undefined ? { angle: a } : {}),
+      ...(a !== undefined && media.angleTracks ? { videoTrack: a } : {}),
+    };
   }
 
   // --- menu rendering --------------------------------------------------------------------------
