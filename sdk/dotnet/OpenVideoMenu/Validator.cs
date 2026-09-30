@@ -16,10 +16,12 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks"],
+        ["media"] = ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
         ["chapter"] = ["time", "label", "thumbnail"],
         ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
         ["timeout"] = ["after", "action", "restartOnInput"],
+        ["cue"] = ["at", "action"],
+        ["overlay"] = ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
         ["canvas"] = ["width", "height", "aspect"],
         ["background"] = ["image", "color", "video", "audio"],
         ["loopingMedia"] = ["src", "loopStart"],
@@ -32,7 +34,7 @@ internal sealed class Validator
     // Insertion order matters: it's the order "Expected …" lists the types in.
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
-        ("play", ["type", "media", "chapter", "start", "after", "audio", "subtitle", "angle"]),
+        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues"]),
         ("playAll", ["type", "items", "after"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
@@ -50,6 +52,9 @@ internal sealed class Validator
     private readonly List<Issue> _warnings = [];
     /// <summary>Declared variables and their types (true = text); a variable keeps the type of its starting value.</summary>
     private readonly Dictionary<string, bool> _varTypes = new(StringComparer.Ordinal);
+
+    /// <summary>Above 0 while checking cues: playback started there returns to the interrupted one.</summary>
+    private int _cueDepth;
 
     /// <summary>Media id → how many angles it has (1 without angles).</summary>
     private readonly Dictionary<string, int> _angleCounts = new(StringComparer.Ordinal);
@@ -101,6 +106,18 @@ internal sealed class Validator
         Vars(m["vars"]);
         var mediaIds = Media(m["media"]);
         var menus = Menus(m["menus"], mediaIds);
+
+        // Media cues run actions, so they're checked once every menu is known.
+        if (Obj.TryFrom(m["media"], out var allMedia))
+        {
+            foreach (var (id, entry) in allMedia.Entries)
+            {
+                if (Obj.TryFrom(entry, out var me) && me["cues"] is { } mediaCues)
+                {
+                    Cues(mediaCues, $"/media/{id}/cues", mediaIds, menus);
+                }
+            }
+        }
 
         if (m["rootMenu"] is { } root)
         {
@@ -563,37 +580,7 @@ internal sealed class Validator
         }
 
         UnknownKeys(menu, KnownKeys["menu"], path);
-
-        (double Width, double Height)? canvas = null;
-        if (!Obj.TryFrom(menu["canvas"], out var c))
-        {
-            Error($"{path}/canvas", "Required: {width, height, aspect?}.");
-        }
-        else
-        {
-            UnknownKeys(c, KnownKeys["canvas"], $"{path}/canvas");
-            var okW = c["width"] is { } w && IsInteger(w) && w.GetDouble() > 0;
-            var okH = c["height"] is { } h && IsInteger(h) && h.GetDouble() > 0;
-            if (!okW)
-            {
-                Error($"{path}/canvas/width", "Must be a positive integer.");
-            }
-
-            if (!okH)
-            {
-                Error($"{path}/canvas/height", "Must be a positive integer.");
-            }
-
-            if (okW && okH)
-            {
-                canvas = (c["width"]!.Value.GetDouble(), c["height"]!.Value.GetDouble());
-            }
-
-            if (c["aspect"] is { } aspect && ParseAspect(aspect) is null)
-            {
-                Error($"{path}/canvas/aspect", "Must be \"W:H\" (e.g. \"16:9\") or a positive number.");
-            }
-        }
+        var canvas = Canvas(menu["canvas"], $"{path}/canvas");
 
         if (menu["background"] is { } bgValue)
         {
@@ -634,10 +621,90 @@ internal sealed class Validator
             Error($"{path}/buttonsAt", "Must be a non-negative number of seconds.");
         }
 
+        if (Buttons(menu, path, canvas, mediaIds, menus, "this menu") is not { } own)
+        {
+            return;
+        }
+
+        if (menu["defaultButton"] is { } defaultButton)
+        {
+            ButtonRef(defaultButton, $"{path}/defaultButton", own, "this menu");
+        }
+
+        // What the remote's Back does here; may press one of this menu's own buttons.
+        if (menu["back"] is { } back)
+        {
+            Action(back, $"{path}/back", mediaIds, menus, own);
+        }
+
+        if (menu["timeout"] is { } timeoutValue)
+        {
+            var tp = $"{path}/timeout";
+            if (!Obj.TryFrom(timeoutValue, out var t))
+            {
+                Error(tp, "Must be {after, action, restartOnInput?}.");
+            }
+            else
+            {
+                UnknownKeys(t, KnownKeys["timeout"], tp);
+                if (t["after"] is not { } after || !(IsFiniteNumber(after) && after.GetDouble() > 0))
+                {
+                    Error($"{tp}/after", "Must be a positive number of seconds.");
+                }
+
+                if (t["restartOnInput"] is { } restart && !IsBoolean(restart))
+                {
+                    Error($"{tp}/restartOnInput", "Must be true or false.");
+                }
+
+                // Like back, it may press one of this menu's own buttons.
+                Action(t["action"], $"{tp}/action", mediaIds, menus, own);
+            }
+        }
+    }
+
+    private (double Width, double Height)? Canvas(JsonElement? value, string path)
+    {
+        if (!Obj.TryFrom(value, out var c))
+        {
+            Error(path, "Required: {width, height, aspect?}.");
+            return null;
+        }
+
+        UnknownKeys(c, KnownKeys["canvas"], path);
+        var okW = c["width"] is { } w && IsInteger(w) && w.GetDouble() > 0;
+        var okH = c["height"] is { } h && IsInteger(h) && h.GetDouble() > 0;
+        if (!okW)
+        {
+            Error($"{path}/width", "Must be a positive integer.");
+        }
+
+        if (!okH)
+        {
+            Error($"{path}/height", "Must be a positive integer.");
+        }
+
+        if (c["aspect"] is { } aspect && ParseAspect(aspect) is null)
+        {
+            Error($"{path}/aspect", "Must be \"W:H\" (e.g. \"16:9\") or a positive number.");
+        }
+
+        return okW && okH ? (c["width"]!.Value.GetDouble(), c["height"]!.Value.GetDouble()) : null;
+    }
+
+    /// <summary>The buttons of a menu or overlay; returns their ids, or null when there are none.</summary>
+    private HashSet<string>? Buttons(
+        Obj menu,
+        string path,
+        (double Width, double Height)? canvas,
+        Dictionary<string, int> mediaIds,
+        Dictionary<string, HashSet<string>> menus,
+        string where)
+    {
         if (menu["buttons"] is not { ValueKind: JsonValueKind.Array } buttons || buttons.GetArrayLength() == 0)
         {
             Error($"{path}/buttons", "Required: at least one button.");
-            return;
+            return null;
         }
 
         var own = new HashSet<string>(StringComparer.Ordinal);
@@ -762,46 +829,94 @@ internal sealed class Validator
                 }
                 else if (!IsNonEmptyString(target) || !own.Contains(target.GetString()!))
                 {
-                    Error($"{np}/{dir}", $"No button \"{JsString(target)}\" in this menu.");
+                    Error($"{np}/{dir}", $"No button \"{JsString(target)}\" in {where}.");
                 }
             }
         }
 
-        if (menu["defaultButton"] is { } defaultButton)
+        return own;
+    }
+
+    /// <summary>
+    /// Level 2: cues during playback (spec §6.3). Point cues {at, action}; overlays {from, to, canvas,
+    /// buttons}, which must not overlap each other within one list.
+    /// </summary>
+    private void Cues(JsonElement value, string path, Dictionary<string, int> mediaIds, Dictionary<string, HashSet<string>> menus)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
         {
-            ButtonRef(defaultButton, $"{path}/defaultButton", own, "this menu");
+            Error(path, "Must be a list of cues.");
+            return;
         }
 
-        // What the remote's Back does here; may press one of this menu's own buttons.
-        if (menu["back"] is { } back)
+        var windows = new List<(double From, double To, int I)>();
+        _cueDepth++;
+        var i = 0;
+        foreach (var cueValue in value.EnumerateArray())
         {
-            Action(back, $"{path}/back", mediaIds, menus, own);
-        }
-
-        if (menu["timeout"] is { } timeoutValue)
-        {
-            var tp = $"{path}/timeout";
-            if (!Obj.TryFrom(timeoutValue, out var t))
+            var cp = $"{path}/{i}";
+            if (!Obj.TryFrom(cueValue, out var cue))
             {
-                Error(tp, "Must be {after, action, restartOnInput?}.");
+                Error(cp, "Must be a point cue {at, action} or an overlay {from, to, canvas, buttons}.");
+            }
+            else if (cue["at"] is { } at)
+            {
+                UnknownKeys(cue, KnownKeys["cue"], cp);
+                if (!(IsFiniteNumber(at) && at.GetDouble() >= 0))
+                {
+                    Error($"{cp}/at", "Must be a non-negative number of seconds.");
+                }
+
+                Action(cue["action"], $"{cp}/action", mediaIds, menus);
+            }
+            else if (cue["from"] is not null || cue["to"] is not null)
+            {
+                UnknownKeys(cue, KnownKeys["overlay"], cp);
+                var okFrom = cue["from"] is { } f && IsFiniteNumber(f) && f.GetDouble() >= 0;
+                if (!okFrom)
+                {
+                    Error($"{cp}/from", "Must be a non-negative number of seconds.");
+                }
+
+                var okTo = okFrom && cue["to"] is { } t && IsFiniteNumber(t) && t.GetDouble() > cue["from"]!.Value.GetDouble();
+                if (!okTo)
+                {
+                    Error($"{cp}/to", "Must be a number of seconds after from.");
+                }
+                else
+                {
+                    var from = cue["from"]!.Value.GetDouble();
+                    var to = cue["to"]!.Value.GetDouble();
+                    var other = windows.FirstOrDefault(w => from < w.To && w.From < to, (0, 0, -1));
+                    if (other.I >= 0)
+                    {
+                        Error($"{cp}/from", $"Overlaps overlay {other.I}; one overlay shows at a time.");
+                    }
+
+                    windows.Add((from, to, i));
+                }
+
+                var canvas = Canvas(cue["canvas"], $"{cp}/canvas");
+                if (cue["autoNav"] is { } autoNav && !IsBoolean(autoNav))
+                {
+                    Error($"{cp}/autoNav", "Must be true or false.");
+                }
+
+                var own = Buttons(cue, cp, canvas, mediaIds, menus, "this overlay");
+                if (own is not null && cue["defaultButton"] is { } defaultButton)
+                {
+                    ButtonRef(defaultButton, $"{cp}/defaultButton", own, "this overlay");
+                }
             }
             else
             {
-                UnknownKeys(t, KnownKeys["timeout"], tp);
-                if (t["after"] is not { } after || !(IsFiniteNumber(after) && after.GetDouble() > 0))
-                {
-                    Error($"{tp}/after", "Must be a positive number of seconds.");
-                }
-
-                if (t["restartOnInput"] is { } restart && !IsBoolean(restart))
-                {
-                    Error($"{tp}/restartOnInput", "Must be true or false.");
-                }
-
-                // Like back, it may press one of this menu's own buttons.
-                Action(t["action"], $"{tp}/action", mediaIds, menus, own);
+                Error(cp, "Must be a point cue {at, action} or an overlay {from, to, canvas, buttons}.");
             }
+
+            i++;
         }
+
+        _cueDepth--;
     }
 
     private void LoopingMedia(JsonElement value, string path)
@@ -844,7 +959,7 @@ internal sealed class Validator
         }
     }
 
-    private void PlayItem(Obj value, string path, Dictionary<string, int> mediaIds)
+    private void PlayItem(Obj value, string path, Dictionary<string, int> mediaIds, Dictionary<string, HashSet<string>> menus)
     {
         var media = value["media"];
         if (!IsNonEmptyString(media) || !mediaIds.ContainsKey(media!.Value.GetString()!))
@@ -868,6 +983,18 @@ internal sealed class Validator
             Error($"{path}/start", "Must be a non-negative number of seconds.");
         }
 
+        if (value["end"] is { } end)
+        {
+            if (!(IsFiniteNumber(end) && end.GetDouble() > 0))
+            {
+                Error($"{path}/end", "Must be a positive number of seconds.");
+            }
+            else if (value["start"] is { } s0 && IsFiniteNumber(s0) && end.GetDouble() <= s0.GetDouble())
+            {
+                Error($"{path}/end", "Must be after start.");
+            }
+        }
+
         if (value["audio"] is { } audio)
         {
             VarOrNumber(audio, $"{path}/audio", 1);
@@ -886,6 +1013,11 @@ internal sealed class Validator
             {
                 Error($"{path}/angle", $"Media \"{mediaId}\" has {count} angle(s).");
             }
+        }
+
+        if (value["cues"] is { } cues)
+        {
+            Cues(cues, $"{path}/cues", mediaIds, menus);
         }
     }
 
@@ -926,7 +1058,7 @@ internal sealed class Validator
         switch (type)
         {
             case "play":
-                PlayItem(action, path, mediaIds);
+                PlayItem(action, path, mediaIds, menus);
                 break;
             case "playAll":
                 if (action["items"] is not { ValueKind: JsonValueKind.Array } items || items.GetArrayLength() == 0)
@@ -945,7 +1077,7 @@ internal sealed class Validator
                         }
                         else
                         {
-                            PlayItem(io, ip, mediaIds);
+                            PlayItem(io, ip, mediaIds, menus);
                         }
                     }
                 }
@@ -1072,7 +1204,11 @@ internal sealed class Validator
             }
         }
 
-        if (type is "play" or "playAll" && action["after"] is { } after)
+        if (type is "play" or "playAll" && action["after"] is not null && _cueDepth > 0)
+        {
+            Error($"{path}/after", "Playback started during playback returns to it when done; after is not allowed here.");
+        }
+        else if (type is "play" or "playAll" && action["after"] is { } after)
         {
             var afterOtherwise = Obj.TryFrom(after, out var ra) && ra["type"] is { ValueKind: JsonValueKind.String } rt && rt.GetString() == "resume" ? ra["otherwise"] : null;
             if (Obj.TryFrom(after, out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } at && at.GetString() is "play" or "playAll")

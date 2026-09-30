@@ -1,6 +1,6 @@
 # DVD import profile (early draft)
 
-This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup and angles) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
+This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup, angles and cues during playback) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
 
 ## Mapping
 
@@ -34,6 +34,9 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Player settings read by commands (SPRM) | Player state: SPRM 1/2/3 → `@audio`/`@subtitle`/`@angle` (SPRM 2 is off when bit 6 is clear), 8 → `@focus` (button number ÷ 1024 → its id), 0/16/18 → `@menuLanguage`/`@audioLanguage`/`@subtitleLanguage` (ISO 639 codes as text), 4–7 → `@lastMedia`/`@lastChapter`, 12 → `@country`, 13 → `@parentalLevel`, 14 → `@aspect`, 20 → `@region`. |
 | SetSTN (choose audio/subtitle/angle) | `set` on `@audio`/`@subtitle`/`@angle`. |
 | Multi-angle title (angle blocks in its cells) | Media `angles`: one file per angle, as the rip wrote them (each whole title, the angle blocks differing). Or `angleTracks` when the rip keeps the angles as video tracks of one file. Menus that choose an angle with SetSTN set `@angle`. |
+| Title that ends at a cell (a cell command `LinkTailPGC`/`Exit`, e.g. one song of a concert) | Play item `end` at that cell's end time. |
+| Other cell commands during a title (SetGPRM, CallSS to a menu, conditional links) | Point cues `{ at, action }` at the cell's end time: `set`, `goto`, `if`. Jumps within the title (LinkCN/LinkPGN) wait for segment playlists. |
+| Buttons in a title's navigation packets (highlights shown over the film) | Overlays `{ from, to, buttons }` on the media, one per run of VOBUs with the same buttons; a button that calls a featurette (and resumes with RSM) is a `play` from the overlay, which returns to the film. |
 | SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
 | Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |
@@ -56,7 +59,6 @@ On a button:
 
 These disc features have no manifest form yet. Importers should keep what they know in `x-dvd`, label the affected buttons honestly, and play the film normally instead.
 
-- **Buttons during playback** (e.g. *The Matrix*'s "Follow the White Rabbit": an icon appears in certain scenes, Enter plays a short featurette, then the film resumes). The planned shape is a timed button on the media ("from 41:10 to 41:25, activating plays X, then resumes at 41:25"). This is a planned Level 2 feature.
 - **Seamless branching** (multi-path titles such as a theatrical and an extended cut sharing segments). The format can express this as a playlist of time ranges from one file, and players can join them gaplessly. The usual obstacle is the rip: many rips follow one path through the disc, so the other path's segments aren't in the file. A branching manifest needs a rip that keeps every segment. This is planned for a later draft.
 
 ## Assets

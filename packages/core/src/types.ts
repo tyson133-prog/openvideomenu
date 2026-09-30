@@ -64,6 +64,8 @@ export interface Media {
   angles?: MediaRef[];
   /** Level 2: the file's first N video tracks are angles 1..N (spec §4.1). */
   angleTracks?: number;
+  /** Level 2: what happens during playback whenever this media plays (spec §6.3). */
+  cues?: Cue[];
 }
 
 export interface Chapter {
@@ -161,6 +163,28 @@ export interface Menu {
   [extension: `x-${string}`]: unknown;
 }
 
+/**
+ * Level 2 (spec §6.3): something that happens during playback. A point cue runs its action when
+ * playback passes `at`; an overlay shows buttons over the video from `from` to `to`.
+ */
+export type Cue = PointCue | Overlay;
+
+export interface PointCue {
+  /** Seconds into the media. */
+  at: number;
+  action: Action;
+}
+
+export interface Overlay {
+  /** Seconds into the media: the buttons show from `from` until `to`. */
+  from: number;
+  to: number;
+  canvas: Canvas;
+  buttons: Button[];
+  defaultButton?: string | { var: string };
+  autoNav?: boolean;
+}
+
 export interface MenuTimeout {
   /** Seconds, from when the menu appears (or from the last key press, with restartOnInput). */
   after: number;
@@ -204,6 +228,10 @@ export interface PlayItem {
   subtitle?: VarOrNumber;
   /** Level 2: angle of media with angles, 1-based. Default: @angle. */
   angle?: VarOrNumber;
+  /** Level 2: stop here (seconds), as if the item ended (spec §6.3). */
+  end?: number;
+  /** Level 2: cues for this way of playing the media, beside the media's own (spec §6.3). */
+  cues?: Cue[];
 }
 
 export type Action =

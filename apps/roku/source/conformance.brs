@@ -49,7 +49,7 @@ function msConformanceCase(c as object) as string
         state = result.state
         want = stepCase["expect"]
         if want <> invalid
-            for each field in ["mode", "menu", "focus", "intro", "buttonsReady"]
+            for each field in ["mode", "menu", "focus", "intro", "buttonsReady", "overlay"]
                 if want.DoesExist(field) and not msDeepEqual(state[field], want[field])
                     return "step " + i.ToStr() + " (" + FormatJson(stepCase["event"]) + "): " + field + " is " + msShow(state[field]) + ", expected " + msShow(want[field]) + msMismatchNote()
                 end if

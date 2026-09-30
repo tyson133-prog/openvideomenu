@@ -21,10 +21,12 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks"],
+  media: ["ref", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
   chapter: ["time", "label", "thumbnail"],
   menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
   timeout: ["after", "action", "restartOnInput"],
+  cue: ["at", "action"],
+  overlay: ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
   canvas: ["width", "height", "aspect"],
   background: ["image", "color", "video", "audio"],
   loopingMedia: ["src", "loopStart"],
@@ -35,7 +37,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "after", "audio", "subtitle", "angle"],
+  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues"],
   playAll: ["type", "items", "after"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
@@ -107,6 +109,10 @@ class Validator {
     this.vars(data.vars);
     const mediaIds = this.media(data.media);
     const menus = this.menus(data.menus, mediaIds);
+    // Media cues run actions, so they're checked once every menu is known.
+    if (isObject(data.media))
+      for (const [id, m] of Object.entries(data.media))
+        if (isObject(m) && m.cues !== undefined) this.cues(m.cues, `/media/${id}/cues`, mediaIds, menus);
 
     if (data.rootMenu !== undefined) {
       if (!isNonEmptyString(data.rootMenu)) this.error("/rootMenu", "Must be a menu id.");
@@ -122,6 +128,9 @@ class Validator {
 
   /** Declared variables and their types (a variable keeps the type of its starting value). */
   private varTypes = new Map<string, "number" | "string">();
+
+  /** Above 0 while checking cues: playback started there returns to the interrupted one. */
+  private cueDepth = 0;
 
   /** Media id → how many angles it has (1 without angles). */
   private angleCounts = new Map<string, number>();
@@ -349,20 +358,7 @@ class Validator {
       return;
     }
     this.unknownKeys(value, KNOWN_KEYS.menu!, path);
-
-    let canvas: { width: number; height: number } | undefined;
-    const c = value.canvas;
-    if (!isObject(c)) this.error(`${path}/canvas`, "Required: {width, height, aspect?}.");
-    else {
-      this.unknownKeys(c, KNOWN_KEYS.canvas!, `${path}/canvas`);
-      const okW = Number.isInteger(c.width) && (c.width as number) > 0;
-      const okH = Number.isInteger(c.height) && (c.height as number) > 0;
-      if (!okW) this.error(`${path}/canvas/width`, "Must be a positive integer.");
-      if (!okH) this.error(`${path}/canvas/height`, "Must be a positive integer.");
-      if (okW && okH) canvas = { width: c.width as number, height: c.height as number };
-      if (c.aspect !== undefined && parseAspect(c.aspect) === undefined)
-        this.error(`${path}/canvas/aspect`, 'Must be "W:H" (e.g. "16:9") or a positive number.');
-    }
+    const canvas = this.canvas(value.canvas, `${path}/canvas`);
 
     if (value.background !== undefined) {
       const bg = value.background;
@@ -382,9 +378,52 @@ class Validator {
     if (value.buttonsAt !== undefined && !(isFiniteNumber(value.buttonsAt) && value.buttonsAt >= 0))
       this.error(`${path}/buttonsAt`, "Must be a non-negative number of seconds.");
 
+    const own = this.buttons(value, path, canvas, mediaIds, menus, "this menu");
+    if (!own) return;
+    if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
+    // What the remote's Back does here; may press one of this menu's own buttons.
+    if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
+    if (value.timeout !== undefined) {
+      const t = value.timeout;
+      const tp = `${path}/timeout`;
+      if (!isObject(t)) this.error(tp, "Must be {after, action, restartOnInput?}.");
+      else {
+        this.unknownKeys(t, KNOWN_KEYS.timeout!, tp);
+        if (!(isFiniteNumber(t.after) && t.after > 0)) this.error(`${tp}/after`, "Must be a positive number of seconds.");
+        if (t.restartOnInput !== undefined && typeof t.restartOnInput !== "boolean") this.error(`${tp}/restartOnInput`, "Must be true or false.");
+        // Like back, it may press one of this menu's own buttons.
+        this.action(t.action, `${tp}/action`, mediaIds, menus, own);
+      }
+    }
+  }
+
+  private canvas(c: unknown, path: string): { width: number; height: number } | undefined {
+    if (!isObject(c)) {
+      this.error(path, "Required: {width, height, aspect?}.");
+      return undefined;
+    }
+    this.unknownKeys(c, KNOWN_KEYS.canvas!, path);
+    const okW = Number.isInteger(c.width) && (c.width as number) > 0;
+    const okH = Number.isInteger(c.height) && (c.height as number) > 0;
+    if (!okW) this.error(`${path}/width`, "Must be a positive integer.");
+    if (!okH) this.error(`${path}/height`, "Must be a positive integer.");
+    if (c.aspect !== undefined && parseAspect(c.aspect) === undefined)
+      this.error(`${path}/aspect`, 'Must be "W:H" (e.g. "16:9") or a positive number.');
+    return okW && okH ? { width: c.width as number, height: c.height as number } : undefined;
+  }
+
+  /** The buttons of a menu or overlay; returns their ids, or undefined when there are none. */
+  private buttons(
+    value: Record<string, unknown>,
+    path: string,
+    canvas: { width: number; height: number } | undefined,
+    mediaIds: Map<string, number>,
+    menus: Map<string, Set<string>>,
+    where: string,
+  ): Set<string> | undefined {
     if (!Array.isArray(value.buttons) || value.buttons.length === 0) {
       this.error(`${path}/buttons`, "Required: at least one button.");
-      return;
+      return undefined;
     }
     const own = new Set<string>();
     value.buttons.forEach((b, i) => {
@@ -441,24 +480,50 @@ class Validator {
         if (!["up", "down", "left", "right"].includes(dir)) {
           if (!dir.startsWith("x-")) this.warn(`${np}/${dir}`, `Unknown direction "${dir}" (ignored).`);
         } else if (!isNonEmptyString(target) || !own.has(target))
-          this.error(`${np}/${dir}`, `No button "${String(target)}" in this menu.`);
+          this.error(`${np}/${dir}`, `No button "${String(target)}" in ${where}.`);
       }
     });
-    if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
-    // What the remote's Back does here; may press one of this menu's own buttons.
-    if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
-    if (value.timeout !== undefined) {
-      const t = value.timeout;
-      const tp = `${path}/timeout`;
-      if (!isObject(t)) this.error(tp, "Must be {after, action, restartOnInput?}.");
-      else {
-        this.unknownKeys(t, KNOWN_KEYS.timeout!, tp);
-        if (!(isFiniteNumber(t.after) && t.after > 0)) this.error(`${tp}/after`, "Must be a positive number of seconds.");
-        if (t.restartOnInput !== undefined && typeof t.restartOnInput !== "boolean") this.error(`${tp}/restartOnInput`, "Must be true or false.");
-        // Like back, it may press one of this menu's own buttons.
-        this.action(t.action, `${tp}/action`, mediaIds, menus, own);
-      }
+    return own;
+  }
+
+  /**
+   * Level 2: cues during playback (spec 6.3). Point cues {at, action}; overlays {from, to, canvas,
+   * buttons}, which must not overlap each other within one list.
+   */
+  private cues(value: unknown, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>) {
+    if (!Array.isArray(value)) {
+      this.error(path, "Must be a list of cues.");
+      return;
     }
+    const windows: { from: number; to: number; i: number }[] = [];
+    this.cueDepth++;
+    value.forEach((cue, i) => {
+      const cp = `${path}/${i}`;
+      if (!isObject(cue)) this.error(cp, "Must be a point cue {at, action} or an overlay {from, to, canvas, buttons}.");
+      else if (cue.at !== undefined) {
+        this.unknownKeys(cue, KNOWN_KEYS.cue!, cp);
+        if (!(isFiniteNumber(cue.at) && cue.at >= 0)) this.error(`${cp}/at`, "Must be a non-negative number of seconds.");
+        this.action(cue.action, `${cp}/action`, mediaIds, menus);
+      } else if (cue.from !== undefined || cue.to !== undefined) {
+        this.unknownKeys(cue, KNOWN_KEYS.overlay!, cp);
+        const okFrom = isFiniteNumber(cue.from) && cue.from >= 0;
+        if (!okFrom) this.error(`${cp}/from`, "Must be a non-negative number of seconds.");
+        const okTo = okFrom && isFiniteNumber(cue.to) && cue.to > (cue.from as number);
+        if (!okTo) this.error(`${cp}/to`, "Must be a number of seconds after from.");
+        else {
+          const from = cue.from as number;
+          const to = cue.to as number;
+          const other = windows.find((w) => from < w.to && w.from < to);
+          if (other) this.error(`${cp}/from`, `Overlaps overlay ${other.i}; one overlay shows at a time.`);
+          windows.push({ from, to, i });
+        }
+        const canvas = this.canvas(cue.canvas, `${cp}/canvas`);
+        if (cue.autoNav !== undefined && typeof cue.autoNav !== "boolean") this.error(`${cp}/autoNav`, "Must be true or false.");
+        const own = this.buttons(cue, cp, canvas, mediaIds, menus, "this overlay");
+        if (own && cue.defaultButton !== undefined) this.buttonRef(cue.defaultButton, `${cp}/defaultButton`, own, "this overlay");
+      } else this.error(cp, "Must be a point cue {at, action} or an overlay {from, to, canvas, buttons}.");
+    });
+    this.cueDepth--;
   }
 
   private loopingMedia(value: unknown, path: string) {
@@ -483,7 +548,7 @@ class Validator {
       this.warn(path, "Extends outside the canvas.");
   }
 
-  private playItem(value: Record<string, unknown>, path: string, mediaIds: Map<string, number>) {
+  private playItem(value: Record<string, unknown>, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>) {
     if (!isNonEmptyString(value.media) || !mediaIds.has(value.media)) {
       this.error(`${path}/media`, `No media "${String(value.media)}".`);
       return;
@@ -495,6 +560,10 @@ class Validator {
     }
     if (value.start !== undefined && !(isFiniteNumber(value.start) && value.start >= 0))
       this.error(`${path}/start`, "Must be a non-negative number of seconds.");
+    if (value.end !== undefined) {
+      if (!(isFiniteNumber(value.end) && value.end > 0)) this.error(`${path}/end`, "Must be a positive number of seconds.");
+      else if (isFiniteNumber(value.start) && value.end <= value.start) this.error(`${path}/end`, "Must be after start.");
+    }
     if (value.audio !== undefined) this.varOrNumber(value.audio, `${path}/audio`, 1);
     if (value.subtitle !== undefined) this.varOrNumber(value.subtitle, `${path}/subtitle`, 0);
     if (value.angle !== undefined) {
@@ -503,6 +572,7 @@ class Validator {
       if (Number.isInteger(value.angle) && (value.angle as number) > count)
         this.error(`${path}/angle`, `Media "${value.media}" has ${count} angle(s).`);
     }
+    if (value.cues !== undefined) this.cues(value.cues, `${path}/cues`, mediaIds, menus);
   }
 
   /** `ownButtons`: set when checking a menu's `back`, the only place `activate` may appear. */
@@ -519,14 +589,14 @@ class Validator {
     this.unknownKeys(value, ACTION_KEYS[type]!, path);
     switch (type) {
       case "play":
-        this.playItem(value, path, mediaIds);
+        this.playItem(value, path, mediaIds, menus);
         break;
       case "playAll":
         if (!Array.isArray(value.items) || value.items.length === 0) this.error(`${path}/items`, "Required: at least one item.");
         else
           value.items.forEach((item, i) => {
             if (!isObject(item)) this.error(`${path}/items/${i}`, "Must be {media, chapter?, start?}.");
-            else this.playItem(item, `${path}/items/${i}`, mediaIds);
+            else this.playItem(item, `${path}/items/${i}`, mediaIds, menus);
           });
         break;
       case "set": {
@@ -578,7 +648,9 @@ class Validator {
         break;
       }
     }
-    if ((type === "play" || type === "playAll") && value.after !== undefined) {
+    if ((type === "play" || type === "playAll") && value.after !== undefined && this.cueDepth > 0) {
+      this.error(`${path}/after`, "Playback started during playback returns to it when done; after is not allowed here.");
+    } else if ((type === "play" || type === "playAll") && value.after !== undefined) {
       const after: unknown = value.after;
       const otherwise: unknown = isObject(after) && after.type === "resume" ? after.otherwise : undefined;
       if (isObject(after) && (after.type === "play" || after.type === "playAll"))

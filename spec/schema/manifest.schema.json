@@ -212,6 +212,13 @@
           "description": "Level 2: the file's first N video tracks are angles 1..N (spec 4.1).",
           "type": "integer",
           "minimum": 2
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cue"
+          },
+          "description": "Level 2: cues whenever this media plays (spec 6.3)."
         }
       },
       "not": {
@@ -519,6 +526,17 @@
             }
           ],
           "description": "Level 2: 1-based angle of media with angles, or {var} (spec 4.1)."
+        },
+        "end": {
+          "$ref": "#/$defs/seconds",
+          "description": "Level 2: stop here, as if the item ended (spec 6.3)."
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cue"
+          },
+          "description": "Level 2: cues for this way of playing the media (spec 6.3)."
         }
       }
     },
@@ -971,6 +989,59 @@
             }
           },
           "maxProperties": 1
+        }
+      ]
+    },
+    "cue": {
+      "description": "Level 2 (spec 6.3): a point cue {at, action}, or an overlay of buttons over the video from `from` to `to`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "at",
+            "action"
+          ],
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/seconds"
+            },
+            "action": {
+              "$ref": "#/$defs/action"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "from",
+            "to",
+            "canvas",
+            "buttons"
+          ],
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/seconds"
+            },
+            "to": {
+              "$ref": "#/$defs/seconds"
+            },
+            "canvas": {
+              "$ref": "#/$defs/canvas"
+            },
+            "buttons": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/button"
+              }
+            },
+            "defaultButton": {
+              "$ref": "#/$defs/buttonRef"
+            },
+            "autoNav": {
+              "type": "boolean"
+            }
+          }
         }
       ]
     }

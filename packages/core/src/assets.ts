@@ -1,4 +1,4 @@
-import type { Action, Manifest } from "./types.js";
+import type { Action, Button, Cue, Manifest } from "./types.js";
 
 /**
  * Every menu asset a manifest names (backgrounds, highlight overlays, menu music, transitions,
@@ -15,6 +15,8 @@ export function menuAssets(manifest: Manifest): string[] {
     if (!action) return;
     if (action.type === "goto") add(action.transition);
     if ((action.type === "play" || action.type === "playAll") && action.after) walkAction(action.after);
+    if (action.type === "play") walkCues(action.cues);
+    if (action.type === "playAll") for (const item of action.items) walkCues(item.cues);
     if (action.type === "set") walkAction(action.then);
     if (action.type === "resume") walkAction(action.otherwise);
     if (action.type === "if") {
@@ -23,18 +25,32 @@ export function menuAssets(manifest: Manifest): string[] {
     }
     if (action.type === "do") action.steps.forEach(walkAction);
   };
+  const walkButtons = (buttons: Button[] | undefined) => {
+    for (const button of buttons ?? []) {
+      for (const state of Object.values(button.states ?? {})) add(state?.image);
+      walkAction(button.action);
+    }
+  };
+  const walkCues = (cues: Cue[] | undefined) => {
+    for (const cue of cues ?? []) {
+      if ("at" in cue) walkAction(cue.action);
+      else walkButtons(cue.buttons);
+    }
+  };
 
   for (const menu of Object.values(manifest.menus ?? {})) {
     add(menu.background?.image);
     add(menu.background?.video?.src);
     add(menu.background?.audio?.src);
+    walkAction(menu.back);
     walkAction(menu.timeout?.action);
-    for (const button of menu.buttons ?? []) {
-      for (const state of Object.values(button.states ?? {})) add(state?.image);
-      walkAction(button.action);
-    }
+    walkButtons(menu.buttons);
   }
   walkAction(manifest.firstPlay);
-  for (const media of Object.values(manifest.media)) for (const chapter of media.chapters ?? []) add(chapter.thumbnail);
+  for (const group of manifest.fallback ?? []) for (const item of group.items ?? []) walkAction(item.action);
+  for (const media of Object.values(manifest.media)) {
+    for (const chapter of media.chapters ?? []) add(chapter.thumbnail);
+    walkCues(media.cues);
+  }
   return [...found].sort();
 }

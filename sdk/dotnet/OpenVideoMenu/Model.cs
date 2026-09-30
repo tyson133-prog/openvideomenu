@@ -99,6 +99,9 @@ public sealed class MediaEntry
     [JsonIgnore]
     public int AngleCount => Angles is { Count: > 0 } a ? 1 + a.Count : AngleTracks ?? 1;
 
+    /// <summary>Level 2: cues whenever this media plays (spec §6.3).</summary>
+    public List<Cue>? Cues { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }
@@ -430,6 +433,12 @@ public sealed class PlayItem
 
     /// <summary>Level 2: angle of media with angles, 1-based; default @angle.</summary>
     public IntOrVar? Angle { get; set; }
+
+    /// <summary>Level 2: stop here (seconds), as if the item ended (spec §6.3).</summary>
+    public double? End { get; set; }
+
+    /// <summary>Level 2: cues for this way of playing the media, beside the media's own (spec §6.3).</summary>
+    public List<Cue>? Cues { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

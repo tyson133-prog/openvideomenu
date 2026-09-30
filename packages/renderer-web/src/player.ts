@@ -1,12 +1,14 @@
 import {
   canvasAspect,
   initialState,
+  overlayOf,
   resolveMedia,
   resolvePath,
   startTime,
   step,
   type Button,
   type ButtonState,
+  type CueWatch,
   type Effect,
   type FallbackItem,
   type Key,
@@ -37,6 +39,11 @@ export interface PlayerOptions {
   /** "back" pressed at the top menu. */
   onExit?: () => void;
   onStateChange?: (state: NavState) => void;
+  /**
+   * Level 2: an overlay's buttons started (true) or stopped (false) showing during playback. Native
+   * hosts show the page over their video while one shows and send it the arrows and Enter.
+   */
+  onOverlay?: (showing: boolean) => void;
   /** How long the activated state shows before the action runs (ms). */
   activatedFlashMs?: number;
   /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
@@ -75,6 +82,11 @@ export class MenuPlayer {
   private readonly resizeObserver: ResizeObserver;
   private renderedMenu?: string;
   private buttonViews = new Map<string, ButtonView>();
+  /** Level 2: buttons over the video during playback (an overlay cue), drawn like a menu's. */
+  private readonly overlayStage: HTMLElement;
+  private renderedOverlay?: string;
+  private overlayShown = false;
+  private overlayViews = new Map<string, ButtonView>();
   private activatedButton?: string;
   private busy = false;
   private toastTimer?: ReturnType<typeof setTimeout>;
@@ -121,6 +133,18 @@ export class MenuPlayer {
       this.toast(message);
       this.onPlaybackStopped(0);
     };
+    // Cue reports can arrive during a button's activated flash; retry until the navigator takes them.
+    const report = (event: NavEvent) => {
+      if (!this.dispatch(event)) setTimeout(() => report(event), 50);
+    };
+    this.playback.onCue = (id) => report({ type: "cue", id });
+    this.playback.onCueEnd = (id) => report({ type: "cueEnd", id });
+
+    // Above the video (added by the playback adapter), so overlay buttons show over it.
+    this.overlayStage = document.createElement("div");
+    this.overlayStage.className = "ms-stage ms-overlay-stage";
+    this.overlayStage.hidden = true;
+    this.root.appendChild(this.overlayStage);
 
     this.input = options.input ?? new KeyboardInput();
     this.input.attach((key) => this.onKey(key));
@@ -166,16 +190,20 @@ export class MenuPlayer {
     if (this.busy) return false;
     const { state, effects } = step(this.options.manifest, this.state, event);
     const flash = effects.find((e): e is Extract<Effect, { type: "activated" }> => e.type === "activated");
+    // A cue that opens a menu leaves playback without the player reporting a stop: stop it here.
+    const leftPlayback = this.state.mode === "playing" && state.mode !== "playing" && event.type !== "ended" && event.type !== "stopped";
     const apply = () => {
       const prev = this.state;
       this.state = state;
+      if (leftPlayback) this.playback.stop();
       this.render(prev);
       if (state.mode !== "menu") clearTimeout(this.menuTimer); // the countdown belongs to a menu on screen
       for (const effect of effects) this.perform(effect);
       this.options.onStateChange?.(state);
     };
     const flashMs = this.options.activatedFlashMs ?? 180;
-    if (flash && flashMs > 0 && flash.menu === this.renderedMenu) {
+    const flashes = !!flash && ("menu" in flash ? flash.menu === this.renderedMenu : flash.cue === this.renderedOverlay);
+    if (flash && flashMs > 0 && flashes) {
       this.busy = true;
       this.activatedButton = flash.button;
       this.updateButtons();
@@ -194,6 +222,11 @@ export class MenuPlayer {
 
   private onKey(key: Key): boolean {
     this.unlockSound();
+    // While an overlay's buttons show, the arrows and Enter are theirs (Back still stops playback).
+    if (this.state.mode === "playing" && this.state.overlay && key !== "back") {
+      this.dispatch({ type: "press", key });
+      return true;
+    }
     if (this.fallbackQueue || this.state.mode === "playing") {
       if (key !== "back") return false; // leave other keys to the video element
       this.onPlaybackStopped(this.playback.stop());
@@ -223,7 +256,7 @@ export class MenuPlayer {
   private perform(effect: Effect) {
     switch (effect.type) {
       case "play":
-        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle);
+        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle, effect.end, effect.cues);
         break;
       case "exit":
         if (this.options.onExit) this.options.onExit();
@@ -253,7 +286,7 @@ export class MenuPlayer {
     this.menuTimer = setTimeout(fire, after * 1000);
   }
 
-  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number) {
+  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number, end?: number, cues?: CueWatch[]) {
     const { manifest, manifestUrl, resolvers } = this.options;
     const media = manifest.media[mediaId]!;
     // Angle 2 and up of angle files is its own file; angle tracks are chosen inside the one file.
@@ -268,6 +301,8 @@ export class MenuPlayer {
       ...(subtitle !== undefined ? { subtitle } : {}),
       ...(angle !== undefined ? { angle } : {}),
       ...(angle !== undefined && media.angleTracks ? { videoTrack: angle } : {}),
+      ...(end !== undefined ? { end } : {}),
+      ...(cues?.length ? { cues } : {}),
     };
     this.playback.play(request);
   }
@@ -289,6 +324,8 @@ export class MenuPlayer {
     const menuChanged = !!menu && s.menu !== this.renderedMenu;
     if (menuChanged) this.buildMenu(s.menu!, menu!);
     this.stage.hidden = s.mode !== "menu";
+    // While a title plays, the page is see-through: a native host's video shows behind overlay buttons.
+    this.root.classList.toggle("ms-playing", s.mode === "playing");
     if (s.mode !== "transition") this.stopTransition();
 
     // Background motion/audio runs only while the menu is on screen. A fresh entry plays the intro
@@ -302,7 +339,29 @@ export class MenuPlayer {
     }
     if (s.buttonsReady) this.stopIntroWatch();
     this.stage.classList.toggle("ms-intro", s.mode === "menu" && !s.buttonsReady);
+    this.renderOverlay();
     this.updateButtons();
+  }
+
+  /** Level 2: the overlay showing during playback, if any, over the video. */
+  private renderOverlay() {
+    const overlay = this.state.mode === "playing" ? overlayOf(this.options.manifest, this.state) : undefined;
+    const id = overlay ? this.state.overlay!.cue : undefined;
+    if (id !== this.renderedOverlay || (overlay && this.overlayStage.hidden)) {
+      this.overlayStage.replaceChildren();
+      this.overlayViews.clear();
+      this.renderedOverlay = id;
+      if (overlay) {
+        this.buildButtons(this.overlayStage, overlay.canvas, overlay.buttons, this.overlayViews);
+        this.overlayStage.hidden = false;
+        this.layout();
+      }
+    }
+    this.overlayStage.hidden = !overlay;
+    if (!!overlay !== this.overlayShown) {
+      this.overlayShown = !!overlay;
+      this.options.onOverlay?.(this.overlayShown);
+    }
   }
 
   // --- Motion: background loops, intro timing, transitions -----------------------------------
@@ -454,7 +513,13 @@ export class MenuPlayer {
       this.stage.appendChild(this.bgAudio);
     }
 
-    const { width, height } = menu.canvas;
+    this.buildButtons(this.stage, menu.canvas, menu.buttons, this.buttonViews);
+    this.layout();
+  }
+
+  /** Buttons with their state images and labels, placed on a canvas (a menu's, or an overlay's). */
+  private buildButtons(parent: HTMLElement, canvas: { width: number; height: number }, buttons: Button[], views: Map<string, ButtonView>) {
+    const { width, height } = canvas;
     const place = (el: HTMLElement, [x, y, w, h]: readonly number[]) => {
       el.style.left = `${(x! / width) * 100}%`;
       el.style.top = `${(y! / height) * 100}%`;
@@ -462,7 +527,7 @@ export class MenuPlayer {
       el.style.height = `${(h! / height) * 100}%`;
     };
 
-    for (const button of menu.buttons) {
+    for (const button of buttons) {
       const overlays: ButtonView["overlays"] = {};
       for (const name of ["normal", "selected", "activated"] as const) {
         const s = button.states?.[name];
@@ -473,7 +538,7 @@ export class MenuPlayer {
         img.src = this.asset(s.image);
         img.hidden = true;
         place(img, s.rect ?? button.rect);
-        this.stage.appendChild(img);
+        parent.appendChild(img);
         overlays[name] = img;
       }
 
@@ -494,21 +559,26 @@ export class MenuPlayer {
       if (!overlays.selected && !button.showLabel) hit.classList.add("ms-ring");
       hit.addEventListener("mouseenter", () => this.dispatch({ type: "select", button: button.id }));
       hit.addEventListener("click", () => this.dispatch({ type: "activate", button: button.id }));
-      this.stage.appendChild(hit);
-      this.buttonViews.set(button.id, { button, hit, overlays });
+      parent.appendChild(hit);
+      views.set(button.id, { button, hit, overlays });
     }
-    this.layout();
   }
 
   private updateButtons() {
-    for (const [id, view] of this.buttonViews) {
-      const visual: VisualState =
-        id === this.activatedButton ? "activated" : id === this.state.focus ? "selected" : "normal";
-      for (const [name, img] of Object.entries(view.overlays)) img.hidden = name !== visual;
-      view.hit.classList.toggle("ms-selected", visual === "selected");
-      view.hit.classList.toggle("ms-activated", visual === "activated");
-      if (view.button.showLabel) this.applyTextStyle(view, view.button.states?.[visual]);
-      if (visual === "selected" && this.state.mode === "menu") view.hit.focus({ preventScroll: true });
+    const menuFocus = this.state.mode === "menu" ? this.state.focus : undefined;
+    const overlayFocus = this.state.mode === "playing" ? this.state.overlay?.focus : undefined;
+    for (const [views, focus, focusable] of [
+      [this.buttonViews, this.state.focus, !!menuFocus],
+      [this.overlayViews, overlayFocus, !!overlayFocus],
+    ] as const) {
+      for (const [id, view] of views) {
+        const visual: VisualState = id === this.activatedButton ? "activated" : id === focus ? "selected" : "normal";
+        for (const [name, img] of Object.entries(view.overlays)) img.hidden = name !== visual;
+        view.hit.classList.toggle("ms-selected", visual === "selected");
+        view.hit.classList.toggle("ms-activated", visual === "activated");
+        if (view.button.showLabel) this.applyTextStyle(view, view.button.states?.[visual]);
+        if (visual === "selected" && focusable) view.hit.focus({ preventScroll: true });
+      }
     }
   }
 
@@ -517,25 +587,30 @@ export class MenuPlayer {
     view.hit.style.background = s?.fill ?? "";
   }
 
-  /** Fit the stage to the root at the canvas's display aspect (letterbox/pillarbox). */
+  /** Fit the stages to the root at their canvas's display aspect (letterbox/pillarbox). */
   private layout() {
     const menu = this.currentMenu();
-    if (!menu) return;
-    const aspect = canvasAspect(menu);
+    if (menu) this.fit(this.stage, menu, this.buttonViews);
+    const overlay = this.state.mode === "playing" ? overlayOf(this.options.manifest, this.state) : undefined;
+    if (overlay) this.fit(this.overlayStage, overlay, this.overlayViews);
+  }
+
+  private fit(stage: HTMLElement, owner: { canvas: Menu["canvas"] }, views: Map<string, ButtonView>) {
+    const aspect = canvasAspect(owner as Menu);
     const w = this.root.clientWidth;
     const h = this.root.clientHeight;
     const stageW = w / h > aspect ? h * aspect : w;
     const stageH = stageW / aspect;
-    Object.assign(this.stage.style, {
+    Object.assign(stage.style, {
       width: `${stageW}px`,
       height: `${stageH}px`,
       left: `${(w - stageW) / 2}px`,
       top: `${(h - stageH) / 2}px`,
     });
     // Labels are half the button's height, smaller when the text would be wider than the button.
-    for (const view of this.buttonViews.values()) {
+    for (const view of views.values()) {
       if (!view.button.showLabel) continue;
-      const size = (view.button.rect[3] / menu.canvas.height) * stageH * 0.5;
+      const size = (view.button.rect[3] / owner.canvas.height) * stageH * 0.5;
       view.hit.style.fontSize = `${size}px`;
       const room = view.hit.clientWidth * 0.94;
       const width = (view.hit.firstElementChild as HTMLElement | null)?.getBoundingClientRect().width ?? 0;
@@ -640,6 +715,7 @@ export class MenuPlayer {
       this.showFallback(queue.focusIndex);
       return;
     }
-    this.playMedia(item.media, startTime(this.options.manifest, item));
+    // The fallback list plays without the navigator: no cues, but an item's end still stops it.
+    this.playMedia(item.media, startTime(this.options.manifest, item), undefined, undefined, undefined, item.end);
   }
 }

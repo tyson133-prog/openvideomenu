@@ -407,10 +407,14 @@ sub plexReport(state as string)
     if p = invalid then return
     position = playerPosition()
     duration = msOr(p.item["duration"], 0)
-    url = m.login.url + "/:/timeline?ratingKey=" + p.item["ratingKey"] + "&key=" + percentEncodeQuery("/library/metadata/" + p.item["ratingKey"]) + "&state=" + state + "&time=" + Int(position * 1000).ToStr() + "&duration=" + duration.ToStr()
+    ' The player's last reading can run a little past the end; Plex refuses a time beyond the duration.
+    time = Int(position * 1000)
+    if duration > 0 and time > duration then time = duration
+    url = m.login.url + "/:/timeline?ratingKey=" + p.item["ratingKey"] + "&key=" + percentEncodeQuery("/library/metadata/" + p.item["ratingKey"]) + "&state=" + state + "&time=" + time.ToStr() + "&duration=" + duration.ToStr()
     extra = { headers: plexHeaders(m.login.token) }
     extra.headers["X-Plex-Session-Identifier"] = p.session
-    http(url, "GET", invalid, "onReported", invalid, extra)
+    ' The URL is the context, so a refused report can be logged (the token is in the headers only).
+    http(url, "GET", invalid, "onReported", url.Mid(url.InStr("/:/")), extra)
     if state = "stopped" and p.method = "Transcode"
         http(m.login.url + "/video/:/transcode/universal/stop?session=" + p.session, "GET", invalid, "onReported", invalid, extra)
     end if

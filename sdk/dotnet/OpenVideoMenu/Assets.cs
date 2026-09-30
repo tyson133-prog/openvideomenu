@@ -33,9 +33,15 @@ public sealed partial class Manifest
                     break;
                 case PlayAction p:
                     Walk(p.After);
+                    WalkCues(p.Cues);
                     break;
                 case PlayAllAction pa:
                     Walk(pa.After);
+                    foreach (var item in pa.Items)
+                    {
+                        WalkCues(item.Cues);
+                    }
+
                     break;
                 case SetAction s:
                     Walk(s.Then);
@@ -53,13 +59,9 @@ public sealed partial class Manifest
             }
         }
 
-        foreach (var menu in Menus?.Values ?? Enumerable.Empty<Menu>())
+        void WalkButtons(IEnumerable<Button> buttons)
         {
-            Add(menu.Background?.Image);
-            Add(menu.Background?.Video?.Src);
-            Add(menu.Background?.Audio?.Src);
-            Walk(menu.Timeout?.Action);
-            foreach (var button in menu.Buttons)
+            foreach (var button in buttons)
             {
                 Add(button.States?.Normal?.Image);
                 Add(button.States?.Selected?.Image);
@@ -77,13 +79,49 @@ public sealed partial class Manifest
             }
         }
 
+        void WalkCues(IEnumerable<Cue>? cues)
+        {
+            foreach (var cue in cues ?? [])
+            {
+                switch (cue)
+                {
+                    case PointCue point:
+                        Walk(point.Action);
+                        break;
+                    case Overlay overlay:
+                        WalkButtons(overlay.Buttons);
+                        break;
+                }
+            }
+        }
+
+        foreach (var menu in Menus?.Values ?? Enumerable.Empty<Menu>())
+        {
+            Add(menu.Background?.Image);
+            Add(menu.Background?.Video?.Src);
+            Add(menu.Background?.Audio?.Src);
+            Walk(menu.Back);
+            Walk(menu.Timeout?.Action);
+            WalkButtons(menu.Buttons);
+        }
+
         Walk(FirstPlay);
+        foreach (var group in Fallback)
+        {
+            foreach (var item in group.Items)
+            {
+                Walk(item.Action);
+            }
+        }
+
         foreach (var media in Media.Values)
         {
             foreach (var chapter in media.Chapters ?? [])
             {
                 Add(chapter.Thumbnail);
             }
+
+            WalkCues(media.Cues);
         }
 
         return [.. found];

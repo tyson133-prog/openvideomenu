@@ -93,7 +93,7 @@ await sleep(1500);
 
 const stateExpr = `(async () => { const p = await window.menuPlayer; if (!p) return null;
   const s = p.navState; const v = document.querySelector("video.ms-video");
-  return { mode: s.mode, menu: s.menu, focus: s.focus, buttonsReady: s.buttonsReady, intro: s.intro, video: v && !v.hidden ? { src: decodeURI(v.src.split("/media/")[1] || ""), t: Math.round(v.currentTime * 10) / 10, paused: v.paused } : null }; })()`;
+  return { mode: s.mode, menu: s.menu, focus: s.focus, buttonsReady: s.buttonsReady, intro: s.intro, overlay: s.overlay ? s.overlay.cue + "/" + s.overlay.focus : null, video: v && !v.hidden ? { src: decodeURI(v.src.split("/media/")[1] || ""), t: Math.round(v.currentTime * 10) / 10, paused: v.paused } : null }; })()`;
 
 let failures = 0;
 for (const [i, step] of steps.entries()) {

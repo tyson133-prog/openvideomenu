@@ -1,0 +1,46 @@
+{
+  "description": "Invalid cues: a cue that's neither a point cue nor an overlay, a negative time, overlays that overlap, an overlay ending before it starts, an overlay without buttons, an overlay button navigating to a button it doesn't have, after on playback started by a cue, activate in a cue, and an end before start.",
+  "level": 2,
+  "valid": false,
+  "errors": [
+    "/media/feature/cues/0",
+    "/media/feature/cues/1/at",
+    "/media/feature/cues/3/from",
+    "/media/feature/cues/4/to",
+    "/media/feature/cues/4/buttons",
+    "/media/feature/cues/2/buttons/0/nav/right",
+    "/media/feature/cues/5/action/after",
+    "/media/feature/cues/6/action/type",
+    "/menus/main/buttons/0/action/end"
+  ],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Cues" },
+    "media": {
+      "feature": {
+        "ref": "Film.mkv",
+        "cues": [
+          { "action": { "type": "back" } },
+          { "at": -1, "action": { "type": "back" } },
+          { "from": 10, "to": 20, "canvas": { "width": 1280, "height": 720 },
+            "buttons": [{ "id": "a", "rect": [0, 0, 10, 10], "nav": { "right": "nope" }, "action": { "type": "back" } }] },
+          { "from": 15, "to": 25, "canvas": { "width": 1280, "height": 720 },
+            "buttons": [{ "id": "b", "rect": [0, 0, 10, 10], "action": { "type": "back" } }] },
+          { "from": 40, "to": 30, "canvas": { "width": 1280, "height": 720 } },
+          { "at": 50, "action": { "type": "play", "media": "extra", "after": { "type": "goto", "menu": "main" } } },
+          { "at": 60, "action": { "type": "activate", "button": "p" } }
+        ]
+      },
+      "extra": { "ref": "Extra.mkv" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [{ "id": "p", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature", "start": 100, "end": 90 } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

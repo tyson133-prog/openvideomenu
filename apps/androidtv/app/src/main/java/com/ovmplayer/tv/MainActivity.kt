@@ -32,6 +32,10 @@ class MainActivity : ComponentActivity() {
         if (granted) vm.begin()
     }
 
+    /** Keys a screen claims before the focused view sees them (menu overlays during playback). */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        KeyClaim.handler?.invoke(event) == true || super.dispatchKeyEvent(event)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -129,4 +133,12 @@ fun App(vm: AppViewModel) {
             }
         }
     }
+}
+
+/**
+ * A screen's claim on remote keys ahead of the focused view: while a menu overlay shows over a playing
+ * title, its arrows and Enter go to the menu page, whatever the video player has focused.
+ */
+object KeyClaim {
+    var handler: ((android.view.KeyEvent) -> Boolean)? = null
 }

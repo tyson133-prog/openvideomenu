@@ -33,6 +33,10 @@ sub init()
     m.shownMenu = invalid
     m.videoRole = invalid  ' "background" or "transition"
     m.buttonViews = []     ' per button of the menu shown: { button, poster, fill?, shadow?, label? }
+    m.overlay = m.top.findNode("overlay")
+    m.overlayButtons = m.top.findNode("overlayButtons")
+    m.overlayViews = []    ' the same, for the overlay showing over a playing title (Level 2)
+    m.shownOverlay = invalid
     m.activatedId = invalid ' the button showing its activated state, briefly
 end sub
 
@@ -70,6 +74,8 @@ sub stepWith(event as object)
     before = m.nav
     result = msNavStep(m.manifest, m.nav, event)
     m.nav = result.state
+    ' A cue that opens a menu leaves playback without the scene reporting a stop: ask it to stop.
+    if before.mode = "playing" and m.nav.mode <> "playing" and event.type <> "ended" and event.type <> "stopped" then m.top.stopRequest = true
     fresh = before.mode <> m.nav.mode or before.menu <> m.nav.menu or event.type = "start" or before.intro <> m.nav.intro
     render(fresh)
     for each effect in result.effects
@@ -82,6 +88,7 @@ sub apply(effect as object)
     if t = "activated"
         m.activatedId = effect.button
         drawButtons()
+        drawOverlay()
         m.flash.control = "start"
     else if t = "play"
         stopBackground()
@@ -113,6 +120,16 @@ end sub
 sub onFlashDone()
     m.activatedId = invalid
     drawButtons()
+    drawOverlay()
+end sub
+
+' Level 2: the scene reports cues of the title playing.
+sub onCue()
+    stepWith({ type: "cue", id: m.top.cue })
+end sub
+
+sub onCueEnd()
+    stepWith({ type: "cueEnd", id: m.top.cueEnd })
 end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
@@ -120,7 +137,13 @@ function onKeyEvent(key as string, press as boolean) as boolean
     map = { up: "up", down: "down", left: "left", right: "right", OK: "enter", back: "back" }
     k = map[key]
     if k = invalid then return false
-    if m.nav.mode = "playing" then return false ' the scene owns playback keys
+    ' The scene owns playback keys, except the arrows and OK while an overlay's buttons show (Back
+    ' still goes to the scene, which stops the title).
+    if m.nav.mode = "playing"
+        if m.nav.overlay = invalid or k = "back" then return false
+        stepWith({ type: "press", key: k })
+        return true
+    end if
     stepWith({ type: "press", key: k })
     return true
 end function
@@ -140,6 +163,10 @@ end sub
 sub render(fresh as boolean)
     mode = m.nav.mode
     if mode <> "menu" then m.menuTimer.control = "stop" ' the countdown belongs to a menu on screen
+    ' While a title plays this view is over it (see MainScene openPlayer): only an overlay shows.
+    m.top.findNode("black").visible = mode <> "playing"
+    m.canvas.visible = mode <> "playing"
+    renderOverlay()
     if mode = "menu"
         menu = m.manifest["menus"][m.nav.menu]
         if fresh or m.shownMenu <> m.nav.menu then showMenu(menu)
@@ -256,6 +283,110 @@ sub buildButtons(menu as object)
     end for
 end sub
 
+' --- Level 2: overlays, buttons over the playing title ------------------------------------------
+
+sub renderOverlay()
+    overlay = invalid
+    if m.nav.mode = "playing" then overlay = msNavOverlayOf(m.manifest, m.nav)
+    id = invalid
+    if overlay <> invalid then id = m.nav.overlay.cue
+    if id <> m.shownOverlay
+        m.shownOverlay = id
+        for each view in m.overlayViews
+            m.wanted.Delete(view.poster.id)
+        end for
+        m.overlayButtons.removeChildrenIndex(m.overlayButtons.getChildCount(), 0)
+        m.overlayViews = []
+        if overlay <> invalid
+            canvas = overlay["canvas"]
+            aspect = aspectOf(canvas["aspect"], canvas["width"] / canvas["height"])
+            dw = 1920
+            dh = 1920 / aspect
+            if dh > 1080
+                dh = 1080
+                dw = 1080 * aspect
+            end if
+            m.overlay.translation = [(1920 - dw) / 2, (1080 - dh) / 2]
+            m.osx = dw / canvas["width"]
+            m.osy = dh / canvas["height"]
+            m.seq = m.seq + 1
+            i = 0
+            for each button in overlay["buttons"]
+                m.overlayViews.push(buttonView(m.overlayButtons, button, "o" + m.seq.ToStr() + "-" + i.ToStr(), m.osx, m.osy))
+                i = i + 1
+            end for
+        end if
+    end if
+    m.overlay.visible = overlay <> invalid
+    m.top.overlayShowing = overlay <> invalid
+    drawOverlay()
+end sub
+
+sub drawOverlay()
+    if m.nav.mode <> "playing" or m.nav.overlay = invalid then return
+    for each view in m.overlayViews
+        visual = "normal"
+        if view.button["id"] = m.activatedId
+            visual = "activated"
+        else if view.button["id"] = m.nav.overlay.focus
+            visual = "selected"
+        end if
+        drawView(view, visual, m.osx, m.osy)
+    end for
+end sub
+
+' One button's layers (state image, and for showLabel a fill and label) in a group, scaled by sx/sy.
+function buttonView(group as object, button as object, id as string, sx as float, sy as float) as object
+    view = { button: button }
+    view.poster = group.createChild("Poster")
+    view.poster.id = id
+    view.poster.loadDisplayMode = "scaleToFill"
+    view.poster.visible = false
+    if button["showLabel"] = true
+        r = button["rect"]
+        x = r[0] * sx
+        y = r[1] * sy
+        w = r[2] * sx
+        h = r[3] * sy
+        view.fill = group.createChild("Rectangle")
+        view.fill.translation = [x, y]
+        view.fill.width = w
+        view.fill.height = h
+        size = fitFontSize(button["label"], w, h * 0.5)
+        view.shadow = labelNode(button["label"], x + 2, y + 3, w, h, size, group)
+        view.shadow.color = "0x000000CC"
+        view.label = labelNode(button["label"], x, y, w, h, size, group)
+    end if
+    return view
+end function
+
+' Show a button in one state: its image, rect, label colour and fill.
+sub drawView(view as object, visual as string, sx as float, sy as float)
+    button = view.button
+    s = invalid
+    if button["states"] <> invalid then s = button["states"][visual]
+    if s = invalid then s = {}
+    if s["image"] <> invalid
+        rect = button["rect"]
+        if s["rect"] <> invalid then rect = s["rect"]
+        view.poster.translation = [rect[0] * sx, rect[1] * sy]
+        view.poster.width = rect[2] * sx
+        view.poster.height = rect[3] * sy
+        showImage(view.poster, s["image"])
+    else
+        view.poster.visible = false
+        m.wanted.Delete(view.poster.id)
+    end if
+    if view.label <> invalid
+        ' Unstyled labels are 85% white, full white with focus (the web renderer's defaults).
+        fallback = "0xFFFFFFD9"
+        if visual = "selected" then fallback = "0xFFFFFFFF"
+        view.label.color = cssColor(s["textColor"], fallback)
+        view.fill.color = cssColor(s["fill"], "0x00000000")
+        view.fill.visible = s["fill"] <> invalid
+    end if
+end sub
+
 ' The largest size up to maxSize at which the text fits in width (a little padding each side).
 function fitFontSize(text as dynamic, width as float, maxSize as float) as float
     size = maxSize
@@ -271,8 +402,9 @@ function fitFontSize(text as dynamic, width as float, maxSize as float) as float
     return size
 end function
 
-function labelNode(text as dynamic, x as float, y as float, w as float, h as float, size as float) as object
-    label = m.buttons.createChild("Label")
+function labelNode(text as dynamic, x as float, y as float, w as float, h as float, size as float, group = invalid as dynamic) as object
+    if group = invalid then group = m.buttons
+    label = group.createChild("Label")
     label.text = msOr(text, "")
     label.translation = [x, y]
     label.width = w

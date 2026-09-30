@@ -1,0 +1,84 @@
+{
+  "description": "Level 2 cues during playback: a point cue setting a variable, an overlay whose buttons take the arrows and Enter while it shows (one branches out to a featurette that returns to the film at the overlay's end, also when stopped with Back), overlay end and re-entry, a cue opening a menu (the film is remembered there for resume), and a play item with end and its own cue.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Cues" },
+    "vars": { "seen": 0, "picked": 0 },
+    "media": {
+      "feature": {
+        "ref": "Film.mkv",
+        "cues": [
+          { "at": 100, "action": { "type": "set", "var": "seen", "value": 1 } },
+          { "from": 200, "to": 215, "canvas": { "width": 1280, "height": 720 }, "defaultButton": "follow",
+            "buttons": [
+              { "id": "follow", "rect": [900, 600, 200, 60], "label": "Follow", "nav": { "right": "skip" }, "action": { "type": "play", "media": "rabbit" } },
+              { "id": "skip", "rect": [1110, 600, 120, 60], "label": "Skip", "nav": { "left": "follow" }, "action": { "type": "set", "var": "picked", "value": 2 } }
+            ] },
+          { "at": 300, "action": { "type": "goto", "menu": "extras" } }
+        ]
+      },
+      "rabbit": { "ref": "Rabbit.mkv" },
+      "song": { "ref": "Concert.mkv" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [10, 10, 100, 30], "nav": { "down": "song" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "song", "rect": [10, 50, 100, 30], "nav": { "up": "play", "down": "check" },
+            "action": { "type": "play", "media": "song", "start": 50, "end": 60,
+              "cues": [{ "at": 55, "action": { "type": "if", "test": { "var": "seen", "eq": 1 }, "then": { "type": "set", "var": "picked", "value": 5 } } }] } },
+          { "id": "check", "rect": [10, 90, 100, 30], "nav": { "up": "song" },
+            "action": { "type": "if", "test": { "var": "picked", "eq": 5 }, "then": { "type": "goto", "menu": "extras" } } }
+        ]
+      },
+      "extras": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "resume", "rect": [10, 10, 100, 30], "nav": { "down": "home" }, "action": { "type": "resume" } },
+          { "id": "home", "rect": [10, 50, 100, 30], "nav": { "up": "resume" }, "action": { "type": "goto", "menu": "main" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "overlay": null } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "mode": "menu", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": null, "effects": [
+      { "type": "activated", "menu": "main", "button": "play" },
+      { "type": "play", "media": "feature", "start": 0, "cues": [{ "id": "media/0", "at": 100 }, { "id": "media/1", "from": 200, "to": 215 }, { "id": "media/2", "at": 300 }] }] } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "mode": "playing", "effects": [] } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "mode": "playing", "overlay": null, "effects": [] } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "mode": "playing", "overlay": { "cue": "media/1", "focus": "follow" }, "effects": [] } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "overlay": { "cue": "media/1", "focus": "skip" }, "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": { "cue": "media/1", "focus": "skip" }, "effects": [{ "type": "activated", "cue": "media/1", "button": "skip" }] } },
+    { "event": { "type": "cueEnd", "id": "media/1" }, "expect": { "mode": "playing", "overlay": null, "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": null, "effects": [] } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "overlay": { "cue": "media/1", "focus": "follow" } } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": null, "effects": [
+      { "type": "activated", "cue": "media/1", "button": "follow" },
+      { "type": "play", "media": "rabbit", "start": 0 }] } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "mode": "playing", "overlay": null, "effects": [
+      { "type": "play", "media": "feature", "start": 215, "cues": [{ "id": "media/0", "at": 100 }, { "id": "media/1", "from": 200, "to": 215 }, { "id": "media/2", "at": 300 }] }] } },
+    { "event": { "type": "cue", "id": "media/2" }, "expect": { "mode": "menu", "menu": "extras", "focus": "resume", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "extras", "button": "resume" },
+      { "type": "play", "media": "feature", "start": 300, "cues": [{ "id": "media/0", "at": 100 }, { "id": "media/1", "from": 200, "to": 215 }, { "id": "media/2", "at": 300 }] }] } },
+    { "event": { "type": "stopped", "position": 310 }, "expect": { "mode": "menu", "menu": "extras", "focus": "resume" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "home" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "song" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [
+      { "type": "activated", "menu": "main", "button": "song" },
+      { "type": "play", "media": "song", "start": 50, "end": 60, "cues": [{ "id": "item/0", "at": 55 }] }] } },
+    { "event": { "type": "cue", "id": "item/0" }, "expect": { "mode": "playing", "effects": [] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "song" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "check" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "extras", "focus": "resume" } }
+  ]
+}

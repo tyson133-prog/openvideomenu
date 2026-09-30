@@ -186,7 +186,7 @@ Every action is an object with a `type`:
 
 | `type` | Fields | Behaviour |
 |---|---|---|
-| `play` | `media`, `chapter?`, `start?`, `after?` | Play one media item. `chapter` (1-based) wins over `start` (seconds). |
+| `play` | `media`, `chapter?`, `start?`, `end?`, `after?`, `cues?` | Play one media item. `chapter` (1-based) wins over `start` (seconds). *(Level 2)* `end` stops there as if the item ended; `cues` (§6.3). |
 | `playAll` | `items[]`, `after?` | Play `{ media, chapter?, start? }` items in order. |
 | `goto` | `menu`, `button?`, `transition?`, `history?` | Open a menu, focusing `button` or its `defaultButton`. `transition` is a clip (path) played first, full screen. `history: "replace"` doesn't add the current menu to Back's history, for page turns (§6.2). |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
@@ -201,7 +201,7 @@ Every action is an object with a `type`:
 2. **`goto` from a button** pushes the current menu and focused button onto the history (unless it says `history: "replace"`). `back` pops it.
 3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the media and position for `resume`.
-5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic.
+5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic, except while an overlay's buttons show (§6.3).
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
 
@@ -305,6 +305,47 @@ On a DVD, the remote's Return key doesn't retrace every menu you visited: each m
 - **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A DVD may leave Return inactive; a TV app must not.)
 - **Importers choose per menu** to match the source as closely as possible: a DVD's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
 
+### 6.3 During playback (Level 2)
+
+Menus can reach into playback: stop a title at a point (a DVD's "play this song, then back to the
+menu"), run an action when playback reaches a moment, or show buttons over the video, like the
+icon some discs show in certain scenes that branches to a featurette and back.
+
+```json
+"feature": { "ref": "Film.mkv", "cues": [
+  { "at": 1200, "action": { "type": "set", "var": "halfway", "value": 1 } },
+  { "from": 2470, "to": 2485, "canvas": { "width": 1280, "height": 720 },
+    "buttons": [{ "id": "follow", "rect": [1080, 600, 160, 90], "label": "Follow",
+                  "states": { "normal": { "image": "menus/rabbit.png" } },
+                  "action": { "type": "play", "media": "rabbit-1" } }] } ] }
+
+{ "type": "play", "media": "concert", "start": 300, "end": 540 }
+```
+
+- **`end`** on a play item (seconds): playback stops there and counts as ended (`after` runs, a
+  `playAll` goes on). It MUST be after `start`.
+- **`cues`** on a media entry apply whenever it plays; on a play item, only when played that way,
+  as well as the media's. Two kinds:
+  - **Point cue** `{ at, action }`: the action runs when playback passes `at`. Not at the time
+    playback starts from (nor on the way there, when a player starts at the keyframe before it),
+    and not when the viewer seeks past it.
+  - **Overlay** `{ from, to, canvas, buttons, defaultButton?, autoNav? }`: buttons over the video from
+    `from` to `to`, with everything a menu's buttons have (states, labels, `nav`). While it shows, the
+    arrows move between its buttons and Enter presses one; Back still stops playback. Overlays in one
+    list MUST NOT overlap; when a media's and an item's overlap, the one that started last shows.
+- **Cue actions** are ordinary actions, run at the cue's time: `at` for a point cue, an overlay's
+  `to` for its buttons.
+  - Starting playback (`play`, `playAll`, `resume`) **interrupts** the current one. When the new
+    playback ends or the viewer stops it, the interrupted one continues from the cue's time. `after`
+    is not allowed there.
+  - `goto` leaves playback; it is remembered for `resume` at the cue's time.
+  - `back` stops playback, like the remote's Back.
+  - `set`, `if` and `do` work as anywhere; `activate` is not allowed.
+- **Players** watch for the cues listed in the play effect and report `cue` (a point cue's `at`,
+  an overlay's `from`) and `cueEnd` (an overlay's `to`, or leaving its window by seeking). A player
+  that can't draw over its video SHOULD still run point cues; without Level 2, cues are ignored and
+  `end` plays to the end of the media.
+
 ## 7. Cross-reference rules
 
 Validators MUST reject a manifest when:
@@ -341,6 +382,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1). Menus per language are separate menus chosen with `@menuLanguage`. *(Next drafts)* Buttons and actions during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), cues and buttons during playback and stopping at `end` (§6.3). Menus per language are separate menus chosen with `@menuLanguage`. *(Next draft)* Segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

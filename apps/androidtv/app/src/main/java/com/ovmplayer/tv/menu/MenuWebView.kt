@@ -38,7 +38,14 @@ sealed interface PageMessage {
         /** Level 2: which angle of media with angles; [videoTrack] when its angles are video tracks. */
         val angle: Int? = null,
         val videoTrack: Int? = null,
+        /** Level 2: stop here (seconds) as if the title ended, and cues to report while it plays. */
+        val end: Double? = null,
+        val cues: List<com.ovmplayer.tv.player.CueWatch> = emptyList(),
     ) : PageMessage
+    /** Level 2: stop playback without reporting it (a cue opened a menu). */
+    data object Stop : PageMessage
+    /** Level 2: an overlay's buttons show over the video: show the page over it and give it the keys. */
+    data class Overlay(val showing: Boolean) : PageMessage
     data object Exit : PageMessage
     data class Error(val message: String) : PageMessage
 }
@@ -140,6 +147,14 @@ class MenuWebView(
     fun stopped(position: Double) = send(buildJsonObject { put("type", "stopped"); put("position", position) })
     fun playError(message: String) = send(buildJsonObject { put("type", "playError"); put("message", message) })
     fun back() = send(buildJsonObject { put("type", "key"); put("key", "back") })
+    fun key(name: String) = send(buildJsonObject { put("type", "key"); put("key", name) })
+    fun cue(id: String) = send(buildJsonObject { put("type", "cue"); put("id", id) })
+    fun cueEnd(id: String) = send(buildJsonObject { put("type", "cueEnd"); put("id", id) })
+
+    /** Level 2: over the video while an overlay's buttons show (see-through), hidden behind it otherwise. */
+    fun setOverVideo(over: Boolean) {
+        setBackgroundColor(if (over) Color.TRANSPARENT else Color.BLACK)
+    }
 
     private fun send(msg: JsonObject) {
         reply?.postMessage(msg.toString())
@@ -159,8 +174,17 @@ class MenuWebView(
                     str("subtitle")?.toDoubleOrNull()?.toInt(),
                     str("angle")?.toDoubleOrNull()?.toInt(),
                     str("videoTrack")?.toDoubleOrNull()?.toInt(),
+                    str("end")?.toDoubleOrNull(),
+                    (msg["cues"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { c ->
+                        val o = c as? JsonObject ?: return@mapNotNull null
+                        fun num(key: String) = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+                        val id = (o["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+                        com.ovmplayer.tv.player.CueWatch(id, num("at"), num("from"), num("to"))
+                    },
                 ),
             )
+            "stop" -> onMessage(PageMessage.Stop)
+            "overlay" -> onMessage(PageMessage.Overlay(str("showing") == "true"))
             "exit" -> onMessage(PageMessage.Exit)
             "error" -> onMessage(PageMessage.Error(str("message") ?: "Menu error"))
         }

@@ -6,11 +6,14 @@
  *
  * page → native
  *   {type:"ready"}                                       page loaded, send "init"
- *   {type:"play", mediaId, ref, url?, start, label, audio?, subtitle?, angle?, videoTrack?}
+ *   {type:"play", mediaId, ref, url?, start, label, audio?, subtitle?, angle?, videoTrack?, end?, cues?}
  *                                                        play this in the native player (audio: 1-based
  *                                                        track; subtitle: 1-based, 0 = off; angle: which
  *                                                        angle file, ref/url already that file's;
  *                                                        videoTrack: 1-based, for angles as video tracks)
+ *   {type:"stop"}                                        stop playback, without reporting it (a cue opened a menu)
+ *   {type:"overlay", showing}                            an overlay's buttons show over the video (Level 2):
+ *                                                        show the page over it and send it the arrows and Enter
  *   {type:"exit"}                                        Back pressed at the top menu
  *   {type:"error", message}                              manifest couldn't be loaded or is invalid
  * native → page
@@ -19,6 +22,7 @@
  *   {type:"stopped", position}                           the viewer stopped early (seconds)
  *   {type:"playError", message}                          the item couldn't be played
  *   {type:"key", key}                                    a remote key the page didn't receive itself (e.g. Back)
+ *   {type:"cue", id} / {type:"cueEnd", id}               playback passed a cue the play message listed (Level 2)
  */
 import type { Key } from "@openvideomenu/core";
 import { KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
@@ -35,7 +39,9 @@ type HostMessage =
   | { type: "ended" }
   | { type: "stopped"; position: number }
   | { type: "playError"; message: string }
-  | { type: "key"; key: Key };
+  | { type: "key"; key: Key }
+  | { type: "cue"; id: string }
+  | { type: "cueEnd"; id: string };
 
 /** Playback handed to the native player; results come back as host messages. */
 export class BridgePlayback implements PlaybackAdapter {
@@ -45,12 +51,16 @@ export class BridgePlayback implements PlaybackAdapter {
 
   constructor(private readonly send: (message: object) => void) {}
 
-  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack }: PlayRequest) {
-    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack });
+  onCue?: (id: string) => void;
+  onCueEnd?: (id: string) => void;
+
+  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues }: PlayRequest) {
+    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues });
   }
 
-  /** The native player owns playback and reports the stop position itself. */
+  /** The navigator left playback by itself (a cue opened a menu); the native player owns the position. */
   stop(): number {
+    this.send({ type: "stop" });
     return 0;
   }
 
@@ -101,6 +111,7 @@ export function runInHost(port: HostPort, container: HTMLElement = document.body
           showHidden: msg.showHidden,
           initialLastStop: msg.lastStop,
           onExit: () => send({ type: "exit" }),
+          onOverlay: (showing) => send({ type: "overlay", showing }),
         }).then((p) => {
           player = p;
           if (!p) send({ type: "error", message: `Couldn't load ${msg.manifestUrl}` });
@@ -111,6 +122,12 @@ export function runInHost(port: HostPort, container: HTMLElement = document.body
         break;
       case "stopped":
         playback.onStopped?.(msg.position);
+        break;
+      case "cue":
+        playback.onCue?.(msg.id);
+        break;
+      case "cueEnd":
+        playback.onCueEnd?.(msg.id);
         break;
       case "playError":
         playback.onError?.(msg.message);

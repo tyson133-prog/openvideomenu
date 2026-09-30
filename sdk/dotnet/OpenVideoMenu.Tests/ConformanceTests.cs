@@ -103,6 +103,12 @@ public sealed class ConformanceTests
                 Assert.True(state.ButtonsReady == ready.GetBoolean(), $"{label}: buttonsReady {state.ButtonsReady}");
             }
 
+            if (want.TryGetProperty("overlay", out var overlay))
+            {
+                var expectedOverlay = overlay.ValueKind == JsonValueKind.Null ? null : new OverlayFocus(overlay.GetProperty("cue").GetString()!, overlay.GetProperty("focus").GetString()!);
+                Assert.True(state.Overlay == expectedOverlay, $"{label}: overlay {state.Overlay}, expected {expectedOverlay}");
+            }
+
             if (want.TryGetProperty("effects", out var wantEffects))
             {
                 var expected = wantEffects.EnumerateArray().Select(Effect).ToList();
@@ -146,15 +152,22 @@ public sealed class ConformanceTests
         "buttonsReady" => new NavEvent.ButtonsReady(),
         "transitionEnded" => new NavEvent.TransitionEnded(),
         "timeout" => new NavEvent.Timeout(e.GetProperty("menu").GetString()!),
+        "cue" => new NavEvent.Cue(e.GetProperty("id").GetString()!),
+        "cueEnd" => new NavEvent.CueEnd(e.GetProperty("id").GetString()!),
         var other => throw new InvalidDataException($"Unknown event {other}"),
     };
 
     private static Effect Effect(JsonElement e)
     {
         int? Int(string name) => e.TryGetProperty(name, out var v) ? v.GetInt32() : null;
+        double? Num(JsonElement o, string name) => o.TryGetProperty(name, out var v) ? v.GetDouble() : null;
+        List<CueWatch>? Cues() => e.TryGetProperty("cues", out var list)
+            ? [.. list.EnumerateArray().Select(c => new CueWatch(c.GetProperty("id").GetString()!, Num(c, "at"), Num(c, "from"), Num(c, "to")))]
+            : null;
         return e.GetProperty("type").GetString() switch
         {
-            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle")),
+            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle"), Num(e, "end"), Cues()),
+            "activated" when e.TryGetProperty("cue", out var cue) => new Effect.OverlayActivated(cue.GetString()!, e.GetProperty("button").GetString()!),
             "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),
             "exit" => new Effect.Exit(),
             "transition" => new Effect.Transition(e.GetProperty("src").GetString()!),

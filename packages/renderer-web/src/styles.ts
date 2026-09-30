@@ -13,6 +13,10 @@ export const STYLES = `
 .ms-stage.ms-intro .ms-button, .ms-stage.ms-intro .ms-overlay { visibility: hidden; }
 .ms-transition { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 5; }
 .ms-video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; z-index: 10; outline: none; }
+/* Level 2: buttons over the video during playback; the video (and its controls) stay usable around them. */
+.ms-overlay-stage { background: transparent; z-index: 11; pointer-events: none; }
+.ms-root.ms-playing { background: transparent; }
+.ms-overlay-stage .ms-button, .ms-overlay-stage .ms-overlay { pointer-events: auto; }
 .ms-toast { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); z-index: 20; max-width: 80%;
   padding: .7em 1.2em; border-radius: .5em; background: rgba(20,20,20,.9); font-size: clamp(14px, 2.2vh, 28px);
   transition: opacity .3s; pointer-events: none; }

@@ -84,6 +84,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
                 p.item = nextItem
                 p.queue = q
                 s.playing = p
+                s.overlay = invalid
                 effects.push(msNavPlaying(manifest, s, nextItem))
             else
                 msNavFinishPlayback(manifest, s, effects, true, invalid)
@@ -98,6 +99,23 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         player = msNavCopyVars(s.player)
         player.Append(event["values"])
         s.player = player
+
+    else if t = "cue"
+        ' Level 2: playback passed a point cue's at (its action runs), or an overlay's from (its buttons show).
+        if s.mode = "playing" and s.playing <> invalid
+            cue = msNavCueById(manifest, s.playing.item, event["id"])
+            if cue <> invalid and cue["at"] <> invalid
+                msNavRunCue(manifest, s, cue["action"], effects, cue["at"])
+            else if cue <> invalid
+                ' A later overlay replaces one still showing.
+                focus = msNavButtonRef(s, cue, cue["defaultButton"])
+                if focus = invalid then focus = cue["buttons"][0]["id"]
+                s.overlay = { cue: event["id"], focus: focus }
+            end if
+        end if
+
+    else if t = "cueEnd"
+        if s.overlay <> invalid and s.overlay.cue = event["id"] then s.overlay = invalid
     end if
 
     return { state: s, effects: effects }
@@ -109,7 +127,16 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
         key = event["key"]
         if s.mode = "playing"
             ' Players report the position with "stopped"; a bare "back" stops at an unknown position.
-            if key = "back" then msNavFinishPlayback(manifest, s, effects, false, invalid)
+            if key = "back"
+                msNavFinishPlayback(manifest, s, effects, false, invalid)
+            else if s.overlay <> invalid
+                ' With an overlay showing, the arrows and Enter are its; otherwise they're the video player's.
+                if key = "enter"
+                    msNavActivateOverlay(manifest, s, s.overlay.focus, effects)
+                else
+                    msNavMoveOverlay(manifest, s, key, effects)
+                end if
+            end if
             return
         end if
         if s.mode <> "menu" then return
@@ -121,10 +148,22 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
             msNavMove(manifest, s, key, effects)
         end if
     else if t = "select"
+        if s.mode = "playing" and s.overlay <> invalid
+            overlay = msNavOverlayOf(manifest, s)
+            if overlay <> invalid and event["button"] <> s.overlay.focus and msNavFindButton(overlay, event["button"]) <> invalid
+                s.overlay = { cue: s.overlay.cue, focus: event["button"] }
+            end if
+            return
+        end if
         if s.mode <> "menu" or event["button"] = s.focus then return
         button = msNavFindButton(msNavMenu(manifest, s.menu), event["button"])
         if button <> invalid then msNavFocusButton(manifest, s, button, effects)
     else if t = "activate"
+        if s.mode = "playing" and s.overlay <> invalid
+            overlay = msNavOverlayOf(manifest, s)
+            if overlay <> invalid and msNavFindButton(overlay, event["button"]) <> invalid then msNavActivateOverlay(manifest, s, event["button"], effects)
+            return
+        end if
         if s.mode <> "menu" then return
         if msNavFindButton(msNavMenu(manifest, s.menu), event["button"]) <> invalid
             s.focus = event["button"]
@@ -134,6 +173,82 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
 end sub
 
 ' --- helpers ---------------------------------------------------------------------------------
+
+' Level 2: the cues that apply while an item plays, with their ids: the media's, then the item's.
+function msNavCuesOf(manifest as object, item as object) as object
+    list = []
+    media = manifest["media"][item["media"]]
+    if media <> invalid and media["cues"] <> invalid
+        for i = 0 to media["cues"].Count() - 1
+            list.push({ id: "media/" + i.ToStr(), cue: media["cues"][i] })
+        end for
+    end if
+    if item["cues"] <> invalid
+        for i = 0 to item["cues"].Count() - 1
+            list.push({ id: "item/" + i.ToStr(), cue: item["cues"][i] })
+        end for
+    end if
+    return list
+end function
+
+function msNavCueById(manifest as object, item as object, id as string) as dynamic
+    for each c in msNavCuesOf(manifest, item)
+        if c.id = id then return c.cue
+    end for
+    return invalid
+end function
+
+function msNavOverlayOf(manifest as object, s as object) as dynamic
+    if s.overlay = invalid or s.playing = invalid then return invalid
+    cue = msNavCueById(manifest, s.playing.item, s.overlay.cue)
+    if cue = invalid or cue["from"] = invalid then return invalid
+    return cue
+end function
+
+sub msNavMoveOverlay(manifest as object, s as object, dir as string, effects as object)
+    overlay = msNavOverlayOf(manifest, s)
+    if overlay = invalid then return
+    current = msNavFindButton(overlay, s.overlay.focus)
+    targetId = invalid
+    if current["nav"] <> invalid then targetId = current["nav"][dir]
+    if targetId = invalid and overlay["autoNav"] = true
+        nearest = msNavNearestButton(overlay, current, dir)
+        if nearest <> invalid then targetId = nearest["id"]
+    end if
+    if targetId = invalid or targetId = current["id"] then return
+    s.overlay = { cue: s.overlay.cue, focus: targetId }
+    if msNavFindButton(overlay, targetId)["autoAction"] = true then msNavActivateOverlay(manifest, s, targetId, effects)
+end sub
+
+' Press an overlay button: its action runs at the overlay's end time (where interrupted playback resumes).
+sub msNavActivateOverlay(manifest as object, s as object, buttonId as string, effects as object)
+    overlay = msNavOverlayOf(manifest, s)
+    if overlay = invalid then return
+    button = msNavFindButton(overlay, buttonId)
+    if button = invalid then return
+    s.overlay = { cue: s.overlay.cue, focus: button["id"] }
+    effects.push({ type: "activated", cue: s.overlay.cue, button: button["id"] })
+    msNavRunCue(manifest, s, button["action"], effects, overlay["to"])
+end sub
+
+' Run a cue's action during playback. s.cueAt (the time interrupted playback resumes from) is set only
+' while it runs: playback it starts interrupts the current one, a goto leaves playback, back stops it.
+sub msNavRunCue(manifest as object, s as object, action as object, effects as object, at as dynamic)
+    s.cueAt = at
+    msNavRunOpts(manifest, s, action, effects, false, false)
+    s.Delete("cueAt")
+end sub
+
+' A cue opened a menu: playback ends, remembered for resume at the cue's time.
+sub msNavLeavePlayback(manifest as object, s as object, at as dynamic)
+    media = s.playing.item["media"]
+    s.lastStop = { media: media, position: at }
+    player = msNavCopyVars(s.player)
+    player["@lastChapter"] = msNavChapterAt(manifest, media, at)
+    s.player = player
+    s.playing = invalid
+    s.overlay = invalid
+end sub
 
 function msNavMenu(manifest as object, id as string) as object
     return manifest["menus"][id]
@@ -256,7 +371,10 @@ end sub
 ' up: running a menu's back (see msNavRemoteBack): gotos unwind history instead of adding to it.
 sub msNavRunOpts(manifest as object, s as object, action as object, effects as object, pushHistory as boolean, up as boolean)
     t = action["type"]
+    duringPlayback = s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
     if t = "goto"
+        ' A cue opening a menu leaves playback, remembered for resume where the cue is.
+        if duringPlayback then msNavLeavePlayback(manifest, s, s.cueAt)
         here = msNavCurrentPosition(s)
         if up
             ' Going up to a menu already in history: drop it and everything after it.
@@ -283,7 +401,12 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
             msNavEnterMenu(manifest, s, action["menu"], action["button"], true, effects)
         end if
     else if t = "back"
-        msNavGoBack(manifest, s, effects)
+        ' From a cue: like the remote's Back during playback.
+        if duringPlayback
+            msNavFinishPlayback(manifest, s, effects, false, s.cueAt)
+        else
+            msNavGoBack(manifest, s, effects)
+        end if
     else if t = "play"
         msNavStartPlayback(manifest, s, [action], action["after"], effects)
     else if t = "playAll"
@@ -345,18 +468,27 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
     end if
 end sub
 
+' Started by a cue during playback (s.cueAt set): interrupts the current playback, which continues
+' from the cue's time when this ends or is stopped (Level 2).
 sub msNavStartPlayback(manifest as object, s as object, items as object, after as dynamic, effects as object)
     queue = msCopyArray(items)
     first = queue.shift()
-    s.playing = { item: first, queue: queue, after: after, returnTo: msNavCurrentPosition(s) }
+    if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
+        s.playing = { item: first, queue: queue, after: invalid, returnTo: s.playing.returnTo, resumeTo: { playing: s.playing, at: s.cueAt } }
+    else
+        s.playing = { item: first, queue: queue, after: after, returnTo: msNavCurrentPosition(s) }
+    end if
     s.mode = "playing"
+    s.overlay = invalid
     s.seq = s.seq + 1
     effects.push(msNavPlaying(manifest, s, first))
 end sub
 
 ' The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).
-function msNavPlaying(manifest as object, s as object, item as object) as object
+' from: start elsewhere than the item's own start (a resumed interruption).
+function msNavPlaying(manifest as object, s as object, item as object, from = invalid as dynamic) as object
     effect = msNavPlayEffect(manifest, item, s)
+    if from <> invalid then effect.start = from
     player = msNavCopyVars(s.player)
     player["@lastMedia"] = item["media"]
     player["@lastChapter"] = msNavChapterAt(manifest, item["media"], effect.start)
@@ -379,6 +511,16 @@ end function
 sub msNavFinishPlayback(manifest as object, s as object, effects as object, completed as boolean, stoppedAt as dynamic)
     playing = s.playing
     s.playing = invalid
+    s.overlay = invalid
+    ' Playback a cue started: the interrupted one continues where the cue was (Level 2).
+    if playing.resumeTo <> invalid
+        if completed and s.lastStop <> invalid and s.lastStop.media = playing.item["media"] then s.lastStop = invalid
+        s.playing = playing.resumeTo.playing
+        s.mode = "playing"
+        s.seq = s.seq + 1
+        effects.push(msNavPlaying(manifest, s, s.playing.item, playing.resumeTo.at))
+        return
+    end if
     if completed
         if s.lastStop <> invalid and s.lastStop.media = playing.item["media"] then s.lastStop = invalid
     else if stoppedAt <> invalid
@@ -421,6 +563,16 @@ function msNavPlayEffect(manifest as object, item as object, s as object) as obj
         if wanted < 1 or wanted > angles then wanted = 1
         effect.angle = wanted
     end if
+    if item["end"] <> invalid then effect["end"] = item["end"]
+    cues = []
+    for each c in msNavCuesOf(manifest, item)
+        if c.cue["at"] <> invalid
+            cues.push({ id: c.id, at: c.cue["at"] })
+        else
+            cues.push({ id: c.id, from: c.cue["from"], to: c.cue["to"] })
+        end if
+    end for
+    if cues.Count() > 0 then effect.cues = cues
     return effect
 end function
 

@@ -5,7 +5,7 @@
  * describes expected behaviour in exactly these terms, so every implementation (TS, C#, native)
  * can be checked against the same cases.
  */
-import type { Action, Button, Direction, Manifest, Menu, PlayItem, Scalar } from "./types.js";
+import type { Action, Button, Cue, Direction, Manifest, Menu, Overlay, PlayItem, Scalar } from "./types.js";
 import { applyOp, evalTest, readVar, valueOf } from "./logic.js";
 
 export type Key = Direction | "enter" | "back";
@@ -33,7 +33,17 @@ export type NavEvent =
   /** A transition clip finished playing. */
   | { type: "transitionEnded" }
   /** Level 2: the countdown a "startTimer" effect asked for ran out on [menu]. */
-  | { type: "timeout"; menu: string };
+  | { type: "timeout"; menu: string }
+  /**
+   * Level 2: playback passed a cue the play effect listed: a point cue's `at`, or an overlay's `from`
+   * (its buttons show). Not for the time playback starts from, nor when seeking past it.
+   */
+  | { type: "cue"; id: string }
+  /** Level 2: playback passed an overlay's `to` (or left its window by seeking): its buttons go. */
+  | { type: "cueEnd"; id: string };
+
+/** Level 2: a cue the host watches for during playback, from the play effect. */
+export type CueWatch = { id: string; at: number } | { id: string; from: number; to: number };
 
 export type Effect =
   /** Start playing a media item from `start` seconds. */
@@ -46,9 +56,14 @@ export type Effect =
       subtitle?: number;
       /** Level 2: which angle, for media with angles (§4.1): 1 = ref, 2 = angles[0] or video track 2, … */
       angle?: number;
+      /** Level 2: stop here and report "ended" (§6.3). */
+      end?: number;
+      /** Level 2: the cues to report with "cue"/"cueEnd" while this plays (§6.3). */
+      cues?: CueWatch[];
     }
-  /** Briefly show the button's activated state. */
+  /** Briefly show the button's activated state (of a menu, or of the overlay showing during playback). */
   | { type: "activated"; menu: string; button: string }
+  | { type: "activated"; cue: string; button: string }
   /** "back" was pressed at the top of the menu history; the host may close the player. */
   | { type: "exit" }
   /** Play a transition clip; report "transitionEnded" when it finishes. */
@@ -81,8 +96,13 @@ export interface NavState {
   transitionTo?: { menu: string; button?: string };
   /** Menus to return to with "back". */
   history: MenuPosition[];
-  /** Playback in progress: the item playing now and those still queued. */
-  playing?: { item: PlayItem; queue: PlayItem[]; after?: Action; returnTo?: MenuPosition };
+  /**
+   * Playback in progress: the item playing now and those still queued. `resumeTo`: playback a cue
+   * interrupted, which continues from `at` when this ends or is stopped (Level 2).
+   */
+  playing?: Playing;
+  /** Level 2: the overlay showing during playback (its cue id) and its focused button. */
+  overlay?: { cue: string; focus: string };
   /** Where the viewer stopped last, for "resume". */
   lastStop?: { media: string; position: number };
   /** Level 2: variable values for this session (from manifest.vars, changed by "set"). */
@@ -93,6 +113,14 @@ export interface NavState {
   seed: number;
   /** Counts menu entries and playback starts, so "do" knows when a step navigated. */
   seq: number;
+}
+
+export interface Playing {
+  item: PlayItem;
+  queue: PlayItem[];
+  after?: Action;
+  returnTo?: MenuPosition;
+  resumeTo?: { playing: Playing; at: number };
 }
 
 export interface StepResult {
@@ -166,7 +194,8 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       if (s.playing.queue.length > 0) {
         const [next, ...rest] = s.playing.queue as [PlayItem, ...PlayItem[]];
         s.playing = { ...s.playing, item: next, queue: rest };
-        effects.push(playing(manifest, s, next));
+        s.overlay = undefined;
+        effects.push(startItem(manifest, s, next));
       } else {
         finishPlayback(manifest, s, effects, { completed: true });
       }
@@ -179,6 +208,23 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
 
     case "player":
       s.player = { ...s.player, ...event.values };
+      break;
+
+    case "cue": {
+      if (s.mode !== "playing" || !s.playing) break;
+      const cue = cueById(manifest, s.playing.item, event.id);
+      if (!cue) break;
+      if ("at" in cue) run(manifest, s, cue.action, effects, { pushHistory: false, cueAt: cue.at });
+      else {
+        // The overlay's buttons show; a later one replaces one still showing.
+        const focus = buttonRef(s, cue, cue.defaultButton) ?? cue.buttons[0]!.id;
+        s.overlay = { cue: event.id, focus };
+      }
+      break;
+    }
+
+    case "cueEnd":
+      if (s.overlay?.cue === event.id) s.overlay = undefined;
       break;
   }
   return { state: s, effects };
@@ -195,6 +241,11 @@ function handleInput(
       if (s.mode === "playing") {
         // Players report the position with "stopped"; a bare "back" stops at an unknown position.
         if (event.key === "back") finishPlayback(manifest, s, effects, { stoppedAt: undefined });
+        // With an overlay showing, the arrows and Enter are its; otherwise they're the video player's.
+        else if (s.overlay) {
+          if (event.key === "enter") activateOverlay(manifest, s, s.overlay.focus, effects);
+          else moveOverlay(manifest, s, event.key, effects);
+        }
         break;
       }
       if (s.mode !== "menu") break;
@@ -204,6 +255,11 @@ function handleInput(
       break;
 
     case "select": {
+      if (s.mode === "playing" && s.overlay) {
+        const overlay = overlayOf(manifest, s);
+        if (overlay && event.button !== s.overlay.focus && findButton(overlay, event.button)) s.overlay = { ...s.overlay, focus: event.button };
+        break;
+      }
       if (s.mode !== "menu" || event.button === s.focus) break;
       const button = findButton(menuOf(manifest, s.menu!), event.button);
       if (button) focusButton(manifest, s, button, effects);
@@ -211,6 +267,11 @@ function handleInput(
     }
 
     case "activate":
+      if (s.mode === "playing" && s.overlay) {
+        const overlay = overlayOf(manifest, s);
+        if (overlay && findButton(overlay, event.button)) activateOverlay(manifest, s, event.button, effects);
+        break;
+      }
       if (s.mode !== "menu") break;
       if (findButton(menuOf(manifest, s.menu!), event.button)) {
         s.focus = event.button;
@@ -229,8 +290,48 @@ function menuOf(manifest: Manifest, id: string): Menu {
   return menu;
 }
 
-function findButton(menu: Menu, id: string): Button | undefined {
+function findButton(menu: { buttons: Button[] }, id: string): Button | undefined {
   return menu.buttons.find((b) => b.id === id);
+}
+
+/** Level 2: the cues that apply while [item] plays, with their ids: the media's, then the item's. */
+function cuesOf(manifest: Manifest, item: PlayItem): { id: string; cue: Cue }[] {
+  return [
+    ...(manifest.media[item.media]?.cues ?? []).map((cue, i) => ({ id: `media/${i}`, cue })),
+    ...(item.cues ?? []).map((cue, i) => ({ id: `item/${i}`, cue })),
+  ];
+}
+
+function cueById(manifest: Manifest, item: PlayItem, id: string): Cue | undefined {
+  return cuesOf(manifest, item).find((c) => c.id === id)?.cue;
+}
+
+/** Level 2: the overlay whose buttons show now (state.overlay), for renderers to draw. */
+export function overlayOf(manifest: Manifest, s: NavState): Overlay | undefined {
+  const cue = s.overlay && s.playing ? cueById(manifest, s.playing.item, s.overlay.cue) : undefined;
+  return cue && "from" in cue ? cue : undefined;
+}
+
+function moveOverlay(manifest: Manifest, s: NavState, dir: Direction, effects: Effect[]) {
+  const overlay = overlayOf(manifest, s);
+  if (!overlay || !s.overlay) return;
+  const current = findButton(overlay, s.overlay.focus)!;
+  let targetId = current.nav?.[dir];
+  if (!targetId && overlay.autoNav) targetId = nearestButton(overlay, current, dir)?.id;
+  if (!targetId || targetId === current.id) return;
+  s.overlay = { ...s.overlay, focus: targetId };
+  const target = findButton(overlay, targetId)!;
+  if (target.autoAction) activateOverlay(manifest, s, targetId, effects);
+}
+
+/** Press an overlay button: its action runs at the overlay's end time (where interrupted playback resumes). */
+function activateOverlay(manifest: Manifest, s: NavState, buttonId: string, effects: Effect[]) {
+  const overlay = overlayOf(manifest, s);
+  const button = overlay && findButton(overlay, buttonId);
+  if (!overlay || !button || !s.overlay) return;
+  s.overlay = { ...s.overlay, focus: button.id };
+  effects.push({ type: "activated", cue: s.overlay.cue, button: button.id });
+  run(manifest, s, button.action, effects, { pushHistory: false, cueAt: overlay.to });
 }
 
 function openRoot(manifest: Manifest, s: NavState, effects: Effect[]) {
@@ -243,7 +344,7 @@ function openRoot(manifest: Manifest, s: NavState, effects: Effect[]) {
 }
 
 /** A button reference (an id, or a variable holding one) resolved to a button of the menu, if it is one. */
-function buttonRef(s: NavState, menu: Menu, ref: string | { var: string } | undefined): string | undefined {
+function buttonRef(s: NavState, menu: { buttons: Button[] }, ref: string | { var: string } | undefined): string | undefined {
   if (ref === undefined) return undefined;
   const id = typeof ref === "object" ? String(readVar(s, ref.var)) : ref;
   return findButton(menu, id) ? id : undefined;
@@ -324,10 +425,16 @@ function currentPosition(s: NavState): MenuPosition | undefined {
   return s.mode === "menu" && s.menu && s.focus ? { menu: s.menu, focus: s.focus } : undefined;
 }
 
-/** `up`: running a menu's `back` (see remoteBack): gotos unwind history instead of adding to it. */
-function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean }) {
+/**
+ * `up`: running a menu's `back` (see remoteBack): gotos unwind history instead of adding to it.
+ * `cueAt`: running a cue's action during playback (Level 2); the time interrupted playback resumes from.
+ */
+function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean; cueAt?: number }) {
+  const duringPlayback = opts.cueAt !== undefined && s.mode === "playing" && s.playing !== undefined;
   switch (action.type) {
     case "goto": {
+      // A cue opening a menu leaves playback, remembered for resume where the cue is.
+      if (duringPlayback) leavePlayback(manifest, s, opts.cueAt!);
       const here = currentPosition(s);
       if (opts.up) {
         // Going up to a menu already in history: drop it and everything after it.
@@ -346,16 +453,18 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
       break;
     }
     case "back":
-      goBack(manifest, s, effects);
+      // From a cue: like the remote's Back during playback.
+      if (duringPlayback) finishPlayback(manifest, s, effects, { stoppedAt: opts.cueAt });
+      else goBack(manifest, s, effects);
       break;
     case "play":
-      startPlayback(manifest, s, [action], action.after, effects);
+      startPlayback(manifest, s, [action], action.after, effects, opts.cueAt);
       break;
     case "playAll":
-      startPlayback(manifest, s, action.items, action.after, effects);
+      startPlayback(manifest, s, action.items, action.after, effects, opts.cueAt);
       break;
     case "resume":
-      if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects);
+      if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects, opts.cueAt);
       // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
       // LinkRSM, else go to the picker").
       else if (action.otherwise) run(manifest, s, action.otherwise, effects, opts);
@@ -398,17 +507,31 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
   }
 }
 
-function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after: Action | undefined, effects: Effect[]) {
+/** `cueAt`: started by a cue during playback, which it interrupts and returns to (Level 2). */
+function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after: Action | undefined, effects: Effect[], cueAt?: number) {
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
-  s.playing = { item: first, queue, after, returnTo: currentPosition(s) };
+  const interrupted = cueAt !== undefined && s.mode === "playing" ? s.playing : undefined;
+  s.playing = interrupted
+    ? { item: first, queue, returnTo: interrupted.returnTo, resumeTo: { playing: interrupted, at: cueAt! } }
+    : { item: first, queue, after, returnTo: currentPosition(s) };
   s.mode = "playing";
+  s.overlay = undefined;
   s.seq += 1;
-  effects.push(playing(manifest, s, first));
+  effects.push(startItem(manifest, s, first));
 }
 
-/** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). */
-function playing(manifest: Manifest, s: NavState, item: PlayItem): Effect {
-  const effect = playEffect(manifest, item, s);
+/** A cue opened a menu: playback ends, remembered for resume at the cue's time. */
+function leavePlayback(manifest: Manifest, s: NavState, at: number) {
+  const media = s.playing!.item.media;
+  s.lastStop = { media, position: at };
+  s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, at) };
+  s.playing = undefined;
+  s.overlay = undefined;
+}
+
+/** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). `from`: start elsewhere than the item's own start. */
+function startItem(manifest: Manifest, s: NavState, item: PlayItem, from?: number): Effect {
+  const effect = playEffect(manifest, item, s, from);
   s.player = { ...s.player, "@lastMedia": item.media, "@lastChapter": chapterAt(manifest, item.media, effect.type === "play" ? effect.start : 0) };
   return effect;
 }
@@ -431,6 +554,16 @@ function finishPlayback(
 ) {
   const playing = s.playing!;
   s.playing = undefined;
+  s.overlay = undefined;
+  // Playback a cue started: the interrupted one continues where the cue was (Level 2).
+  if (playing.resumeTo) {
+    if ("completed" in how && s.lastStop?.media === playing.item.media) s.lastStop = undefined;
+    s.playing = playing.resumeTo.playing;
+    s.mode = "playing";
+    s.seq += 1;
+    effects.push(startItem(manifest, s, playing.resumeTo.playing.item, playing.resumeTo.at));
+    return;
+  }
   if ("completed" in how) {
     if (s.lastStop?.media === playing.item.media) s.lastStop = undefined;
   } else if (how.stoppedAt !== undefined) {
@@ -447,7 +580,7 @@ function finishPlayback(
   if ("completed" in how && playing.after) run(manifest, s, playing.after, effects, { pushHistory: true });
 }
 
-function playEffect(manifest: Manifest, item: PlayItem, s: NavState): Effect {
+function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: number): Effect {
   const value = (v: PlayItem["audio"]) => {
     if (v === undefined) return undefined;
     const n = typeof v === "number" ? v : readVar(s, v.var);
@@ -457,6 +590,7 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState): Effect {
   // like a DVD's SetSTN, or as the player reported them).
   const audio = value(item.audio) ?? (typeof s.player["@audio"] === "number" && s.player["@audio"] > 0 ? s.player["@audio"] : undefined);
   const subtitle = value(item.subtitle) ?? (typeof s.player["@subtitle"] === "number" ? s.player["@subtitle"] : undefined);
+  const cues: CueWatch[] = cuesOf(manifest, item).map(({ id, cue }) => ("at" in cue ? { id, at: cue.at } : { id, from: cue.from, to: cue.to }));
   // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
   const angles = angleCount(manifest, item.media);
   let angle: number | undefined;
@@ -468,10 +602,12 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState): Effect {
   return {
     type: "play",
     media: item.media,
-    start: startTime(manifest, item),
+    start: from ?? startTime(manifest, item),
     ...(audio !== undefined ? { audio } : {}),
     ...(subtitle !== undefined ? { subtitle } : {}),
     ...(angle !== undefined ? { angle } : {}),
+    ...(item.end !== undefined ? { end: item.end } : {}),
+    ...(cues.length ? { cues } : {}),
   };
 }
 
@@ -493,7 +629,7 @@ export function startTime(manifest: Manifest, item: PlayItem): number {
  * Nearest button in a direction, for menus with autoNav. Candidates must lie in the direction of
  * travel (by centre); the score favours small distance along the axis and penalises sideways offset.
  */
-export function nearestButton(menu: Menu, from: Button, dir: Direction): Button | undefined {
+export function nearestButton(menu: { buttons: Button[] }, from: Button, dir: Direction): Button | undefined {
   const centre = (b: Button) => [b.rect[0] + b.rect[2] / 2, b.rect[1] + b.rect[3] / 2] as const;
   const [fx, fy] = centre(from);
   let best: Button | undefined;

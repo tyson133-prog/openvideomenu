@@ -21,6 +21,13 @@
     <!-- in: playback finished on its own / was stopped at a position (seconds) -->
     <field id="playbackEnded" type="boolean" alwaysNotify="true" onChange="onPlaybackEnded" />
     <field id="playbackStopped" type="float" alwaysNotify="true" onChange="onPlaybackStopped" />
+    <!-- Level 2, in: playback passed a cue of the play request (an overlay's from / a point cue), or an overlay's to -->
+    <field id="cue" type="string" alwaysNotify="true" onChange="onCue" />
+    <field id="cueEnd" type="string" alwaysNotify="true" onChange="onCueEnd" />
+    <!-- Level 2, out: the menus left playback by themselves (a cue opened a menu): stop the title -->
+    <field id="stopRequest" type="boolean" alwaysNotify="true" />
+    <!-- Level 2, out: an overlay's buttons show over the title; the scene gives this view the keys -->
+    <field id="overlayShowing" type="boolean" />
   </interface>
   <script type="text/brightscript" uri="MenuView.brs" />
   <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
@@ -41,5 +48,9 @@
       </Group>
     </Group>
     <Audio id="music" />
+    <!-- Level 2: buttons over the playing title (an overlay cue), laid out on the overlay's canvas -->
+    <Group id="overlay" visible="false">
+      <Group id="overlayButtons" />
+    </Group>
   </children>
 </component>

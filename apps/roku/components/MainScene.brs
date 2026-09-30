@@ -141,7 +141,16 @@ sub onHttp(event as object)
     if pending = invalid then return
     res = event.getData()
     data = invalid
-    if res.body <> invalid and res.body <> "" then data = ParseJson(res.body)
+    if res.code >= 400
+        detail = ""
+        if GetInterface(pending.context, "ifString") <> invalid then detail = " " + pending.context
+        print "ovmplayer: HTTP "; res.code; " for "; pending.handler; detail
+    end if
+    ' Only JSON is parsed: some servers answer errors with an HTML page.
+    if res.body <> invalid
+        first = Left(res.body.Trim(), 1)
+        if first = "{" or first = "[" then data = ParseJson(res.body)
+    end if
     res.json = data
     ' Handlers are called by name so each step of a flow reads top to bottom.
     if pending.handler = "onServerInfo" then onServerInfo(res, pending.context)
@@ -688,6 +697,8 @@ sub startMenu()
     m.menu.authHeaders = assetHeaders()
     m.menu.observeField("playRequest", "onPlayRequest")
     m.menu.observeField("exit", "onMenuExit")
+    m.menu.observeField("stopRequest", "onMenuStop")
+    m.menu.observeField("overlayShowing", "onOverlayShowing")
     m.top.findNode(m.menuFrom.screen).visible = false
     setStatus("")
     m.direct = invalid
@@ -790,6 +801,12 @@ end function
 ' transcoding; subtitles off (0) is SubtitleStreamIndex -1.
 sub onPlayRequest()
     req = m.menu.playRequest
+    ' A cue started this while a title plays (it returns there afterwards): that one stops first.
+    if m.player <> invalid
+        if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)
+        report("/Sessions/Playing/Stopped")
+        closePlayer()
+    end if
     target = m.menuMedia[req.media]
     if target = invalid
         setStatus("That title isn't in your library.")
@@ -880,8 +897,76 @@ sub openPlayer(content as object)
     m.player.observeField("availableAudioTracks", "onAudioTracks")
     m.player.content = content
     m.top.appendChild(m.player)
+    ' Level 2: a menu's overlay buttons draw over the title, so the menu goes above the player (it
+    ' shows nothing else while a title plays), and its cues are timed on the player's position.
+    if m.menu <> invalid
+        m.top.removeChild(m.menu)
+        m.top.appendChild(m.menu)
+        req = m.playing.req
+        if req.cues <> invalid or req["end"] <> invalid
+            ' floor: readings before where playback was asked to start (the Video node starts at the
+            ' keyframe before it) are ignored, so a cue there doesn't fire again.
+            m.cueClock = { cues: msOr(req.cues, []), end: req["end"], last: req.start, floor: req.start, inside: {} }
+            m.player.notificationInterval = 0.25
+            m.player.observeField("position", "onPlayerPosition")
+        end if
+    end if
     m.player.setFocus(true)
     m.player.control = "play"
+end sub
+
+' Level 2: cue reports for the menu, as CueClock in packages/renderer-web/src/adapters.ts: point cues
+' when playback passes them in ordinary play (not seeking), overlays while inside their window, and
+' the item's end as the title ending.
+sub onPlayerPosition()
+    clock = m.cueClock
+    if clock = invalid or m.player = invalid or m.menu = invalid then return
+    position = playerPosition()
+    if clock.floor <> invalid
+        if position < clock.floor then return
+        clock.floor = invalid
+    end if
+    last = clock.last
+    clock.last = position
+    played = position >= last and position - last <= 2
+    for each c in clock.cues
+        if c["at"] <> invalid
+            if played and last < c["at"] and c["at"] <= position then m.menu.cue = c["id"]
+        else
+            inWindow = c["from"] <= position and position < c["to"]
+            if inWindow and not clock.inside.DoesExist(c["id"])
+                clock.inside[c["id"]] = true
+                m.menu.cue = c["id"]
+            else if not inWindow and clock.inside.DoesExist(c["id"])
+                clock.inside.Delete(c["id"])
+                m.menu.cueEnd = c["id"]
+            end if
+        end if
+    end for
+    if clock["end"] <> invalid and position >= clock["end"] and m.playing <> invalid
+        ' Stop here, as if the title had finished.
+        m.cueClock = invalid
+        report("/Sessions/Playing/Stopped")
+        rememberStop(msOr(m.playing.stopItem, m.playing.item), position, m.playing.req)
+        m.playing = invalid
+        closePlayer()
+        titleEnded()
+    end if
+end sub
+
+' Level 2: the menu left playback by itself (a cue opened a menu): stop, remembering where.
+sub onMenuStop()
+    if m.player = invalid then return
+    if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)
+    report("/Sessions/Playing/Stopped")
+    closePlayer()
+    m.menu.setFocus(true)
+end sub
+
+' Level 2: while an overlay's buttons show, the menu takes the arrows and OK (Back still stops).
+sub onOverlayShowing()
+    if m.player = invalid or m.menu = invalid then return
+    if m.menu.overlayShowing then m.menu.setFocus(true) else m.player.setFocus(true)
 end sub
 
 ' A subtitle file the server delivers separately (srt/ttml): offered to the player as a track.
@@ -978,6 +1063,7 @@ end sub
 
 sub closePlayer()
     m.progressTimer.control = "stop"
+    m.cueClock = invalid
     ' Captions are a TV-wide setting: put back what the viewer had.
     if m.captionModeBefore <> invalid
         m.player.globalCaptionMode = m.captionModeBefore

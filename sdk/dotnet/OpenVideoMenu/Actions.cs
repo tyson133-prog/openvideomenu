@@ -44,11 +44,17 @@ public sealed class PlayAction : MenuAction
     /// <summary>Level 2: angle of media with angles, 1-based; default @angle.</summary>
     public IntOrVar? Angle { get; set; }
 
+    /// <summary>Level 2: stop here (seconds), as if the item ended (spec §6.3).</summary>
+    public double? End { get; set; }
+
+    /// <summary>Level 2: cues for this way of playing the media, beside the media's own (spec §6.3).</summary>
+    public List<Cue>? Cues { get; set; }
+
     /// <summary>Runs when playback finishes on its own; must not start another playback.</summary>
     public MenuAction? After { get; set; }
 
     /// <summary>What this plays, as a play item.</summary>
-    public PlayItem ToItem() => new() { Media = Media, Chapter = Chapter, Start = Start, Audio = Audio, Subtitle = Subtitle, Angle = Angle };
+    public PlayItem ToItem() => new() { Media = Media, Chapter = Chapter, Start = Start, Audio = Audio, Subtitle = Subtitle, Angle = Angle, End = End, Cues = Cues };
 }
 
 /// <summary>Play several items in order (a "play all"), then run <see cref="After"/>.</summary>

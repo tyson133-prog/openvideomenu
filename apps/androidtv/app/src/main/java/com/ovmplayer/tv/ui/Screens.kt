@@ -354,6 +354,8 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     var playingMsg by remember { mutableStateOf<PageMessage.Play?>(null) }
     var handle by remember { mutableStateOf<PlayerHandle?>(null) }
     var failure by remember { mutableStateOf<String?>(null) }
+    /** Level 2: an overlay's buttons show over the playing title (the page is over the video). */
+    var overlay by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     lateinit var web: MenuWebView
     web = remember {
@@ -363,17 +365,88 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                 is PageMessage.Play -> scope.launch {
                     val request = vm.requestFor(open, msg.mediaId, msg.start, msg.audio, msg.subtitle, msg.angle, msg.videoTrack)
                     if (request == null) web.playError("\"${msg.label}\" isn't in your ${vm.sourceKind} library.") else {
+                        // A cue may start this while something plays (it returns there afterwards).
+                        handle = null
+                        overlay = false
                         playingMsg = msg
                         playing = request
                     }
+                }
+                // A cue opened a menu: playback ends where it is, and the page shows that menu.
+                PageMessage.Stop -> {
+                    val position = handle?.positionSeconds()
+                    if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "page: stop at ${position}s")
+                    playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, position, ended = false, it.audio, it.subtitle) }
+                    playing = null
+                    overlay = false
+                }
+                is PageMessage.Overlay -> {
+                    if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "page: overlay ${msg.showing}")
+                    overlay = msg.showing
                 }
                 PageMessage.Exit -> onExit()
                 is PageMessage.Error -> failure = msg.message
             }
         }
     }
-    // Remote keys belong to the player while a title plays, never to the menu page behind it.
-    LaunchedEffect(playing) { web.setBehindPlayer(playing != null) }
+    // Remote keys belong to the player while a title plays, never to the menu page behind it, except
+    // while an overlay's buttons show: then the page is over the video (see-through) and takes them.
+    LaunchedEffect(playing, overlay) {
+        val hidden = playing != null && !overlay
+        web.setOverVideo(playing != null && overlay)
+        web.visibility = if (hidden) android.view.View.INVISIBLE else android.view.View.VISIBLE
+        web.setBehindPlayer(playing != null)
+    }
+    // The overlay's keys are claimed ahead of the player, which keeps focus (and Back) meanwhile.
+    DisposableEffect(playing, overlay) {
+        if (playing != null && overlay) {
+            com.ovmplayer.tv.KeyClaim.handler = { e ->
+                val key = when (e.keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> "up"
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
+                    android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER -> "enter"
+                    else -> null
+                }
+                if (key != null && e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) {
+                    if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "overlay key $key")
+                    web.key(key)
+                }
+                key != null
+            }
+        }
+        onDispose { com.ovmplayer.tv.KeyClaim.handler = null }
+    }
+    fun titleEnded() {
+        playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, null, ended = true, it.audio, it.subtitle) }
+        playing = null
+        overlay = false
+        web.ended()
+        web.requestFocus()
+    }
+    // Level 2: the page's cues (and an item's end), timed against the player's position.
+    LaunchedEffect(playing, handle) {
+        val request = playing ?: return@LaunchedEffect
+        val msg = playingMsg ?: return@LaunchedEffect
+        val h = handle ?: return@LaunchedEffect
+        if (msg.cues.isEmpty() && msg.end == null) return@LaunchedEffect
+        fun log(what: String) {
+            if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "$what at ${h.positionSeconds()}s")
+        }
+        val clock = com.ovmplayer.tv.player.CueClock(
+            msg.cues,
+            msg.end,
+            onCue = { log("cue $it"); web.cue(it) },
+            onCueEnd = { log("cueEnd $it"); web.cueEnd(it) },
+            onEnd = { log("end"); titleEnded() },
+        )
+        clock.start(msg.start)
+        while (playing === request) {
+            kotlinx.coroutines.delay(200)
+            clock.tick(h.positionSeconds())
+        }
+    }
     // Where the viewer is gets saved as they watch: Home leaves the app without a stop.
     fun saveMenuPosition() {
         val msg = playingMsg ?: return
@@ -412,6 +485,7 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             val position = handle?.positionSeconds() ?: 0.0
             playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, position, ended = false, it.audio, it.subtitle) }
             playing = null
+            overlay = false
             web.stopped(position)
             web.requestFocus()
         } else if (failure != null) {
@@ -421,25 +495,22 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
         }
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(factory = { web.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
+        // The title plays under the page: the page is hidden while it plays, except for overlays.
         playing?.let { request ->
             VideoPlayer(
                 request = request,
                 onReady = { handle = it },
-                onEnded = {
-                    playingMsg?.let { vm.menuTitleFinished(open, it.mediaId, null, ended = true, it.audio, it.subtitle) }
-                    playing = null
-                    web.ended()
-                    web.requestFocus()
-                },
+                onEnded = { titleEnded() },
                 onError = { message ->
                     playing = null
+                    overlay = false
                     web.playError(message)
                     web.requestFocus()
                 },
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        AndroidView(factory = { web.also { it.requestFocus() } }, modifier = Modifier.fillMaxSize())
         failure?.let { message ->
             val main = open.entry.media.firstOrNull { it.kind == "feature" && open.media.containsKey(it.id) }
                 ?: open.entry.media.firstOrNull { open.media.containsKey(it.id) }

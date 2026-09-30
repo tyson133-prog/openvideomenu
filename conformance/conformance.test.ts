@@ -8,7 +8,7 @@
  *   schemaValid  — the JSON Schema accepts it (defaults to `valid`)
  *   errors[]     — issue paths the validator must report (subset match)
  *   warnings[]   — warning paths the validator must report (subset match)
- *   steps[]      — { event, expect: { mode?, menu?, focus?, intro?, buttonsReady?, effects? } } run through the navigator;
+ *   steps[]      — { event, expect: { mode?, menu?, focus?, intro?, buttonsReady?, overlay?, effects? } } run through the navigator;
  *                  `effects`, when given, must match exactly and in order.
  */
 import { readdirSync, readFileSync } from "node:fs";
@@ -26,7 +26,11 @@ interface Case {
   errors?: string[];
   warnings?: string[];
   manifest: unknown;
-  steps?: { event: NavEvent; expect?: Partial<Pick<NavState, "mode" | "menu" | "focus" | "intro" | "buttonsReady">> & { effects?: Effect[] } }[];
+  steps?: {
+    event: NavEvent;
+    /** overlay: null when none shows (Level 2). */
+    expect?: Partial<Pick<NavState, "mode" | "menu" | "focus" | "intro" | "buttonsReady">> & { overlay?: NavState["overlay"] | null; effects?: Effect[] };
+  }[];
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -69,6 +73,7 @@ describe.each(cases)("$file", ({ c }) => {
         if (want.focus !== undefined) expect(state.focus, label).toBe(want.focus);
         if (want.intro !== undefined) expect(state.intro, label).toBe(want.intro);
         if (want.buttonsReady !== undefined) expect(state.buttonsReady, label).toBe(want.buttonsReady);
+        if (want.overlay !== undefined) expect(state.overlay ?? null, label).toEqual(want.overlay);
         if (want.effects !== undefined) expect(result.effects, label).toEqual(want.effects);
       });
     });

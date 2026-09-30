@@ -51,6 +51,15 @@ public abstract record NavEvent
 
     /// <summary>Level 2: the countdown a <see cref="Effect.StartTimer"/> asked for ran out on <paramref name="Menu"/>.</summary>
     public sealed record Timeout(string Menu) : NavEvent;
+
+    /// <summary>
+    /// Level 2: playback passed a cue the play effect listed: a point cue's at, or an overlay's from (its
+    /// buttons show). Not for the time playback starts from, nor when seeking past it.
+    /// </summary>
+    public sealed record Cue(string Id) : NavEvent;
+
+    /// <summary>Level 2: playback passed an overlay's to (or left its window by seeking): its buttons go.</summary>
+    public sealed record CueEnd(string Id) : NavEvent;
 }
 
 /// <summary>Something the player must do.</summary>
@@ -59,11 +68,33 @@ public abstract record Effect
     /// <summary>
     /// Start playing a media entry from <paramref name="Start"/> seconds, with tracks when given (Level 2).
     /// <paramref name="Angle"/> is set for media with angles (spec §4.1): 1 = its ref, 2 = Angles[0] or video track 2, ….
+    /// <paramref name="End"/>: stop there and report <see cref="NavEvent.Ended"/>; <paramref name="Cues"/>:
+    /// report <see cref="NavEvent.Cue"/>/<see cref="NavEvent.CueEnd"/> for these while it plays (spec §6.3).
     /// </summary>
-    public sealed record Play(string Media, double Start, int? Audio = null, int? Subtitle = null, int? Angle = null) : Effect;
+    public sealed record Play(
+        string Media,
+        double Start,
+        int? Audio = null,
+        int? Subtitle = null,
+        int? Angle = null,
+        double? End = null,
+        IReadOnlyList<CueWatch>? Cues = null) : Effect
+    {
+        public bool Equals(Play? other) =>
+            other is not null && Media == other.Media && Start == other.Start && Audio == other.Audio && Subtitle == other.Subtitle &&
+            Angle == other.Angle && End == other.End && (Cues ?? []).SequenceEqual(other.Cues ?? []);
+
+        public override int GetHashCode() => HashCode.Combine(Media, Start, Audio, Subtitle, Angle, End, Cues?.Count ?? 0);
+
+        public override string ToString() =>
+            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}] }}";
+    }
 
     /// <summary>Briefly show the button's activated state.</summary>
     public sealed record Activated(string Menu, string Button) : Effect;
+
+    /// <summary>Level 2: briefly show the activated state of a button of the overlay showing during playback.</summary>
+    public sealed record OverlayActivated(string Cue, string Button) : Effect;
 
     /// <summary>Back was pressed at the top of the menus; the host may leave the title.</summary>
     public sealed record Exit : Effect;
@@ -94,8 +125,17 @@ public enum NavMode
 /// <summary>A menu and the button focused on it.</summary>
 public sealed record MenuPosition(string Menu, string Focus);
 
-/// <summary>Playback in progress: the item playing now and those still queued.</summary>
-public sealed record Playback(PlayItem Item, IReadOnlyList<PlayItem> Queue, MenuAction? After, MenuPosition? ReturnTo);
+/// <summary>
+/// Playback in progress: the item playing now and those still queued. <paramref name="ResumeTo"/>:
+/// playback a cue interrupted, which continues from its time when this ends or is stopped (Level 2).
+/// </summary>
+public sealed record Playback(PlayItem Item, IReadOnlyList<PlayItem> Queue, MenuAction? After, MenuPosition? ReturnTo, Interrupted? ResumeTo = null);
+
+/// <summary>Level 2: playback a cue interrupted, and the time it continues from.</summary>
+public sealed record Interrupted(Playback Playing, double At);
+
+/// <summary>Level 2: the overlay showing during playback (its cue id) and its focused button.</summary>
+public sealed record OverlayFocus(string Cue, string Focus);
 
 /// <summary>Where the viewer stopped, for resume.</summary>
 public sealed record LastStop(string Media, double Position);
@@ -125,6 +165,9 @@ public sealed record NavState
     public IReadOnlyList<MenuPosition> History { get; init; } = [];
 
     public Playback? Playing { get; init; }
+
+    /// <summary>Level 2: the overlay showing during playback, if any.</summary>
+    public OverlayFocus? Overlay { get; init; }
 
     /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
     public LastStop? LastStop { get; init; }
@@ -249,7 +292,8 @@ public static class Navigator
                 {
                     var next = s.Playing.Queue[0];
                     s.Playing = s.Playing with { Item = next, Queue = s.Playing.Queue.Skip(1).ToList() };
-                    effects.Add(Playing(manifest, s, next));
+                    s.Overlay = null;
+                    effects.Add(StartItem(manifest, s, next));
                 }
                 else
                 {
@@ -270,6 +314,35 @@ public static class Navigator
                 if (s.Mode == NavMode.Playing)
                 {
                     FinishPlayback(manifest, s, effects, completed: false, stoppedAt: stopped.Position);
+                }
+
+                break;
+
+            case NavEvent.Cue cueEvent:
+            {
+                if (s.Mode != NavMode.Playing || s.Playing is null)
+                {
+                    break;
+                }
+
+                switch (CueById(manifest, s.Playing.Item, cueEvent.Id))
+                {
+                    case PointCue point:
+                        Run(manifest, s, point.Action, effects, pushHistory: false, cueAt: point.At);
+                        break;
+                    case Overlay overlay:
+                        // The overlay's buttons show; a later one replaces one still showing.
+                        s.Overlay = new OverlayFocus(cueEvent.Id, ResolveButton(s, overlay.Buttons, overlay.DefaultButton) ?? overlay.Buttons[0].Id);
+                        break;
+                }
+
+                break;
+            }
+
+            case NavEvent.CueEnd cueEnd:
+                if (s.Overlay?.Cue == cueEnd.Id)
+                {
+                    s.Overlay = null;
                 }
 
                 break;
@@ -294,12 +367,15 @@ public static class Navigator
     /// The nearest button in a direction, for menus with autoNav. Candidates must lie that way (by
     /// centre); the score favours a short distance along the axis and penalises sideways offset.
     /// </summary>
-    public static Button? NearestButton(Menu menu, Button from, Direction dir)
+    public static Button? NearestButton(Menu menu, Button from, Direction dir) => NearestButton(menu.Buttons, from, dir);
+
+    /// <summary>The nearest of <paramref name="buttons"/> in a direction (a menu's, or an overlay's).</summary>
+    public static Button? NearestButton(IReadOnlyList<Button> buttons, Button from, Direction dir)
     {
         var (fx, fy) = (from.Rect.CentreX, from.Rect.CentreY);
         Button? best = null;
         var bestScore = double.PositiveInfinity;
-        foreach (var b in menu.Buttons)
+        foreach (var b in buttons)
         {
             if (b.Id == from.Id)
             {
@@ -339,6 +415,19 @@ public static class Navigator
                         FinishPlayback(manifest, s, effects, completed: false, stoppedAt: null);
                     }
 
+                    // With an overlay showing, the arrows and Enter are its; otherwise they're the video player's.
+                    else if (s.Overlay is not null)
+                    {
+                        if (press.Key == Key.Enter)
+                        {
+                            ActivateOverlay(manifest, s, s.Overlay.Focus, effects);
+                        }
+                        else
+                        {
+                            MoveOverlay(manifest, s, (Direction)(int)press.Key, effects);
+                        }
+                    }
+
                     break;
                 }
 
@@ -364,6 +453,16 @@ public static class Navigator
 
             case NavEvent.Select select:
             {
+                if (s.Mode == NavMode.Playing && s.Overlay is not null)
+                {
+                    if (OverlayOf(manifest, s) is { } overlay && select.Button != s.Overlay.Focus && FindButton(overlay.Buttons, select.Button) is not null)
+                    {
+                        s.Overlay = s.Overlay with { Focus = select.Button };
+                    }
+
+                    break;
+                }
+
                 if (s.Mode != NavMode.Menu || select.Button == s.Focus)
                 {
                     break;
@@ -378,6 +477,16 @@ public static class Navigator
             }
 
             case NavEvent.Activate activate:
+                if (s.Mode == NavMode.Playing && s.Overlay is not null)
+                {
+                    if (OverlayOf(manifest, s) is { } overlay && FindButton(overlay.Buttons, activate.Button) is not null)
+                    {
+                        ActivateOverlay(manifest, s, activate.Button, effects);
+                    }
+
+                    break;
+                }
+
                 if (s.Mode != NavMode.Menu)
                 {
                     break;
@@ -396,7 +505,59 @@ public static class Navigator
     private static Menu MenuOf(Manifest manifest, string id) =>
         manifest.Menus is not null && manifest.Menus.TryGetValue(id, out var menu) ? menu : throw new InvalidOperationException($"No menu \"{id}\"");
 
-    private static Button? FindButton(Menu menu, string id) => menu.Buttons.FirstOrDefault(b => b.Id == id);
+    private static Button? FindButton(Menu menu, string id) => FindButton(menu.Buttons, id);
+
+    private static Button? FindButton(IEnumerable<Button> buttons, string id) => buttons.FirstOrDefault(b => b.Id == id);
+
+    /// <summary>Level 2: the cues that apply while <paramref name="item"/> plays, with their ids: the media's, then the item's.</summary>
+    private static IEnumerable<(string Id, Cue Cue)> CuesOf(Manifest manifest, PlayItem item) =>
+        (manifest.Media.TryGetValue(item.Media, out var m) ? m.Cues ?? [] : []).Select((c, i) => ($"media/{i}", c))
+            .Concat((item.Cues ?? []).Select((c, i) => ($"item/{i}", c)));
+
+    private static Cue? CueById(Manifest manifest, PlayItem item, string id) =>
+        CuesOf(manifest, item).Where(c => c.Id == id).Select(c => c.Cue).FirstOrDefault();
+
+    private static Overlay? OverlayOf(Manifest manifest, Working s) =>
+        s.Overlay is not null && s.Playing is not null ? CueById(manifest, s.Playing.Item, s.Overlay.Cue) as Overlay : null;
+
+    private static void MoveOverlay(Manifest manifest, Working s, Direction dir, List<Effect> effects)
+    {
+        if (OverlayOf(manifest, s) is not { } overlay || s.Overlay is null)
+        {
+            return;
+        }
+
+        var current = FindButton(overlay.Buttons, s.Overlay.Focus)!;
+        var targetId = current.Nav?[dir];
+        if (string.IsNullOrEmpty(targetId) && overlay.AutoNav == true)
+        {
+            targetId = NearestButton(overlay.Buttons, current, dir)?.Id;
+        }
+
+        if (string.IsNullOrEmpty(targetId) || targetId == current.Id)
+        {
+            return;
+        }
+
+        s.Overlay = s.Overlay with { Focus = targetId };
+        if (FindButton(overlay.Buttons, targetId)!.AutoAction == true)
+        {
+            ActivateOverlay(manifest, s, targetId, effects);
+        }
+    }
+
+    /// <summary>Press an overlay button: its action runs at the overlay's end time (where interrupted playback resumes).</summary>
+    private static void ActivateOverlay(Manifest manifest, Working s, string buttonId, List<Effect> effects)
+    {
+        if (OverlayOf(manifest, s) is not { } overlay || s.Overlay is null || FindButton(overlay.Buttons, buttonId) is not { } button)
+        {
+            return;
+        }
+
+        s.Overlay = s.Overlay with { Focus = button.Id };
+        effects.Add(new Effect.OverlayActivated(s.Overlay.Cue, button.Id));
+        Run(manifest, s, button.Action, effects, pushHistory: false, cueAt: overlay.To);
+    }
 
     private static void OpenRoot(Manifest manifest, Working s, List<Effect> effects)
     {
@@ -411,7 +572,9 @@ public static class Navigator
     }
 
     /// <summary>A button reference (an id, or a variable holding one) resolved to a button of the menu, if it is one.</summary>
-    private static string? ResolveButton(Working s, Menu menu, ButtonRef? r)
+    private static string? ResolveButton(Working s, Menu menu, ButtonRef? r) => ResolveButton(s, menu.Buttons, r);
+
+    private static string? ResolveButton(Working s, IEnumerable<Button> buttons, ButtonRef? r)
     {
         if (r is null)
         {
@@ -419,7 +582,7 @@ public static class Navigator
         }
 
         var id = r.Id ?? s.Read(r.Var!).ToString();
-        return FindButton(menu, id) is not null ? id : null;
+        return FindButton(buttons, id) is not null ? id : null;
     }
 
     private static void EnterMenu(Manifest manifest, Working s, string menuId, ButtonRef? buttonId, bool intro, List<Effect> effects)
@@ -531,13 +694,23 @@ public static class Navigator
     private static MenuPosition? CurrentPosition(Working s) =>
         s.Mode == NavMode.Menu && s.Menu is not null && s.Focus is not null ? new MenuPosition(s.Menu, s.Focus) : null;
 
-    /// <summary><paramref name="up"/>: running a menu's back (see RemoteBack): gotos unwind history instead of adding to it.</summary>
-    private static void Run(Manifest manifest, Working s, MenuAction action, List<Effect> effects, bool pushHistory, bool up = false)
+    /// <summary>
+    /// <paramref name="up"/>: running a menu's back (see RemoteBack): gotos unwind history instead of adding to it.
+    /// <paramref name="cueAt"/>: running a cue's action during playback (Level 2); the time interrupted playback resumes from.
+    /// </summary>
+    private static void Run(Manifest manifest, Working s, MenuAction action, List<Effect> effects, bool pushHistory, bool up = false, double? cueAt = null)
     {
+        var duringPlayback = cueAt is not null && s.Mode == NavMode.Playing && s.Playing is not null;
         switch (action)
         {
             case GotoAction g:
             {
+                // A cue opening a menu leaves playback, remembered for resume where the cue is.
+                if (duringPlayback)
+                {
+                    LeavePlayback(manifest, s, cueAt!.Value);
+                }
+
                 var here = CurrentPosition(s);
                 if (up)
                 {
@@ -569,23 +742,32 @@ public static class Navigator
             }
 
             case BackAction:
-                GoBack(manifest, s, effects);
+                // From a cue: like the remote's Back during playback.
+                if (duringPlayback)
+                {
+                    FinishPlayback(manifest, s, effects, completed: false, stoppedAt: cueAt);
+                }
+                else
+                {
+                    GoBack(manifest, s, effects);
+                }
+
                 break;
             case PlayAction p:
-                StartPlayback(manifest, s, [p.ToItem()], p.After, effects);
+                StartPlayback(manifest, s, [p.ToItem()], p.After, effects, cueAt);
                 break;
             case PlayAllAction pa:
-                StartPlayback(manifest, s, pa.Items, pa.After, effects);
+                StartPlayback(manifest, s, pa.Items, pa.After, effects, cueAt);
                 break;
             case ResumeAction resume:
                 if (s.LastStop is { } stop)
                 {
-                    StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects);
+                    StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects, cueAt);
                 }
                 else if (resume.Otherwise is not null)
                 {
                     // Nothing to resume: the fallback runs as if it were the action itself.
-                    Run(manifest, s, resume.Otherwise, effects, pushHistory, up);
+                    Run(manifest, s, resume.Otherwise, effects, pushHistory, up, cueAt);
                 }
 
                 break;
@@ -617,7 +799,7 @@ public static class Navigator
 
                 if (set.Then is not null)
                 {
-                    Run(manifest, s, set.Then, effects, pushHistory, up);
+                    Run(manifest, s, set.Then, effects, pushHistory, up, cueAt);
                 }
 
                 break;
@@ -626,11 +808,11 @@ public static class Navigator
             case IfAction ifAction:
                 if (Logic.Eval(ifAction.Test, s.Read))
                 {
-                    Run(manifest, s, ifAction.Then, effects, pushHistory, up);
+                    Run(manifest, s, ifAction.Then, effects, pushHistory, up, cueAt);
                 }
                 else if (ifAction.Else is not null)
                 {
-                    Run(manifest, s, ifAction.Else, effects, pushHistory, up);
+                    Run(manifest, s, ifAction.Else, effects, pushHistory, up, cueAt);
                 }
 
                 break;
@@ -639,7 +821,7 @@ public static class Navigator
                 foreach (var stepAction in doAction.Steps)
                 {
                     var (seq, mode, count) = (s.Seq, s.Mode, effects.Count);
-                    Run(manifest, s, stepAction, effects, pushHistory, up);
+                    Run(manifest, s, stepAction, effects, pushHistory, up, cueAt);
                     if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition))
                     {
                         break;
@@ -664,18 +846,36 @@ public static class Navigator
         }
     }
 
-    private static void StartPlayback(Manifest manifest, Working s, IReadOnlyList<PlayItem> items, MenuAction? after, List<Effect> effects)
+    /// <summary><paramref name="cueAt"/>: started by a cue during playback, which it interrupts and returns to (Level 2).</summary>
+    private static void StartPlayback(Manifest manifest, Working s, IReadOnlyList<PlayItem> items, MenuAction? after, List<Effect> effects, double? cueAt = null)
     {
-        s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
+        var interrupted = cueAt is not null && s.Mode == NavMode.Playing ? s.Playing : null;
+        s.Playing = interrupted is not null
+            ? new Playback(items[0], items.Skip(1).ToList(), null, interrupted.ReturnTo, new Interrupted(interrupted, cueAt!.Value))
+            : new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
         s.Mode = NavMode.Playing;
+        s.Overlay = null;
         s.Seq++;
-        effects.Add(Playing(manifest, s, items[0]));
+        effects.Add(StartItem(manifest, s, items[0]));
     }
 
-    /// <summary>The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).</summary>
-    private static Effect.Play Playing(Manifest manifest, Working s, PlayItem item)
+    /// <summary>A cue opened a menu: playback ends, remembered for resume at the cue's time.</summary>
+    private static void LeavePlayback(Manifest manifest, Working s, double at)
     {
-        var effect = PlayEffect(manifest, item, s);
+        var media = s.Playing!.Item.Media;
+        s.LastStop = new LastStop(media, at);
+        s.Player["@lastChapter"] = ChapterAt(manifest, media, at);
+        s.Playing = null;
+        s.Overlay = null;
+    }
+
+    /// <summary>
+    /// The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).
+    /// <paramref name="from"/>: start elsewhere than the item's own start.
+    /// </summary>
+    private static Effect.Play StartItem(Manifest manifest, Working s, PlayItem item, double? from = null)
+    {
+        var effect = PlayEffect(manifest, item, s, from);
         s.Player["@lastMedia"] = item.Media;
         s.Player["@lastChapter"] = ChapterAt(manifest, item.Media, effect.Start);
         return effect;
@@ -701,6 +901,23 @@ public static class Navigator
     {
         var playing = s.Playing!;
         s.Playing = null;
+        s.Overlay = null;
+
+        // Playback a cue started: the interrupted one continues where the cue was (Level 2).
+        if (playing.ResumeTo is { } resumeTo)
+        {
+            if (completed && s.LastStop?.Media == playing.Item.Media)
+            {
+                s.LastStop = null;
+            }
+
+            s.Playing = resumeTo.Playing;
+            s.Mode = NavMode.Playing;
+            s.Seq++;
+            effects.Add(StartItem(manifest, s, resumeTo.Playing.Item, resumeTo.At));
+            return;
+        }
+
         if (completed)
         {
             if (s.LastStop?.Media == playing.Item.Media)
@@ -734,7 +951,7 @@ public static class Navigator
     /// Without tracks of its own, playback uses the current ones (after a set on @audio/@subtitle, like a
     /// DVD's SetSTN, or as the player reported them).
     /// </summary>
-    private static Effect.Play PlayEffect(Manifest manifest, PlayItem item, Working s)
+    private static Effect.Play PlayEffect(Manifest manifest, PlayItem item, Working s, double? from = null)
     {
         var audio = item.Audio?.Resolve(s.Read) ?? (s.Player.TryGetValue("@audio", out var a) && a.Number > 0 ? a.Number : null);
         var subtitle = item.Subtitle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@subtitle", out var t) ? t.Number : null);
@@ -747,7 +964,10 @@ public static class Navigator
             angle = wanted >= 1 && wanted <= angles ? wanted : 1;
         }
 
-        return new(item.Media, StartTime(manifest, item), audio, subtitle, angle);
+        var cues = CuesOf(manifest, item)
+            .Select(c => c.Cue is PointCue point ? new CueWatch(c.Id, At: point.At) : new CueWatch(c.Id, From: ((Overlay)c.Cue).From, To: ((Overlay)c.Cue).To))
+            .ToList();
+        return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null);
     }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>
@@ -768,6 +988,8 @@ public static class Navigator
         public List<MenuPosition> History { get; } = [.. from.History];
 
         public Playback? Playing { get; set; } = from.Playing;
+
+        public OverlayFocus? Overlay { get; set; } = from.Overlay;
 
         public LastStop? LastStop { get; set; } = from.LastStop;
 
@@ -791,6 +1013,7 @@ public static class Navigator
             TransitionTo = TransitionTo,
             History = History,
             Playing = Playing,
+            Overlay = Overlay,
             LastStop = LastStop,
             Vars = Vars,
             Player = Player,
