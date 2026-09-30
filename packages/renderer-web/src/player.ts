@@ -41,6 +41,21 @@ export interface PlayerOptions {
   activatedFlashMs?: number;
   /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
   initialLastStop?: { media: string; position: number };
+  /**
+   * Level 2: what the host knows of the viewer's setup, as "@" player state (e.g. "@audioLanguage",
+   * "@region"). Merged over the defaults: the browser's language for the three language preferences.
+   */
+  player?: Record<string, number | string>;
+}
+
+/** The browser's (or TV's) language as the default preference for audio, subtitles and menus. */
+function defaultPlayerState(): Record<string, string> {
+  // A BCP 47 tag such as "fr-CA": the language and, when given, the country.
+  const [language = "", region = ""] = (typeof navigator !== "undefined" ? navigator.language : "").split("-");
+  const lang = language.length === 2 ? language.toLowerCase() : "";
+  const state: Record<string, string> = lang ? { "@audioLanguage": lang, "@subtitleLanguage": lang, "@menuLanguage": lang } : {};
+  if (/^[A-Za-z]{2}$/.test(region)) state["@country"] = region.toUpperCase();
+  return state;
 }
 
 type VisualState = "normal" | "selected" | "activated";
@@ -121,7 +136,12 @@ export class MenuPlayer {
 
   start() {
     if (this.options.view === "fallback") this.showFallback();
-    else this.dispatch({ type: "start" });
+    else
+      this.dispatch({
+        type: "start",
+        player: { ...defaultPlayerState(), ...(this.options.player ?? {}) },
+        seed: 1 + Math.floor(Math.random() * 2147483646),
+      });
   }
 
   destroy() {

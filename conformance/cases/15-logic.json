@@ -1,0 +1,93 @@
+{
+  "description": "Level 2 logic layer: player state (@audioLanguage from the player, @audio set like a DVD's SetSTN, @lastChapter from where playback stopped, @region unset), if/else, do stopping after its first navigating step, set with add and a seeded random (seed 42 gives 1 for 1..3, then 265 for 1..1000), div truncating toward zero, mod keeping the dividend's sign, div by 0 leaving the variable unchanged, xor, all/any/not/has conditions, and a menu's focus from a text variable.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Logic" },
+    "vars": { "sel": "a2", "count": 0, "flags": 5, "pick": 0, "n": 0, "m": 0, "x": 6 },
+    "media": { "feature": { "ref": "Film.mkv", "chapters": [{ "time": 0 }, { "time": 100 }, { "time": 200 }] } },
+    "firstPlay": {
+      "type": "if",
+      "test": { "var": "@audioLanguage", "eq": "fr" },
+      "then": { "type": "do", "steps": [
+        { "type": "set", "var": "@audio", "value": 2 },
+        { "type": "goto", "menu": "main" },
+        { "type": "set", "var": "@audio", "value": 3 }
+      ] },
+      "else": { "type": "goto", "menu": "main" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [10, 10, 100, 30], "nav": { "down": "setup" }, "action": { "type": "play", "media": "feature" } },
+          { "id": "setup", "rect": [10, 50, 100, 30], "nav": { "up": "play", "down": "count" }, "action": { "type": "goto", "menu": "setup" } },
+          { "id": "count", "rect": [10, 90, 100, 30], "nav": { "up": "setup", "down": "rand" },
+            "action": { "type": "set", "var": "count", "op": "add", "value": 1, "then": { "type": "if", "test": { "var": "count", "ge": 2 }, "then": { "type": "goto", "menu": "setup" } } } },
+          { "id": "rand", "rect": [10, 130, 100, 30], "nav": { "up": "count", "down": "flag" },
+            "action": { "type": "set", "var": "pick", "op": "random", "value": 3, "then": { "type": "if", "test": { "any": [{ "var": "pick", "eq": 1 }, { "var": "pick", "eq": 2 }] }, "then": { "type": "goto", "menu": "setup" } } } },
+          { "id": "flag", "rect": [10, 170, 100, 30], "nav": { "up": "rand" },
+            "action": { "type": "if", "test": { "all": [{ "var": "flags", "has": 4 }, { "not": { "var": "@region", "eq": 2 } }] }, "then": { "type": "goto", "menu": "chapters" } } }
+        ]
+      },
+      "setup": {
+        "canvas": { "width": 720, "height": 480 },
+        "defaultButton": { "var": "sel" },
+        "buttons": [
+          { "id": "a1", "rect": [10, 10, 100, 30], "nav": { "down": "a2" },
+            "action": { "type": "set", "var": "@audio", "value": 1, "then": { "type": "set", "var": "sel", "value": "a1", "then": { "type": "back" } } } },
+          { "id": "a2", "rect": [10, 50, 100, 30], "nav": { "up": "a1" },
+            "action": { "type": "set", "var": "@audio", "value": 2, "then": { "type": "set", "var": "sel", "value": "a2", "then": { "type": "back" } } } }
+        ]
+      },
+      "chapters": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "resume-chapter", "rect": [10, 10, 100, 30],
+            "nav": { "down": "math" },
+            "action": { "type": "if", "test": { "var": "@lastChapter", "eq": 2 }, "then": { "type": "play", "media": "feature", "chapter": 3 }, "else": { "type": "play", "media": "feature", "chapter": 1 } } },
+          { "id": "math", "rect": [10, 50, 100, 30], "nav": { "up": "resume-chapter" },
+            "action": { "type": "do", "steps": [
+              { "type": "set", "var": "n", "value": -7 },
+              { "type": "set", "var": "n", "op": "div", "value": 2 },
+              { "type": "set", "var": "m", "value": -7 },
+              { "type": "set", "var": "m", "op": "mod", "value": 3 },
+              { "type": "set", "var": "m", "op": "div", "value": 0 },
+              { "type": "set", "var": "x", "op": "xor", "value": 3 },
+              { "type": "set", "var": "pick", "op": "random", "value": 1000 },
+              { "type": "if", "test": { "all": [{ "var": "n", "eq": -3 }, { "var": "m", "eq": -1 }, { "var": "x", "eq": 5 }, { "var": "pick", "eq": 265 }] },
+                "then": { "type": "play", "media": "feature", "chapter": 2 }, "else": { "type": "play", "media": "feature", "chapter": 1 } }
+            ] } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start", "player": { "@audioLanguage": "fr" }, "seed": 42 }, "expect": { "mode": "menu", "menu": "main", "focus": "play", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "feature", "start": 0, "audio": 2 }] } },
+    { "event": { "type": "stopped", "position": 150 }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "setup" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "setup", "focus": "a2" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "a1" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "setup", "effects": [{ "type": "activated", "menu": "setup", "button": "a1" }] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "setup", "focus": "a1" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "setup" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "count" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "main", "focus": "count", "effects": [{ "type": "activated", "menu": "main", "button": "count" }] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "setup", "focus": "a1" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "count" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "rand" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "setup", "focus": "a1" } },
+    { "event": { "type": "press", "key": "back" }, "expect": { "menu": "main", "focus": "rand" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "flag" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "menu": "chapters", "focus": "resume-chapter" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "chapters", "button": "resume-chapter" }, { "type": "play", "media": "feature", "start": 200, "audio": 1 }] } },
+    { "event": { "type": "stopped", "position": 210 }, "expect": { "mode": "menu", "menu": "chapters", "focus": "resume-chapter" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "math" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "chapters", "button": "math" }, { "type": "play", "media": "feature", "start": 100, "audio": 1 }] } }
+  ]
+}

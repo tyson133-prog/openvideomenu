@@ -8,7 +8,7 @@
 ' Manifest data is read with bracket access (m["menus"]) because ids are author-chosen strings.
 
 function msNavInitialState() as object
-    return { mode: "idle", history: [], intro: false, buttonsReady: true, vars: {} }
+    return { mode: "idle", history: [], intro: false, buttonsReady: true, vars: msNavNewVars(), player: msNavNewVars(), seed: 1&, seq: 0 }
 end function
 
 function msNavStep(manifest as object, state as object, event as object) as object
@@ -20,7 +20,12 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     if t = "start"
         s.history = []
         s.playing = invalid
-        s.vars = msCopyAA(msOr(manifest["vars"], {}))
+        s.vars = msNavCopyVars(msOr(manifest["vars"], {}))
+        ' What the player knows of the viewer's setup ("@" player state) and a random seed (Level 2).
+        player = msNavCopyVars(s.player)
+        if event["player"] <> invalid then player.Append(event["player"])
+        s.player = player
+        if event["seed"] <> invalid then s.seed = event["seed"] + 0&
         if manifest["firstPlay"] <> invalid
             msNavRun(manifest, s, manifest["firstPlay"], effects, false)
         else
@@ -79,7 +84,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
                 p.item = nextItem
                 p.queue = q
                 s.playing = p
-                effects.push(msNavPlayEffect(manifest, nextItem, s.vars))
+                effects.push(msNavPlaying(manifest, s, nextItem))
             else
                 msNavFinishPlayback(manifest, s, effects, true, invalid)
             end if
@@ -87,6 +92,12 @@ function msNavStep(manifest as object, state as object, event as object) as obje
 
     else if t = "stopped"
         if s.mode = "playing" then msNavFinishPlayback(manifest, s, effects, false, event["position"])
+
+    else if t = "player"
+        ' Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack).
+        player = msNavCopyVars(s.player)
+        player.Append(event["values"])
+        s.player = player
     end if
 
     return { state: s, effects: effects }
@@ -146,17 +157,23 @@ sub msNavOpenRoot(manifest as object, s as object, effects as object)
     msNavEnterMenu(manifest, s, manifest["rootMenu"], invalid, true, effects)
 end sub
 
+' A button reference (an id, or {"var": name} holding one) resolved to a button of the menu, if it is one.
+function msNavButtonRef(s as object, menu as object, ref as dynamic) as dynamic
+    if ref = invalid then return invalid
+    id = ref
+    if GetInterface(ref, "ifAssociativeArray") <> invalid then id = msNavText(msNavRead(s, ref["var"]))
+    if msNavFindButton(menu, id) <> invalid then return id
+    return invalid
+end function
+
 sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId as dynamic, fresh as boolean, effects as object)
     menu = msNavMenu(manifest, menuId)
     s.mode = "menu"
     s.menu = menuId
-    if buttonId <> invalid
-        s.focus = buttonId
-    else if menu["defaultButton"] <> invalid
-        s.focus = menu["defaultButton"]
-    else
-        s.focus = menu["buttons"][0]["id"]
-    end if
+    s.seq = s.seq + 1
+    s.focus = msNavButtonRef(s, menu, buttonId)
+    if s.focus = invalid then s.focus = msNavButtonRef(s, menu, menu["defaultButton"])
+    if s.focus = invalid then s.focus = menu["buttons"][0]["id"]
     s.intro = fresh
     buttonsAt = msOr(menu["buttonsAt"], 0)
     s.buttonsReady = not (fresh and buttonsAt > 0)
@@ -259,7 +276,8 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
         end if
         if action["transition"] <> invalid
             s.mode = "transition"
-            s.transitionTo = { menu: action["menu"], button: action["button"] }
+            ' A variable button is read now, when the viewer chose it.
+            s.transitionTo = { menu: action["menu"], button: msNavButtonRef(s, msNavMenu(manifest, action["menu"]), action["button"]) }
             effects.push({ type: "transition", src: action["transition"] })
         else
             msNavEnterMenu(manifest, s, action["menu"], action["button"], true, effects)
@@ -279,10 +297,43 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
             msNavRunOpts(manifest, s, action["otherwise"], effects, pushHistory, up)
         end if
     else if t = "set"
-        vars = msCopyAA(s.vars)
-        vars[action["var"]] = action["value"]
-        s.vars = vars
+        name = action["var"]
+        nextValue = msNavApplyOp(s, msNavRead(s, name), msOr(action["op"], "set"), msNavValueOf(s, action["value"]))
+        if nextValue <> invalid
+            if name = "@focus"
+                ' Highlight a button of the current menu (a DVD's SetHL_BTN).
+                id = msNavText(nextValue)
+                if s.menu <> invalid and msNavFindButton(msNavMenu(manifest, s.menu), id) <> invalid then s.focus = id
+            else if Left(name, 1) = "@"
+                player = msNavCopyVars(s.player)
+                player[name] = nextValue
+                s.player = player
+            else
+                vars = msNavCopyVars(s.vars)
+                vars[name] = nextValue
+                s.vars = vars
+            end if
+        end if
         if action["then"] <> invalid then msNavRunOpts(manifest, s, action["then"], effects, pushHistory, up)
+    else if t = "if"
+        if msNavEvalTest(s, action["test"])
+            msNavRunOpts(manifest, s, action["then"], effects, pushHistory, up)
+        else if action["else"] <> invalid
+            msNavRunOpts(manifest, s, action["else"], effects, pushHistory, up)
+        end if
+    else if t = "do"
+        ' In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
+        for each stepAction in action["steps"]
+            seq = s.seq
+            mode = s.mode
+            count = effects.Count()
+            msNavRunOpts(manifest, s, stepAction, effects, pushHistory, up)
+            navigated = s.seq <> seq or s.mode <> mode
+            for i = count to effects.Count() - 1
+                if effects[i].type = "exit" or effects[i].type = "transition" then navigated = true
+            end for
+            if navigated then exit for
+        end for
     else if t = "activate"
         ' Press a button of the current menu, as if the viewer had: focus, activated state, action.
         if s.menu = invalid then return
@@ -299,8 +350,30 @@ sub msNavStartPlayback(manifest as object, s as object, items as object, after a
     first = queue.shift()
     s.playing = { item: first, queue: queue, after: after, returnTo: msNavCurrentPosition(s) }
     s.mode = "playing"
-    effects.push(msNavPlayEffect(manifest, first, s.vars))
+    s.seq = s.seq + 1
+    effects.push(msNavPlaying(manifest, s, first))
 end sub
+
+' The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).
+function msNavPlaying(manifest as object, s as object, item as object) as object
+    effect = msNavPlayEffect(manifest, item, s)
+    player = msNavCopyVars(s.player)
+    player["@lastMedia"] = item["media"]
+    player["@lastChapter"] = msNavChapterAt(manifest, item["media"], effect.start)
+    s.player = player
+    return effect
+end function
+
+' The 1-based chapter a time falls in (0 when the media has no chapters).
+function msNavChapterAt(manifest as object, media as string, seconds as dynamic) as integer
+    info = manifest["media"][media]
+    if info = invalid or info["chapters"] = invalid then return 0
+    n = 0
+    for i = 0 to info["chapters"].Count() - 1
+        if info["chapters"][i]["time"] <= seconds then n = i + 1
+    end for
+    return n
+end function
 
 ' completed: the item played to the end. Otherwise stoppedAt is the position (invalid = unknown).
 sub msNavFinishPlayback(manifest as object, s as object, effects as object, completed as boolean, stoppedAt as dynamic)
@@ -310,6 +383,9 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
         if s.lastStop <> invalid and s.lastStop.media = playing.item["media"] then s.lastStop = invalid
     else if stoppedAt <> invalid
         s.lastStop = { media: playing.item["media"], position: stoppedAt }
+        player = msNavCopyVars(s.player)
+        player["@lastChapter"] = msNavChapterAt(manifest, playing.item["media"], stoppedAt)
+        s.player = player
     end if
 
     ' Go back to where playback was started from, then run the after-action from there.
@@ -321,19 +397,32 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
     if completed and playing.after <> invalid then msNavRun(manifest, s, playing.after, effects, true)
 end sub
 
-function msNavPlayEffect(manifest as object, item as object, vars as object) as object
+' Without tracks of its own, playback uses the current ones (after a set on @audio/@subtitle, like a
+' DVD's SetSTN, or as the player reported them).
+function msNavPlayEffect(manifest as object, item as object, s as object) as object
     effect = { type: "play", media: item["media"], start: msNavStartTime(manifest, item) }
-    audio = msNavVarOrNumber(item["audio"], vars)
-    subtitle = msNavVarOrNumber(item["subtitle"], vars)
+    audio = msNavVarOrNumber(item["audio"], s)
+    if audio = invalid
+        current = s.player["@audio"]
+        if msNavIsNumber(current)
+            if current > 0 then audio = current
+        end if
+    end if
+    subtitle = msNavVarOrNumber(item["subtitle"], s)
+    if subtitle = invalid and msNavIsNumber(s.player["@subtitle"]) then subtitle = s.player["@subtitle"]
     if audio <> invalid then effect.audio = audio
     if subtitle <> invalid then effect.subtitle = subtitle
     return effect
 end function
 
-' A track number, or {"var": name} read from the session's variables.
-function msNavVarOrNumber(v as dynamic, vars as object) as dynamic
+' A track number, or {"var": name} holding one.
+function msNavVarOrNumber(v as dynamic, s as object) as dynamic
     if v = invalid then return invalid
-    if GetInterface(v, "ifAssociativeArray") <> invalid then return vars[v["var"]]
+    if GetInterface(v, "ifAssociativeArray") <> invalid
+        n = msNavRead(s, v["var"])
+        if msNavIsNumber(n) then return n
+        return invalid
+    end if
     return v
 end function
 
@@ -383,6 +472,137 @@ function msNavNearestButton(menu as object, from as object, dir as string) as dy
         end if
     end for
     return best
+end function
+
+' --- logic layer (Level 2; a port of packages/core/src/logic.ts) -----------------------------
+
+' What an unset player-state variable reads as.
+function msNavPlayerDefault(name as string) as dynamic
+    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9" }
+    if defaults.DoesExist(name) then return defaults[name]
+    return 0
+end function
+
+function msNavRead(s as object, name as string) as dynamic
+    if name = "@focus" then return msOr(s.focus, "")
+    if Left(name, 1) = "@"
+        if s.player.DoesExist(name) then return s.player[name]
+        return msNavPlayerDefault(name)
+    end if
+    if s.vars.DoesExist(name) then return s.vars[name]
+    return 0
+end function
+
+function msNavValueOf(s as object, v as dynamic) as dynamic
+    if GetInterface(v, "ifAssociativeArray") <> invalid then return msNavRead(s, v["var"])
+    return v
+end function
+
+function msNavEvalTest(s as object, t as object) as boolean
+    if t["all"] <> invalid
+        for each x in t["all"]
+            if not msNavEvalTest(s, x) then return false
+        end for
+        return true
+    end if
+    if t["any"] <> invalid
+        for each x in t["any"]
+            if msNavEvalTest(s, x) then return true
+        end for
+        return false
+    end if
+    if t["not"] <> invalid then return not msNavEvalTest(s, t["not"])
+    lhs = msNavRead(s, t["var"])
+    for each op in ["eq", "ne", "lt", "le", "gt", "ge", "has"]
+        if t.DoesExist(op)
+            rhs = msNavValueOf(s, t[op])
+            same = msNavSame(lhs, rhs)
+            if op = "eq" then return same
+            if op = "ne" then return not same
+            if not (msNavIsNumber(lhs) and msNavIsNumber(rhs)) then return false
+            if op = "has" then return (lhs and rhs) <> 0
+            if op = "lt" then return lhs < rhs
+            if op = "le" then return lhs <= rhs
+            if op = "gt" then return lhs > rhs
+            return lhs >= rhs
+        end if
+    end for
+    return false
+end function
+
+' Equal values of the same kind: an integer never equals text (and comparing them with = is an error here).
+function msNavSame(a as dynamic, b as dynamic) as boolean
+    if msNavIsNumber(a) and msNavIsNumber(b) then return a = b
+    if msNavIsText(a) and msNavIsText(b) then return a = b
+    return false
+end function
+
+' The next random number 1..max: seed = (seed * 1103515245 + 12345) mod 2^31, result 1 + seed mod max.
+' Specified exactly so every navigator agrees; LongInteger keeps the product exact.
+function msNavNextRandom(s as object, limit as integer) as integer
+    s.seed = (s.seed * 1103515245& + 12345&) mod 2147483648&
+    return CInt(1 + s.seed mod limit)
+end function
+
+' The new value after set, or invalid when the operation leaves the variable unchanged.
+function msNavApplyOp(s as object, current as dynamic, op as string, operand as dynamic) as dynamic
+    if op = "set" then return operand
+    if not (msNavIsNumber(current) and msNavIsNumber(operand)) then return invalid
+    if op = "add" then return current + operand
+    if op = "sub" then return current - operand
+    if op = "mul" then return current * operand
+    if op = "div" or op = "mod"
+        if operand = 0 then return invalid
+        ' Division truncates toward zero; mod keeps the dividend's sign.
+        q = msNavAbs(current) \ msNavAbs(operand)
+        if (current < 0) <> (operand < 0) then q = -q
+        if op = "div" then return q
+        return current - q * operand
+    end if
+    if op = "and" then return current and operand
+    if op = "or" then return current or operand
+    if op = "xor" then return (current or operand) and not (current and operand)
+    if op = "random"
+        if operand < 1 then return invalid
+        return msNavNextRandom(s, operand)
+    end if
+    return invalid
+end function
+
+function msNavAbs(n as dynamic) as dynamic
+    if n < 0 then return -n
+    return n
+end function
+
+function msNavIsNumber(v as dynamic) as boolean
+    t = type(v)
+    return t = "Integer" or t = "roInt" or t = "roInteger" or t = "LongInteger" or t = "roLongInteger"
+end function
+
+function msNavIsText(v as dynamic) as boolean
+    t = type(v)
+    return t = "String" or t = "roString"
+end function
+
+function msNavText(v as dynamic) as string
+    if msNavIsText(v) then return v
+    if msNavIsNumber(v) then return v.ToStr()
+    return ""
+end function
+
+' Variable names are the author's and case-sensitive, unlike a plain BrightScript object's keys.
+function msNavNewVars() as object
+    vars = {}
+    vars.SetModeCaseSensitive()
+    return vars
+end function
+
+function msNavCopyVars(from as object) as object
+    vars = msNavNewVars()
+    for each key in from
+        vars[key] = from[key]
+    end for
+    return vars
 end function
 
 ' --- small utilities ------------------------------------------------------------------------

@@ -1,0 +1,44 @@
+{
+  "description": "Invalid logic: a variable named like player state, setting read-only player state, arithmetic on text, a condition with two comparisons, lt on text, comparing an integer with text, an undeclared variable, an empty do, a focus variable holding an integer, and if in a fallback item.",
+  "level": 2,
+  "valid": false,
+  "errors": [
+    "/vars/@mine",
+    "/menus/main/buttons/0/action/var",
+    "/menus/main/buttons/1/action/op",
+    "/menus/main/buttons/2/action/test",
+    "/menus/main/buttons/3/action/test/lt",
+    "/menus/main/buttons/4/action/test/eq",
+    "/menus/main/buttons/5/action/test/var",
+    "/menus/main/buttons/6/action/steps",
+    "/menus/main/defaultButton/var",
+    "/fallback/0/items/1/action/type"
+  ],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Logic" },
+    "vars": { "@mine": 1, "name": "x", "count": 0 },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "defaultButton": { "var": "count" },
+        "buttons": [
+          { "id": "b0", "rect": [0, 0, 10, 10], "action": { "type": "set", "var": "@audioLanguage", "value": "fr" } },
+          { "id": "b1", "rect": [0, 20, 10, 10], "action": { "type": "set", "var": "name", "op": "random", "value": 3 } },
+          { "id": "b2", "rect": [0, 40, 10, 10], "action": { "type": "if", "test": { "var": "count", "eq": 1, "lt": 3 }, "then": { "type": "back" } } },
+          { "id": "b3", "rect": [0, 60, 10, 10], "action": { "type": "if", "test": { "var": "@audioLanguage", "lt": "fr" }, "then": { "type": "back" } } },
+          { "id": "b4", "rect": [0, 80, 10, 10], "action": { "type": "if", "test": { "var": "count", "eq": "x" }, "then": { "type": "back" } } },
+          { "id": "b5", "rect": [0, 100, 10, 10], "action": { "type": "if", "test": { "var": "nope", "eq": 1 }, "then": { "type": "back" } } },
+          { "id": "b6", "rect": [0, 120, 10, 10], "action": { "type": "do", "steps": [] } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [
+      { "label": "Play", "action": { "type": "play", "media": "feature" } },
+      { "label": "Maybe", "action": { "type": "if", "test": { "var": "count", "eq": 0 }, "then": { "type": "play", "media": "feature" } } }
+    ] }]
+  }
+}

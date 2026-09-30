@@ -42,8 +42,8 @@ public sealed partial class Manifest
     /// <summary>The plain list every player can show. At least one visible group.</summary>
     public List<FallbackGroup> Fallback { get; set; } = [];
 
-    /// <summary>Level 2: named integer variables for the session, with their starting values.</summary>
-    public Dictionary<string, int>? Vars { get; set; }
+    /// <summary>Level 2: the manifest's own variables and their starting values (integer or text; a variable keeps its type).</summary>
+    public Dictionary<string, Scalar>? Vars { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
@@ -142,7 +142,8 @@ public sealed class Menu
 
     public string? Label { get; set; }
 
-    public string? DefaultButton { get; set; }
+    /// <summary>The button focused on entry: an id, or (Level 2) a variable holding one.</summary>
+    public ButtonRef? DefaultButton { get; set; }
 
     /// <summary>When true, a missing nav direction moves to the nearest button that way.</summary>
     public bool? AutoNav { get; set; }
@@ -396,8 +397,8 @@ public readonly record struct IntOrVar
 
     public static implicit operator IntOrVar(int value) => new(value);
 
-    /// <summary>The number, or the variable's value in <paramref name="vars"/> (null if unset).</summary>
-    public int? Resolve(IReadOnlyDictionary<string, int> vars) => Value ?? (vars.TryGetValue(Var!, out var v) ? v : null);
+    /// <summary>The number, or the variable's value read through <paramref name="read"/> (null when it isn't an integer).</summary>
+    public int? Resolve(Func<string, Scalar> read) => Value ?? read(Var!).Number;
 }
 
 /// <summary>Something to play: a media entry, from a chapter or a time.</summary>

@@ -134,7 +134,10 @@ public sealed class ConformanceTests
 
     private static NavEvent Event(JsonElement e) => e.GetProperty("type").GetString() switch
     {
-        "start" => new NavEvent.Start(),
+        "start" => new NavEvent.Start(
+            e.TryGetProperty("player", out var player) ? player.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? new Scalar(p.Value.GetString()!) : new Scalar(p.Value.GetInt32())) : null,
+            e.TryGetProperty("seed", out var seed) ? seed.GetInt64() : null),
+        "player" => new NavEvent.PlayerChanged(e.GetProperty("values").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? new Scalar(p.Value.GetString()!) : new Scalar(p.Value.GetInt32()))),
         "press" => new NavEvent.Press(Enum.Parse<Key>(e.GetProperty("key").GetString()!, ignoreCase: true)),
         "select" => new NavEvent.Select(e.GetProperty("button").GetString()!),
         "activate" => new NavEvent.Activate(e.GetProperty("button").GetString()!),

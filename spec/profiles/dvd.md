@@ -28,6 +28,13 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Remote Return (Go Up) | Menu `back`, chosen per menu to behave like the disc: the PGC's **Go Up** target when it has one (`goto` that menu); otherwise the menu's own **on-screen back button**, i.e. a button that returns to the menu this one was entered from (`activate` it, so its highlight shows and the viewer lands on the right item); otherwise leave `back` out (history). |
 | Menu that moves on by itself (still time or end of the menu's video, then a link) | If the next part has the same buttons, it's the same menu looping: `background.video` with `loopStart`. Otherwise menu `timeout` with `after` = the time until it moves on and the link as its `action`; `restartOnInput: false` to match the disc's timer exactly. |
 | Next / previous page (`LinkNextPG`, `LinkPrevPG`, PGC next/prev) | `goto` with `history: "replace"`, so paging adds no Back steps. |
+| General registers (GPRM 0–15) | Manifest `vars` (integers). Registers in counter mode (SetGPRMMD) count seconds; keep them in `x-dvd` for now. |
+| Register commands (Set: mov, add, sub, mul, div, mod, and, or, xor, rnd) | `set` with the matching `op` (`rnd` → `random`). |
+| Conditional commands (`if (a op b)`), Goto/Break programs | `if`, `do`; a program's skipped lines become `else` branches. |
+| Player settings read by commands (SPRM) | Player state: SPRM 1/2/3 → `@audio`/`@subtitle`/`@angle` (SPRM 2 is off when bit 6 is clear), 8 → `@focus` (button number ÷ 1024 → its id), 0/16/18 → `@menuLanguage`/`@audioLanguage`/`@subtitleLanguage` (ISO 639 codes as text), 4–7 → `@lastMedia`/`@lastChapter`, 12 → `@country`, 13 → `@parentalLevel`, 14 → `@aspect`, 20 → `@region`. |
+| SetSTN (choose audio/subtitle/angle) | `set` on `@audio`/`@subtitle`/`@angle`. |
+| SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
+| Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |
 
 ## Suggested `x-dvd` shape

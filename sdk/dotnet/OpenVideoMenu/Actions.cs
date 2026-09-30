@@ -65,7 +65,8 @@ public sealed class GotoAction : MenuAction
 
     public string Menu { get; set; } = "";
 
-    public string? Button { get; set; }
+    /// <summary>The button to focus: an id, or (Level 2) a variable holding one.</summary>
+    public ButtonRef? Button { get; set; }
 
     /// <summary>Clip played before the menu opens (skippable).</summary>
     public string? Transition { get; set; }
@@ -100,14 +101,40 @@ public sealed class ActivateAction : MenuAction
     public string Button { get; set; } = "";
 }
 
-/// <summary>Level 2: set a variable, then optionally run another action.</summary>
+/// <summary>
+/// Level 2: change a variable (or writable player state: @audio, @subtitle, @angle, @focus), then
+/// optionally run another action.
+/// </summary>
 public sealed class SetAction : MenuAction
 {
     public override string Type => "set";
 
     public string Var { get; set; } = "";
 
-    public int Value { get; set; }
+    public Value Value { get; set; } = 0;
+
+    /// <summary>set (default), add, sub, mul, div, mod, and, or, xor, random.</summary>
+    public string? Op { get; set; }
 
     public MenuAction? Then { get; set; }
+}
+
+/// <summary>Level 2: run <see cref="Then"/> or <see cref="Else"/> depending on a condition.</summary>
+public sealed class IfAction : MenuAction
+{
+    public override string Type => "if";
+
+    public Test Test { get; set; } = new Test.Compare("@audio", "eq", 0);
+
+    public MenuAction Then { get; set; } = new BackAction();
+
+    public MenuAction? Else { get; set; }
+}
+
+/// <summary>Level 2: run actions in order, stopping after the first that navigates.</summary>
+public sealed class DoAction : MenuAction
+{
+    public override string Type => "do";
+
+    public List<MenuAction> Steps { get; set; } = [];
 }

@@ -55,10 +55,16 @@
       }
     },
     "vars": {
-      "description": "Level 2: session variables with starting values.",
+      "description": "Level 2: session variables with starting values: an integer or text (a variable keeps that type). Names starting with @ are player state.",
       "type": "object",
+      "propertyNames": {
+        "pattern": "^[^@]"
+      },
       "additionalProperties": {
-        "type": "integer"
+        "type": [
+          "integer",
+          "string"
+        ]
       }
     }
   },
@@ -372,7 +378,7 @@
           "type": "string"
         },
         "defaultButton": {
-          "$ref": "#/$defs/id"
+          "$ref": "#/$defs/buttonRef"
         },
         "autoNav": {
           "type": "boolean"
@@ -477,7 +483,7 @@
       }
     },
     "afterAction": {
-      "description": "Runs when playback completes. Must not start another playback.",
+      "description": "Runs when playback completes. Not a bare play/playAll (use playAll for fixed sequences); an if or do may play, e.g. a disc's conditional play-all.",
       "allOf": [
         {
           "$ref": "#/$defs/action"
@@ -489,7 +495,9 @@
                 "goto",
                 "back",
                 "resume",
-                "set"
+                "set",
+                "if",
+                "do"
               ]
             }
           }
@@ -510,7 +518,9 @@
             "back",
             "resume",
             "set",
-            "activate"
+            "activate",
+            "if",
+            "do"
           ]
         }
       },
@@ -579,7 +589,7 @@
                 "$ref": "#/$defs/id"
               },
               "button": {
-                "$ref": "#/$defs/id"
+                "$ref": "#/$defs/buttonRef"
               },
               "transition": {
                 "$ref": "#/$defs/path",
@@ -614,10 +624,25 @@
                 "minLength": 1
               },
               "value": {
-                "type": "integer"
+                "$ref": "#/$defs/value"
               },
               "then": {
                 "$ref": "#/$defs/action"
+              },
+              "op": {
+                "enum": [
+                  "set",
+                  "add",
+                  "sub",
+                  "mul",
+                  "div",
+                  "mod",
+                  "and",
+                  "or",
+                  "xor",
+                  "random"
+                ],
+                "description": "How the variable changes: replaced (default), arithmetic, bitwise, or a random 1..value."
               }
             }
           }
@@ -667,6 +692,55 @@
                     }
                   }
                 ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "if"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "test",
+              "then"
+            ],
+            "properties": {
+              "test": {
+                "$ref": "#/$defs/test"
+              },
+              "then": {
+                "$ref": "#/$defs/action"
+              },
+              "else": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "do"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/action"
+                }
               }
             }
           }
@@ -737,6 +811,128 @@
           "$ref": "#/$defs/seconds"
         }
       }
+    },
+    "varRef": {
+      "type": "object",
+      "required": [
+        "var"
+      ],
+      "properties": {
+        "var": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A variable of /vars, or @ player state (@audio, @audioLanguage, ...)."
+        }
+      }
+    },
+    "value": {
+      "description": "An integer, text, or the current value of a variable.",
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/varRef"
+        }
+      ]
+    },
+    "buttonRef": {
+      "description": "A button id, or a variable holding one.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "$ref": "#/$defs/varRef"
+        }
+      ]
+    },
+    "test": {
+      "description": "Level 2: a condition: one comparison of a variable (eq/ne any value; lt/le/gt/ge integers; has = any bit set), or all/any/not.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "var"
+          ],
+          "properties": {
+            "var": {
+              "type": "string",
+              "minLength": 1
+            },
+            "eq": {
+              "$ref": "#/$defs/value"
+            },
+            "ne": {
+              "$ref": "#/$defs/value"
+            },
+            "lt": {
+              "$ref": "#/$defs/value"
+            },
+            "le": {
+              "$ref": "#/$defs/value"
+            },
+            "gt": {
+              "$ref": "#/$defs/value"
+            },
+            "ge": {
+              "$ref": "#/$defs/value"
+            },
+            "has": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "minProperties": 2,
+          "maxProperties": 2
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/test"
+              }
+            }
+          },
+          "maxProperties": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/test"
+              }
+            }
+          },
+          "maxProperties": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/test"
+            }
+          },
+          "maxProperties": 1
+        }
+      ]
     }
   }
 }

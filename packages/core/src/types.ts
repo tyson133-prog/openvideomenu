@@ -17,10 +17,11 @@ export interface Manifest {
   firstPlay?: Action;
   fallback: FallbackGroup[];
   /**
-   * Level 2: named integer variables for the viewing session (the data-only stand-in for DVD
-   * registers), with their starting values. Set by "set" actions, read by play's audio/subtitle.
+   * Level 2: named variables for the viewing session (the data-only stand-in for DVD registers), with
+   * their starting values: an integer or text, and a variable keeps that type. Set by "set", read by
+   * conditions, play's audio/subtitle and focus. Player state is read as "@name" variables (logic.ts).
    */
-  vars?: Record<string, number>;
+  vars?: Record<string, Scalar>;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -131,7 +132,8 @@ export interface Menu {
   canvas: Canvas;
   background?: Background;
   label?: string;
-  defaultButton?: string;
+  /** The button focused on entry: an id, or a variable holding one (Level 2). */
+  defaultButton?: string | { var: string };
   /** When true, a missing nav direction moves to the nearest button in that direction. */
   autoNav?: boolean;
   buttons: Button[];
@@ -167,6 +169,25 @@ export interface MenuTimeout {
 /** A number, or the current value of a variable. */
 export type VarOrNumber = number | { var: string };
 
+/** A variable's value: an integer or text. */
+export type Scalar = number | string;
+
+/** A literal value, or the current value of a variable (or "@" player state). */
+export type Value = Scalar | { var: string };
+
+/**
+ * Level 2: a condition. One comparison of a variable with a value (eq/ne for any value; lt/le/gt/ge
+ * for integers; has = any of the value's bits set), or all/any/not of other tests.
+ */
+export type Test =
+  | { var: string; eq?: Value; ne?: Value; lt?: Value; le?: Value; gt?: Value; ge?: Value; has?: Value }
+  | { all: Test[] }
+  | { any: Test[] }
+  | { not: Test };
+
+/** How set changes a variable: replace it (default), arithmetic, bitwise, or a random 1..value. */
+export type SetOp = "set" | "add" | "sub" | "mul" | "div" | "mod" | "and" | "or" | "xor" | "random";
+
 export interface PlayItem {
   media: string;
   /** 1-based chapter number within the media. */
@@ -185,7 +206,8 @@ export type Action =
   | {
       type: "goto";
       menu: string;
-      button?: string;
+      /** The button to focus: an id, or a variable holding one (Level 2). */
+      button?: string | { var: string };
       /** Clip played before the menu opens (skippable). */
       transition?: string;
       /** "replace" = don't add this menu to Back's history (page turns); default "push". */
@@ -196,8 +218,15 @@ export type Action =
   | { type: "resume"; otherwise?: Action }
   /** Press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
   | { type: "activate"; button: string }
-  /** Level 2: set a variable, then (optionally) run another action — e.g. choose a soundtrack and return to the menu. */
-  | { type: "set"; var: string; value: number; then?: Action };
+  /**
+   * Level 2: change a variable, then (optionally) run another action — e.g. choose a soundtrack and
+   * return to the menu. op defaults to "set"; "@audio", "@subtitle", "@angle" and "@focus" can be set.
+   */
+  | { type: "set"; var: string; value: Value; op?: SetOp; then?: Action }
+  /** Level 2: run then or (optional) else, depending on a condition. */
+  | { type: "if"; test: Test; then: Action; else?: Action }
+  /** Level 2: run actions in order, stopping after the first that navigates (opens a menu, plays, leaves). */
+  | { type: "do"; steps: Action[] };
 
 export type ActionType = Action["type"];
 

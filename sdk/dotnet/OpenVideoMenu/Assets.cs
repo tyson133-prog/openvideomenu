@@ -43,6 +43,13 @@ public sealed partial class Manifest
                 case ResumeAction r:
                     Walk(r.Otherwise);
                     break;
+                case IfAction i:
+                    Walk(i.Then);
+                    Walk(i.Else);
+                    break;
+                case DoAction d:
+                    d.Steps.ForEach(Walk);
+                    break;
             }
         }
 

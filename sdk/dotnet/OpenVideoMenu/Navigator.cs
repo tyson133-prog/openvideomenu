@@ -19,8 +19,14 @@ public enum Key
 /// <summary>Something that happened: input, or playback reaching a point.</summary>
 public abstract record NavEvent
 {
-    /// <summary>Begin: run firstPlay, or open the root menu.</summary>
-    public sealed record Start : NavEvent;
+    /// <summary>
+    /// Begin: run firstPlay, or open the root menu. <paramref name="Player"/> is what the player knows of
+    /// the viewer's setup as "@" player state; <paramref name="Seed"/> seeds random (Level 2).
+    /// </summary>
+    public sealed record Start(IReadOnlyDictionary<string, Scalar>? Player = null, long? Seed = null) : NavEvent;
+
+    /// <summary>Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack).</summary>
+    public sealed record PlayerChanged(IReadOnlyDictionary<string, Scalar> Values) : NavEvent;
 
     /// <summary>Remote or keyboard input. While playing, only Back is handled (it stops playback).</summary>
     public sealed record Press(Key Key) : NavEvent;
@@ -121,7 +127,16 @@ public sealed record NavState
     public LastStop? LastStop { get; init; }
 
     /// <summary>Level 2: variable values for this session.</summary>
-    public IReadOnlyDictionary<string, int> Vars { get; init; } = new Dictionary<string, int>();
+    public IReadOnlyDictionary<string, Scalar> Vars { get; init; } = new Dictionary<string, Scalar>();
+
+    /// <summary>Level 2: player state ("@audio", "@audioLanguage", …) as reported by the player or changed by set.</summary>
+    public IReadOnlyDictionary<string, Scalar> Player { get; init; } = new Dictionary<string, Scalar>();
+
+    /// <summary>Level 2: the random generator's state.</summary>
+    public long Seed { get; init; } = 1;
+
+    /// <summary>Counts menu entries and playback starts, so "do" knows when a step navigated.</summary>
+    public int Seq { get; init; }
 }
 
 public static class Navigator
@@ -134,10 +149,20 @@ public static class Navigator
 
         switch (navEvent)
         {
-            case NavEvent.Start:
+            case NavEvent.Start start:
                 s.History.Clear();
                 s.Playing = null;
-                s.Vars = new Dictionary<string, int>(manifest.Vars ?? []);
+                s.Vars = new Dictionary<string, Scalar>(manifest.Vars ?? []);
+                foreach (var (k, v) in start.Player ?? new Dictionary<string, Scalar>())
+                {
+                    s.Player[k] = v;
+                }
+
+                if (start.Seed is { } seed)
+                {
+                    s.Seed = seed;
+                }
+
                 if (manifest.FirstPlay is { } firstPlay)
                 {
                     Run(manifest, s, firstPlay, effects, pushHistory: false);
@@ -221,11 +246,19 @@ public static class Navigator
                 {
                     var next = s.Playing.Queue[0];
                     s.Playing = s.Playing with { Item = next, Queue = s.Playing.Queue.Skip(1).ToList() };
-                    effects.Add(PlayEffect(manifest, next, s.Vars));
+                    effects.Add(Playing(manifest, s, next));
                 }
                 else
                 {
                     FinishPlayback(manifest, s, effects, completed: true, stoppedAt: null);
+                }
+
+                break;
+
+            case NavEvent.PlayerChanged changed:
+                foreach (var (k, v) in changed.Values)
+                {
+                    s.Player[k] = v;
                 }
 
                 break;
@@ -374,12 +407,25 @@ public static class Navigator
         EnterMenu(manifest, s, manifest.RootMenu, null, intro: true, effects);
     }
 
-    private static void EnterMenu(Manifest manifest, Working s, string menuId, string? buttonId, bool intro, List<Effect> effects)
+    /// <summary>A button reference (an id, or a variable holding one) resolved to a button of the menu, if it is one.</summary>
+    private static string? ResolveButton(Working s, Menu menu, ButtonRef? r)
+    {
+        if (r is null)
+        {
+            return null;
+        }
+
+        var id = r.Id ?? s.Read(r.Var!).ToString();
+        return FindButton(menu, id) is not null ? id : null;
+    }
+
+    private static void EnterMenu(Manifest manifest, Working s, string menuId, ButtonRef? buttonId, bool intro, List<Effect> effects)
     {
         var menu = MenuOf(manifest, menuId);
         s.Mode = NavMode.Menu;
         s.Menu = menuId;
-        s.Focus = buttonId ?? menu.DefaultButton ?? menu.Buttons[0].Id;
+        s.Seq++;
+        s.Focus = ResolveButton(s, menu, buttonId) ?? ResolveButton(s, menu, menu.DefaultButton) ?? menu.Buttons[0].Id;
         s.Intro = intro;
         s.ButtonsReady = !(intro && (menu.ButtonsAt ?? 0) > 0);
         s.TransitionTo = null;
@@ -507,7 +553,8 @@ public static class Navigator
                 if (!string.IsNullOrEmpty(g.Transition))
                 {
                     s.Mode = NavMode.Transition;
-                    s.TransitionTo = (g.Menu, g.Button);
+                    // A variable button is read now, when the viewer chose it.
+                    s.TransitionTo = (g.Menu, ResolveButton(s, MenuOf(manifest, g.Menu), g.Button));
                     effects.Add(new Effect.Transition(g.Transition));
                 }
                 else
@@ -540,10 +587,60 @@ public static class Navigator
 
                 break;
             case SetAction set:
-                s.Vars = new Dictionary<string, int>(s.Vars) { [set.Var] = set.Value };
+            {
+                var operand = set.Value.Var is { } v ? s.Read(v) : set.Value.Literal!.Value;
+                var seed = s.Seed;
+                var next = Logic.Apply(ref seed, s.Read(set.Var), set.Op ?? "set", operand);
+                s.Seed = seed;
+                if (next is { } value)
+                {
+                    if (set.Var == "@focus")
+                    {
+                        // Highlight a button of the current menu (a DVD's SetHL_BTN).
+                        if (s.Menu is not null && FindButton(MenuOf(manifest, s.Menu), value.ToString()) is not null)
+                        {
+                            s.Focus = value.ToString();
+                        }
+                    }
+                    else if (set.Var.StartsWith('@'))
+                    {
+                        s.Player[set.Var] = value;
+                    }
+                    else
+                    {
+                        s.Vars = new Dictionary<string, Scalar>(s.Vars) { [set.Var] = value };
+                    }
+                }
+
                 if (set.Then is not null)
                 {
                     Run(manifest, s, set.Then, effects, pushHistory, up);
+                }
+
+                break;
+            }
+
+            case IfAction ifAction:
+                if (Logic.Eval(ifAction.Test, s.Read))
+                {
+                    Run(manifest, s, ifAction.Then, effects, pushHistory, up);
+                }
+                else if (ifAction.Else is not null)
+                {
+                    Run(manifest, s, ifAction.Else, effects, pushHistory, up);
+                }
+
+                break;
+            case DoAction doAction:
+                // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
+                foreach (var stepAction in doAction.Steps)
+                {
+                    var (seq, mode, count) = (s.Seq, s.Mode, effects.Count);
+                    Run(manifest, s, stepAction, effects, pushHistory, up);
+                    if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition))
+                    {
+                        break;
+                    }
                 }
 
                 break;
@@ -568,7 +665,33 @@ public static class Navigator
     {
         s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
         s.Mode = NavMode.Playing;
-        effects.Add(PlayEffect(manifest, items[0], s.Vars));
+        s.Seq++;
+        effects.Add(Playing(manifest, s, items[0]));
+    }
+
+    /// <summary>The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).</summary>
+    private static Effect.Play Playing(Manifest manifest, Working s, PlayItem item)
+    {
+        var effect = PlayEffect(manifest, item, s);
+        s.Player["@lastMedia"] = item.Media;
+        s.Player["@lastChapter"] = ChapterAt(manifest, item.Media, effect.Start);
+        return effect;
+    }
+
+    /// <summary>The 1-based chapter a time falls in (0 when the media has no chapters).</summary>
+    public static int ChapterAt(Manifest manifest, string media, double seconds)
+    {
+        var chapters = manifest.Media.TryGetValue(media, out var m) ? m.Chapters ?? [] : [];
+        var n = 0;
+        for (var i = 0; i < chapters.Count; i++)
+        {
+            if (chapters[i].Time <= seconds)
+            {
+                n = i + 1;
+            }
+        }
+
+        return n;
     }
 
     private static void FinishPlayback(Manifest manifest, Working s, List<Effect> effects, bool completed, double? stoppedAt)
@@ -585,6 +708,7 @@ public static class Navigator
         else if (stoppedAt is { } position)
         {
             s.LastStop = new LastStop(playing.Item.Media, position);
+            s.Player["@lastChapter"] = ChapterAt(manifest, playing.Item.Media, position);
         }
 
         // Go back to where playback was started from, then run the after-action from there.
@@ -603,8 +727,16 @@ public static class Navigator
         }
     }
 
-    private static Effect.Play PlayEffect(Manifest manifest, PlayItem item, IReadOnlyDictionary<string, int> vars) =>
-        new(item.Media, StartTime(manifest, item), item.Audio?.Resolve(vars), item.Subtitle?.Resolve(vars));
+    /// <summary>
+    /// Without tracks of its own, playback uses the current ones (after a set on @audio/@subtitle, like a
+    /// DVD's SetSTN, or as the player reported them).
+    /// </summary>
+    private static Effect.Play PlayEffect(Manifest manifest, PlayItem item, Working s)
+    {
+        var audio = item.Audio?.Resolve(s.Read) ?? (s.Player.TryGetValue("@audio", out var a) && a.Number > 0 ? a.Number : null);
+        var subtitle = item.Subtitle?.Resolve(s.Read) ?? (s.Player.TryGetValue("@subtitle", out var t) ? t.Number : null);
+        return new(item.Media, StartTime(manifest, item), audio, subtitle);
+    }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>
     private sealed class Working(NavState from)
@@ -627,7 +759,15 @@ public static class Navigator
 
         public LastStop? LastStop { get; set; } = from.LastStop;
 
-        public IReadOnlyDictionary<string, int> Vars { get; set; } = from.Vars;
+        public IReadOnlyDictionary<string, Scalar> Vars { get; set; } = from.Vars;
+
+        public Dictionary<string, Scalar> Player { get; } = new(from.Player);
+
+        public long Seed { get; set; } = from.Seed;
+
+        public int Seq { get; set; } = from.Seq;
+
+        public Scalar Read(string name) => Logic.Read(Vars, Player, Focus, name);
 
         public NavState ToState() => new()
         {
@@ -641,6 +781,9 @@ public static class Navigator
             Playing = Playing,
             LastStop = LastStop,
             Vars = Vars,
+            Player = Player,
+            Seed = Seed,
+            Seq = Seq,
         };
     }
 }

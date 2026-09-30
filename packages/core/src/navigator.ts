@@ -5,13 +5,19 @@
  * describes expected behaviour in exactly these terms, so every implementation (TS, C#, native)
  * can be checked against the same cases.
  */
-import type { Action, Button, Direction, Manifest, Menu, PlayItem } from "./types.js";
+import type { Action, Button, Direction, Manifest, Menu, PlayItem, Scalar } from "./types.js";
+import { applyOp, evalTest, readVar, valueOf } from "./logic.js";
 
 export type Key = Direction | "enter" | "back";
 
 export type NavEvent =
-  /** Begin: run firstPlay, or open the root menu. */
-  | { type: "start" }
+  /**
+   * Begin: run firstPlay, or open the root menu. Players pass what they know of the viewer's setup as
+   * "@" player state (languages, region, …) and a random seed.
+   */
+  | { type: "start"; player?: Record<string, Scalar>; seed?: number }
+  /** Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack). */
+  | { type: "player"; values: Record<string, Scalar> }
   /** Remote/keyboard input. While playing, only "back" is handled (it stops playback). */
   | { type: "press"; key: Key }
   /** Pointer or touch moved onto a button. */
@@ -71,7 +77,13 @@ export interface NavState {
   /** Where the viewer stopped last, for "resume". */
   lastStop?: { media: string; position: number };
   /** Level 2: variable values for this session (from manifest.vars, changed by "set"). */
-  vars: Record<string, number>;
+  vars: Record<string, Scalar>;
+  /** Level 2: player state ("@audio", "@audioLanguage", …) as reported by the player or changed by set. */
+  player: Record<string, Scalar>;
+  /** Level 2: the random generator's state (see logic.ts nextRandom). */
+  seed: number;
+  /** Counts menu entries and playback starts, so "do" knows when a step navigated. */
+  seq: number;
 }
 
 export interface StepResult {
@@ -79,7 +91,7 @@ export interface StepResult {
   effects: Effect[];
 }
 
-export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true, vars: {} });
+export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true, vars: {}, player: {}, seed: 1, seq: 0 });
 
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
   const effects: Effect[] = [];
@@ -90,6 +102,8 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       s.history = [];
       s.playing = undefined;
       s.vars = { ...(manifest.vars ?? {}) };
+      s.player = { ...(s.player ?? {}), ...(event.player ?? {}) };
+      if (event.seed !== undefined) s.seed = event.seed;
       if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
       else openRoot(manifest, s, effects);
       break;
@@ -143,7 +157,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       if (s.playing.queue.length > 0) {
         const [next, ...rest] = s.playing.queue as [PlayItem, ...PlayItem[]];
         s.playing = { ...s.playing, item: next, queue: rest };
-        effects.push(playEffect(manifest, next, s.vars));
+        effects.push(playing(manifest, s, next));
       } else {
         finishPlayback(manifest, s, effects, { completed: true });
       }
@@ -152,6 +166,10 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "stopped":
       if (s.mode !== "playing") break;
       finishPlayback(manifest, s, effects, { stoppedAt: event.position });
+      break;
+
+    case "player":
+      s.player = { ...s.player, ...event.values };
       break;
   }
   return { state: s, effects };
@@ -215,11 +233,19 @@ function openRoot(manifest: Manifest, s: NavState, effects: Effect[]) {
   enterMenu(manifest, s, manifest.rootMenu, undefined, "intro", effects);
 }
 
-function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: string | undefined, how: "intro" | "return", effects: Effect[]) {
+/** A button reference (an id, or a variable holding one) resolved to a button of the menu, if it is one. */
+function buttonRef(s: NavState, menu: Menu, ref: string | { var: string } | undefined): string | undefined {
+  if (ref === undefined) return undefined;
+  const id = typeof ref === "object" ? String(readVar(s, ref.var)) : ref;
+  return findButton(menu, id) ? id : undefined;
+}
+
+function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: string | { var: string } | undefined, how: "intro" | "return", effects: Effect[]) {
   const menu = menuOf(manifest, menuId);
   s.mode = "menu";
   s.menu = menuId;
-  s.focus = buttonId ?? menu.defaultButton ?? menu.buttons[0]!.id;
+  s.seq += 1;
+  s.focus = buttonRef(s, menu, buttonId) ?? buttonRef(s, menu, menu.defaultButton) ?? menu.buttons[0]!.id;
   s.intro = how === "intro";
   s.buttonsReady = !(s.intro && (menu.buttonsAt ?? 0) > 0);
   s.transitionTo = undefined;
@@ -301,7 +327,9 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
       } else if (opts.pushHistory && here && action.history !== "replace") s.history.push(here);
       if (action.transition) {
         s.mode = "transition";
-        s.transitionTo = { menu: action.menu, button: action.button };
+        // A variable button is read now, when the viewer chose it.
+        const button = buttonRef(s, menuOf(manifest, action.menu), action.button);
+        s.transitionTo = { menu: action.menu, ...(button !== undefined ? { button } : {}) };
         effects.push({ type: "transition", src: action.transition });
       } else {
         enterMenu(manifest, s, action.menu, action.button, "intro", effects);
@@ -323,9 +351,31 @@ function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[],
       // LinkRSM, else go to the picker").
       else if (action.otherwise) run(manifest, s, action.otherwise, effects, opts);
       break;
-    case "set":
-      s.vars = { ...s.vars, [action.var]: action.value };
+    case "set": {
+      const next = applyOp(s, readVar(s, action.var), action.op ?? "set", valueOf(s, action.value));
+      if (next !== undefined) {
+        if (action.var === "@focus") {
+          // Highlight a button of the current menu (a DVD's SetHL_BTN).
+          if (s.menu && findButton(menuOf(manifest, s.menu), String(next))) s.focus = String(next);
+        } else if (action.var.startsWith("@")) s.player = { ...s.player, [action.var]: next };
+        else s.vars = { ...s.vars, [action.var]: next };
+      }
       if (action.then) run(manifest, s, action.then, effects, opts);
+      break;
+    }
+    case "if":
+      if (evalTest(s, action.test)) run(manifest, s, action.then, effects, opts);
+      else if (action.else) run(manifest, s, action.else, effects, opts);
+      break;
+    case "do":
+      // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
+      for (const stepAction of action.steps) {
+        const before = { seq: s.seq, mode: s.mode, effects: effects.length };
+        run(manifest, s, stepAction, effects, opts);
+        const navigated =
+          s.seq !== before.seq || s.mode !== before.mode || effects.slice(before.effects).some((e) => e.type === "exit" || e.type === "transition");
+        if (navigated) break;
+      }
       break;
     case "activate": {
       // Press a button of the current menu, as if the viewer had: focus, activated state, action.
@@ -343,7 +393,25 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
   s.playing = { item: first, queue, after, returnTo: currentPosition(s) };
   s.mode = "playing";
-  effects.push(playEffect(manifest, first, s.vars));
+  s.seq += 1;
+  effects.push(playing(manifest, s, first));
+}
+
+/** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). */
+function playing(manifest: Manifest, s: NavState, item: PlayItem): Effect {
+  const effect = playEffect(manifest, item, s);
+  s.player = { ...s.player, "@lastMedia": item.media, "@lastChapter": chapterAt(manifest, item.media, effect.type === "play" ? effect.start : 0) };
+  return effect;
+}
+
+/** The 1-based chapter a time falls in (0 when the media has no chapters). */
+export function chapterAt(manifest: Manifest, media: string, seconds: number): number {
+  const chapters = manifest.media[media]?.chapters ?? [];
+  let n = 0;
+  chapters.forEach((c, i) => {
+    if (c.time <= seconds) n = i + 1;
+  });
+  return n;
 }
 
 function finishPlayback(
@@ -358,6 +426,7 @@ function finishPlayback(
     if (s.lastStop?.media === playing.item.media) s.lastStop = undefined;
   } else if (how.stoppedAt !== undefined) {
     s.lastStop = { media: playing.item.media, position: how.stoppedAt };
+    s.player = { ...s.player, "@lastChapter": chapterAt(manifest, playing.item.media, how.stoppedAt) };
   }
 
   // Go back to where playback was started from, then run the after-action from there.
@@ -369,10 +438,16 @@ function finishPlayback(
   if ("completed" in how && playing.after) run(manifest, s, playing.after, effects, { pushHistory: true });
 }
 
-function playEffect(manifest: Manifest, item: PlayItem, vars: Record<string, number>): Effect {
-  const value = (v: PlayItem["audio"]) => (v === undefined ? undefined : typeof v === "number" ? v : vars[v.var]);
-  const audio = value(item.audio);
-  const subtitle = value(item.subtitle);
+function playEffect(manifest: Manifest, item: PlayItem, s: NavState): Effect {
+  const value = (v: PlayItem["audio"]) => {
+    if (v === undefined) return undefined;
+    const n = typeof v === "number" ? v : readVar(s, v.var);
+    return typeof n === "number" ? n : undefined;
+  };
+  // Without tracks of its own, playback uses the current ones (after a set on @audio/@subtitle,
+  // like a DVD's SetSTN, or as the player reported them).
+  const audio = value(item.audio) ?? (typeof s.player["@audio"] === "number" && s.player["@audio"] > 0 ? s.player["@audio"] : undefined);
+  const subtitle = value(item.subtitle) ?? (typeof s.player["@subtitle"] === "number" ? s.player["@subtitle"] : undefined);
   return {
     type: "play",
     media: item.media,

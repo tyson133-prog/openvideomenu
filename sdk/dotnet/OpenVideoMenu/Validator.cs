@@ -34,7 +34,9 @@ internal sealed class Validator
     [
         ("play", ["type", "media", "chapter", "start", "after", "audio", "subtitle"]),
         ("playAll", ["type", "items", "after"]),
-        ("set", ["type", "var", "value", "then"]),
+        ("set", ["type", "var", "value", "op", "then"]),
+        ("if", ["type", "test", "then", "else"]),
+        ("do", ["type", "steps"]),
         ("goto", ["type", "menu", "button", "transition", "history"]),
         ("back", ["type"]),
         ("resume", ["type", "otherwise"]),
@@ -46,7 +48,8 @@ internal sealed class Validator
 
     private readonly List<Issue> _errors = [];
     private readonly List<Issue> _warnings = [];
-    private readonly HashSet<string> _varNames = [];
+    /// <summary>Declared variables and their types (true = text); a variable keeps the type of its starting value.</summary>
+    private readonly Dictionary<string, bool> _varTypes = new(StringComparer.Ordinal);
 
     public static (List<Issue> Errors, List<Issue> Warnings) Run(JsonElement data)
     {
@@ -129,34 +132,168 @@ internal sealed class Validator
 
         if (!Obj.TryFrom(value.Value, out var vars))
         {
-            Error("/vars", "Must be an object of name → integer.");
+            Error("/vars", "Must be an object of name → integer or text.");
             return;
         }
 
         foreach (var (name, v) in vars.Entries)
         {
-            if (!IsInteger(v))
+            if (name.StartsWith('@'))
             {
-                Error($"/vars/{name}", "Must be an integer.");
+                Error($"/vars/{name}", "Names starting with \"@\" are player state, not the manifest's own variables.");
             }
-
-            _varNames.Add(name);
+            else if (IsInteger(v))
+            {
+                _varTypes[name] = false;
+            }
+            else if (v.ValueKind == JsonValueKind.String)
+            {
+                _varTypes[name] = true;
+            }
+            else
+            {
+                Error($"/vars/{name}", "Must be an integer or text.");
+            }
         }
     }
+
+    /// <summary>The type (true = text) of a variable the manifest may read, or null when there's none.</summary>
+    private bool? TypeOfVar(JsonElement? name)
+    {
+        if (name is not { ValueKind: JsonValueKind.String } n)
+        {
+            return null;
+        }
+
+        var s = n.GetString()!;
+        if (s.StartsWith('@'))
+        {
+            return PlayerState.Variables.TryGetValue(s, out var p) ? p.IsText : null;
+        }
+
+        return _varTypes.TryGetValue(s, out var t) ? t : null;
+    }
+
+    private bool? VarRef(Obj value, string path)
+    {
+        var t = TypeOfVar(value["var"]);
+        if (t is null)
+        {
+            Error($"{path}/var", $"No variable \"{JsString(value["var"])}\" in /vars or player state.");
+        }
+
+        return t;
+    }
+
+    /// <summary>A literal value (integer or text) or {var}; returns its type (true = text) when known.</summary>
+    private bool? ValueType(JsonElement? value, string path)
+    {
+        if (Obj.TryFrom(value, out var o))
+        {
+            return VarRef(o, path);
+        }
+
+        if (value is { } v && IsInteger(v))
+        {
+            return false;
+        }
+
+        if (value is { ValueKind: JsonValueKind.String })
+        {
+            return true;
+        }
+
+        Error(path, "Must be an integer, text, or {\"var\": name}.");
+        return null;
+    }
+
+    private static string Kind(bool text) => text ? "text" : "an integer";
 
     private void VarOrNumber(JsonElement value, string path, int min)
     {
         if (Obj.TryFrom(value, out var o))
         {
-            var name = o["var"];
-            if (!IsNonEmptyString(name) || !_varNames.Contains(name!.Value.GetString()!))
+            if (VarRef(o, path) == true)
             {
-                Error($"{path}/var", $"No variable \"{JsString(name)}\" in /vars.");
+                Error($"{path}/var", $"Variable \"{JsString(o["var"])}\" holds text; a track number is needed.");
             }
         }
         else if (!IsInteger(value) || value.GetDouble() < min)
         {
             Error(path, $"Must be an integer ≥ {min}, or {{\"var\": name}}.");
+        }
+    }
+
+    /// <summary>A condition: one comparison of a variable, or all/any/not of other conditions.</summary>
+    private void Test(JsonElement? value, string path)
+    {
+        if (!Obj.TryFrom(value, out var t))
+        {
+            Error(path, "Must be a condition: {\"var\", \"eq\"|\"ne\"|\"lt\"|\"le\"|\"gt\"|\"ge\"|\"has\": value}, or all/any/not.");
+            return;
+        }
+
+        foreach (var key in new[] { "all", "any" })
+        {
+            if (t[key] is { } list)
+            {
+                if (list.ValueKind != JsonValueKind.Array || list.GetArrayLength() == 0)
+                {
+                    Error($"{path}/{key}", "Must be a list of at least one condition.");
+                }
+                else
+                {
+                    var i = 0;
+                    foreach (var item in list.EnumerateArray())
+                    {
+                        Test(item, $"{path}/{key}/{i++}");
+                    }
+                }
+
+                return;
+            }
+        }
+
+        if (t["not"] is { } not)
+        {
+            Test(not, $"{path}/not");
+            return;
+        }
+
+        var ops = PlayerState.TestOps.Where(op => t[op] is not null).ToList();
+        UnknownKeys(t, ["var", .. PlayerState.TestOps], path);
+        var left = VarRef(t, path);
+        if (ops.Count != 1)
+        {
+            Error(path, "Needs exactly one comparison: eq, ne, lt, le, gt, ge or has.");
+            return;
+        }
+
+        var op = ops[0];
+        var right = ValueType(t[op], $"{path}/{op}");
+        if (op is not ("eq" or "ne") && (left == true || right == true))
+        {
+            Error($"{path}/{op}", $"\"{op}\" compares integers; text can only be compared with eq or ne.");
+        }
+        else if (left is { } l && right is { } r && l != r)
+        {
+            Error($"{path}/{op}", $"Compares {Kind(l)} with {Kind(r)}.");
+        }
+    }
+
+    /// <summary>A button reference: an id of the menu, or a variable holding one.</summary>
+    private void ButtonRef(JsonElement value, string path, HashSet<string> buttons, string where)
+    {
+        if (Obj.TryFrom(value, out var o))
+        {
+            if (VarRef(o, path) == false)
+            {
+                Error($"{path}/var", $"Variable \"{JsString(o["var"])}\" holds an integer; a button id is text.");
+            }
+        }
+        else if (!(IsNonEmptyString(value) && buttons.Contains(value.GetString()!)))
+        {
+            Error(path, $"No button \"{JsString(value)}\" in {where}.");
         }
     }
 
@@ -602,9 +739,9 @@ internal sealed class Validator
             }
         }
 
-        if (menu["defaultButton"] is { } defaultButton && !(IsNonEmptyString(defaultButton) && own.Contains(defaultButton.GetString()!)))
+        if (menu["defaultButton"] is { } defaultButton)
         {
-            Error($"{path}/defaultButton", $"No button \"{JsString(defaultButton)}\" in this menu.");
+            ButtonRef(defaultButton, $"{path}/defaultButton", own, "this menu");
         }
 
         // What the remote's Back does here; may press one of this menu's own buttons.
@@ -762,19 +899,69 @@ internal sealed class Validator
 
                 break;
             case "set":
-                if (!IsNonEmptyString(action["var"]) || !_varNames.Contains(action["var"]!.Value.GetString()!))
+            {
+                var name = action["var"];
+                var target = TypeOfVar(name);
+                if (target is null)
                 {
-                    Error($"{path}/var", $"No variable \"{JsString(action["var"])}\" in /vars.");
+                    Error($"{path}/var", $"No variable \"{JsString(name)}\" in /vars or player state.");
+                }
+                else if (name!.Value.GetString()!.StartsWith('@') && !PlayerState.Variables[name.Value.GetString()!].Writable)
+                {
+                    Error($"{path}/var", $"\"{name.Value.GetString()}\" is read-only player state.");
                 }
 
-                if (action["value"] is not { } setValue || !IsInteger(setValue))
+                // "op": null counts as absent, as in the reference (JavaScript's ??).
+                var opEl = action["op"] is { ValueKind: not JsonValueKind.Null } present ? present : (JsonElement?)null;
+                var op = opEl is null ? "set" : JsString(opEl);
+                var opKnown = opEl is null || (opEl.Value.ValueKind == JsonValueKind.String && PlayerState.SetOps.Contains(op));
+                if (!opKnown)
                 {
-                    Error($"{path}/value", "Must be an integer.");
+                    Error($"{path}/op", $"Must be one of {string.Join(", ", PlayerState.SetOps)}.");
+                }
+
+                var given = ValueType(action["value"], $"{path}/value");
+                if (opKnown && op == "set")
+                {
+                    if (target is { } tt && given is { } gg && tt != gg)
+                    {
+                        Error($"{path}/value", $"\"{JsString(name)}\" holds {Kind(tt)}.");
+                    }
+                }
+                else if (target == true || given == true)
+                {
+                    Error($"{path}/op", $"\"{op}\" works on integers only.");
                 }
 
                 if (action["then"] is { } then)
                 {
                     Action(then, $"{path}/then", mediaIds, menus, ownButtons);
+                }
+
+                break;
+            }
+
+            case "if":
+                Test(action["test"], $"{path}/test");
+                Action(action["then"], $"{path}/then", mediaIds, menus, ownButtons);
+                if (action["else"] is { } elseAction)
+                {
+                    Action(elseAction, $"{path}/else", mediaIds, menus, ownButtons);
+                }
+
+                break;
+            case "do":
+                if (action["steps"] is not { ValueKind: JsonValueKind.Array } steps || steps.GetArrayLength() == 0)
+                {
+                    Error($"{path}/steps", "Required: at least one action.");
+                }
+                else
+                {
+                    var i = 0;
+                    foreach (var stepAction in steps.EnumerateArray())
+                    {
+                        Action(stepAction, $"{path}/steps/{i++}", mediaIds, menus, ownButtons);
+                    }
                 }
 
                 break;
@@ -813,9 +1000,9 @@ internal sealed class Validator
                 }
 
                 var menuId = menu.Value.GetString()!;
-                if (action["button"] is { } button && !(IsNonEmptyString(button) && menus[menuId].Contains(button.GetString()!)))
+                if (action["button"] is { } button)
                 {
-                    Error($"{path}/button", $"No button \"{JsString(button)}\" in menu \"{menuId}\".");
+                    ButtonRef(button, $"{path}/button", menus[menuId], $"menu \"{menuId}\"");
                 }
 
                 if (action["transition"] is { } transition && !IsNonEmptyString(transition))
@@ -904,7 +1091,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

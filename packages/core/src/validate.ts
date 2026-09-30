@@ -1,4 +1,5 @@
 import { FORMAT_ID, FORMAT_VERSION, isFormatId } from "./constants.js";
+import { PLAYER_VARS, SET_OPS, TEST_OPS } from "./logic.js";
 import type { Action, Manifest, Menu, PlayItem } from "./types.js";
 
 export interface Issue {
@@ -36,7 +37,9 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 const ACTION_KEYS: Record<string, readonly string[]> = {
   play: ["type", "media", "chapter", "start", "after", "audio", "subtitle"],
   playAll: ["type", "items", "after"],
-  set: ["type", "var", "value", "then"],
+  set: ["type", "var", "value", "op", "then"],
+  if: ["type", "test", "then", "else"],
+  do: ["type", "steps"],
   goto: ["type", "menu", "button", "transition", "history"],
   back: ["type"],
   resume: ["type", "otherwise"],
@@ -117,25 +120,92 @@ class Validator {
     this.fallback(data.fallback, mediaIds, menus);
   }
 
-  private varNames = new Set<string>();
+  /** Declared variables and their types (a variable keeps the type of its starting value). */
+  private varTypes = new Map<string, "number" | "string">();
 
   private vars(value: unknown) {
     if (value === undefined) return;
     if (!isObject(value)) {
-      this.error("/vars", "Must be an object of name → integer.");
+      this.error("/vars", "Must be an object of name → integer or text.");
       return;
     }
     for (const [name, v] of Object.entries(value)) {
-      if (!Number.isInteger(v)) this.error(`/vars/${name}`, "Must be an integer.");
-      this.varNames.add(name);
+      if (name.startsWith("@")) this.error(`/vars/${name}`, 'Names starting with "@" are player state, not the manifest\'s own variables.');
+      else if (Number.isInteger(v)) this.varTypes.set(name, "number");
+      else if (typeof v === "string") this.varTypes.set(name, "string");
+      else this.error(`/vars/${name}`, "Must be an integer or text.");
     }
+  }
+
+  /** The type of a variable the manifest may read (its own, or "@" player state), or undefined if there's none. */
+  private typeOfVar(name: unknown): "number" | "string" | undefined {
+    if (typeof name !== "string") return undefined;
+    return name.startsWith("@") ? PLAYER_VARS[name]?.type : this.varTypes.get(name);
+  }
+
+  /** Check a {var} reference; returns its type. */
+  private varRef(value: Record<string, unknown>, path: string): "number" | "string" | undefined {
+    const t = this.typeOfVar(value.var);
+    if (!t) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars or player state.`);
+    return t;
+  }
+
+  /** A literal value (integer or text) or {var}; returns its type when known. */
+  private value(value: unknown, path: string): "number" | "string" | undefined {
+    if (isObject(value)) return this.varRef(value, path);
+    if (Number.isInteger(value)) return "number";
+    if (typeof value === "string") return "string";
+    this.error(path, 'Must be an integer, text, or {"var": name}.');
+    return undefined;
   }
 
   private varOrNumber(value: unknown, path: string, min: number) {
     if (isObject(value)) {
-      if (!isNonEmptyString(value.var) || !this.varNames.has(value.var)) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars.`);
+      const t = this.varRef(value, path);
+      if (t === "string") this.error(`${path}/var`, `Variable "${String(value.var)}" holds text; a track number is needed.`);
     } else if (!Number.isInteger(value) || (value as number) < min) {
       this.error(path, `Must be an integer ≥ ${min}, or {"var": name}.`);
+    }
+  }
+
+  /** A condition: one comparison of a variable, or all/any/not of other conditions. */
+  private test(value: unknown, path: string) {
+    if (!isObject(value)) {
+      this.error(path, 'Must be a condition: {"var", "eq"|"ne"|"lt"|"le"|"gt"|"ge"|"has": value}, or all/any/not.');
+      return;
+    }
+    for (const key of ["all", "any"] as const) {
+      if (key in value) {
+        const list = value[key];
+        if (!Array.isArray(list) || list.length === 0) this.error(`${path}/${key}`, "Must be a list of at least one condition.");
+        else list.forEach((t, i) => this.test(t, `${path}/${key}/${i}`));
+        return;
+      }
+    }
+    if ("not" in value) {
+      this.test(value.not, `${path}/not`);
+      return;
+    }
+    const ops = TEST_OPS.filter((op) => op in value);
+    this.unknownKeys(value, ["var", ...TEST_OPS], path);
+    const left = this.varRef(value, path);
+    if (ops.length !== 1) {
+      this.error(path, "Needs exactly one comparison: eq, ne, lt, le, gt, ge or has.");
+      return;
+    }
+    const op = ops[0]!;
+    const right = this.value(value[op], `${path}/${op}`);
+    if (op !== "eq" && op !== "ne" && (left === "string" || right === "string"))
+      this.error(`${path}/${op}`, `"${op}" compares integers; text can only be compared with eq or ne.`);
+    else if (left && right && left !== right) this.error(`${path}/${op}`, `Compares ${left === "number" ? "an integer" : "text"} with ${right === "number" ? "an integer" : "text"}.`);
+  }
+
+  /** A button reference: an id of the menu, or a variable holding one. */
+  private buttonRef(value: unknown, path: string, buttons: Set<string>, where: string) {
+    if (isObject(value)) {
+      if (this.varRef(value, path) === "number") this.error(`${path}/var`, `Variable "${String(value.var)}" holds an integer; a button id is text.`);
+    } else if (!(isNonEmptyString(value) && buttons.has(value))) {
+      this.error(path, `No button "${String(value)}" in ${where}.`);
     }
   }
 
@@ -355,8 +425,7 @@ class Validator {
           this.error(`${np}/${dir}`, `No button "${String(target)}" in this menu.`);
       }
     });
-    if (value.defaultButton !== undefined && !(isNonEmptyString(value.defaultButton) && own.has(value.defaultButton)))
-      this.error(`${path}/defaultButton`, `No button "${String(value.defaultButton)}" in this menu.`);
+    if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
     // What the remote's Back does here; may press one of this menu's own buttons.
     if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
     if (value.timeout !== undefined) {
@@ -435,10 +504,29 @@ class Validator {
             else this.playItem(item, `${path}/items/${i}`, mediaIds);
           });
         break;
-      case "set":
-        if (!isNonEmptyString(value.var) || !this.varNames.has(value.var)) this.error(`${path}/var`, `No variable "${String(value.var)}" in /vars.`);
-        if (!Number.isInteger(value.value)) this.error(`${path}/value`, "Must be an integer.");
+      case "set": {
+        const name = value.var;
+        const target = this.typeOfVar(name);
+        if (!target) this.error(`${path}/var`, `No variable "${String(name)}" in /vars or player state.`);
+        else if (typeof name === "string" && name.startsWith("@") && !PLAYER_VARS[name]!.writable)
+          this.error(`${path}/var`, `"${name}" is read-only player state.`);
+        const op = value.op ?? "set";
+        if (!SET_OPS.includes(op as never)) this.error(`${path}/op`, `Must be one of ${SET_OPS.join(", ")}.`);
+        const given = this.value(value.value, `${path}/value`);
+        if (op === "set") {
+          if (target && given && target !== given) this.error(`${path}/value`, `"${String(name)}" holds ${target === "number" ? "an integer" : "text"}.`);
+        } else if (target === "string" || given === "string") this.error(`${path}/op`, `"${String(op)}" works on integers only.`);
         if (value.then !== undefined) this.action(value.then, `${path}/then`, mediaIds, menus, ownButtons);
+        break;
+      }
+      case "if":
+        this.test(value.test, `${path}/test`);
+        this.action(value.then, `${path}/then`, mediaIds, menus, ownButtons);
+        if (value.else !== undefined) this.action(value.else, `${path}/else`, mediaIds, menus, ownButtons);
+        break;
+      case "do":
+        if (!Array.isArray(value.steps) || value.steps.length === 0) this.error(`${path}/steps`, "Required: at least one action.");
+        else value.steps.forEach((st, i) => this.action(st, `${path}/steps/${i}`, mediaIds, menus, ownButtons));
         break;
       case "resume":
         if (value.otherwise !== undefined) {
@@ -457,8 +545,7 @@ class Validator {
           this.error(`${path}/menu`, `No menu "${String(value.menu)}".`);
           break;
         }
-        if (value.button !== undefined && !(isNonEmptyString(value.button) && menus.get(value.menu)!.has(value.button)))
-          this.error(`${path}/button`, `No button "${String(value.button)}" in menu "${value.menu}".`);
+        if (value.button !== undefined) this.buttonRef(value.button, `${path}/button`, menus.get(value.menu)!, `menu "${value.menu}"`);
         if (value.transition !== undefined && !isNonEmptyString(value.transition))
           this.error(`${path}/transition`, "Must be a path or URL to a clip.");
         if (value.history !== undefined && value.history !== "push" && value.history !== "replace")
@@ -506,7 +593,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

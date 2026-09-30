@@ -42,9 +42,27 @@ sub onControl()
     m.nav = msNavInitialState()
     seed = m.top.lastStop
     if seed <> invalid and seed.media <> invalid then m.nav.lastStop = { media: seed.media, position: seed.position }
-    stepWith({ type: "start" })
+    stepWith({ type: "start", player: playerState(), seed: Rnd(2147483646) })
     m.top.setFocus(true)
 end sub
+
+' What this Roku knows of the viewer's setup, as "@" player state (spec §6.1).
+function playerState() as object
+    info = CreateObject("roDeviceInfo")
+    state = {}
+    state.SetModeCaseSensitive()
+    ' The locale is "en_US": the language and the country.
+    parts = info.GetCurrentLocale().Split("_")
+    if parts.Count() > 0 and Len(parts[0]) = 2
+        lang = LCase(parts[0])
+        state["@audioLanguage"] = lang
+        state["@subtitleLanguage"] = lang
+        state["@menuLanguage"] = lang
+    end if
+    if parts.Count() > 1 and Len(parts[1]) = 2 then state["@country"] = UCase(parts[1])
+    if info.GetDisplayAspectRatio() = "4x3" then state["@aspect"] = "4:3"
+    return state
+end function
 
 ' --- the navigator loop ------------------------------------------------------------------------
 

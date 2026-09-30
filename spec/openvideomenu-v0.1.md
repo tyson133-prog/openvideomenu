@@ -168,7 +168,9 @@ Every action is an object with a `type`:
 | `goto` | `menu`, `button?`, `transition?`, `history?` | Open a menu, focusing `button` or its `defaultButton`. `transition` is a clip (path) played first, full screen. `history: "replace"` doesn't add the current menu to Back's history, for page turns (§6.2). |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
 | `activate` | `button` | Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu's `back` (§6.2). |
-| `set` | `var`, `value`, `then?` | *(Level 2)* Set a variable, then optionally run another action (§6.1). |
+| `set` | `var`, `value`, `op?`, `then?` | *(Level 2)* Change a variable or player state, then optionally run another action (§6.1). |
+| `if` | `test`, `then`, `else?` | *(Level 2)* Run `then` or `else` depending on a condition (§6.1). |
+| `do` | `steps` | *(Level 2)* Run actions in order until one navigates (§6.1). |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped. When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -180,26 +182,82 @@ Every action is an object with a `type`:
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
 
-### 6.1 Variables and track selection (Level 2)
+### 6.1 Variables and logic (Level 2)
 
-DVDs remember choices, such as the soundtrack picked in a Languages menu, in registers. Open Video Menu keeps them as **variables**: data, not scripts.
+DVDs keep state in registers and decide with small command programs: which soundtrack was chosen,
+whether the film was started, the viewer's preferred language, which button to highlight. Open Video
+Menu expresses the same logic as **data, not scripts**: variables, player state, conditions and a
+few actions. It works on any media, not only discs, and the fallback list still works everywhere.
 
 ```json
-"vars": { "audio": 1, "subs": 0 },
+"vars": { "audio": 1, "played": 0, "lang": "en" },
 ...
-{ "type": "set", "var": "audio", "value": 2, "then": { "type": "goto", "menu": "main" } }
-...
-{ "type": "play", "media": "feature", "audio": { "var": "audio" }, "subtitle": { "var": "subs" } }
+{ "type": "if",
+  "test": { "var": "@audioLanguage", "eq": "fr" },
+  "then": { "type": "do", "steps": [
+    { "type": "set", "var": "@audio", "value": 2 },
+    { "type": "goto", "menu": "main-fr" } ] },
+  "else": { "type": "goto", "menu": "main" } }
 ```
 
-- **Session scope.** Variables start at their `vars` values when the player starts, and keep their values across menus and playback until it starts again.
-- **`set`** assigns an integer to a declared variable, then runs `then` if present. `set` MUST NOT be used in the fallback list.
-- **Choosing tracks.** `play` and `playAll` items MAY have `audio` and `subtitle`, each either a number or `{"var": name}`:
-  - `audio: N` plays the Nth audio track of the media (1-based).
-  - `subtitle: N` shows the Nth subtitle track; `subtitle: 0` turns subtitles off.
-  - When absent, the player uses its default. A number outside the media's tracks is ignored.
-- **Players without Level 2** ignore these fields: the media plays with default tracks, and `set` actions still run their `then`.
-- Conditions on actions (`when`) are planned for a later draft.
+**Variables.** `vars` declares the manifest's own variables and their starting values: an integer or
+text. A variable keeps that type. Variables start at their `vars` values when the player starts and keep
+their values across menus and playback until it starts again. Names MUST NOT start with `@`.
+
+**Player state** is read as `@` variables. Players report what they know when they start (and when it
+changes, e.g. the viewer picks another soundtrack during playback); anything unknown reads as its default.
+
+| Variable | Type | Default | Meaning |
+|---|---|---|---|
+| `@audio` | integer | 0 (unknown) | Current audio track, 1-based. Writable. |
+| `@subtitle` | integer | 0 (off) | Current subtitle track, 1-based; 0 = off. Writable. |
+| `@angle` | integer | 1 | Current angle, 1-based. Writable. |
+| `@focus` | text | — | The highlighted button's id. Writable: setting it highlights that button of the current menu. |
+| `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
+| `@lastMedia` | text | `""` | Media id of the last playback. |
+| `@lastChapter` | integer | 0 | Chapter (1-based) that playback started in, updated to where it stopped. |
+| `@region` | integer | 0 (unknown) | Player region, 1–8. |
+| `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. |
+| `@country` | text | `""` | ISO 3166-1 alpha-2. |
+| `@aspect` | text | `"16:9"` | The TV's shape: `"16:9"` or `"4:3"`. |
+
+**Values** are an integer, text, or `{"var": name}` (the current value of a variable or player state).
+
+**Conditions** (`test`) compare one variable with a value, or combine conditions:
+- `{ "var": v, "eq" | "ne": value }` for any type; `"lt" | "le" | "gt" | "ge"` for integers; `"has"`: true
+  when any bit of the value is set in the variable (integers).
+- `{ "all": [tests] }`, `{ "any": [tests] }`, `{ "not": test }`.
+- Exactly one comparison per test. Comparing an integer with text is an error.
+
+**Actions:**
+- **`set`** `{ var, value, op?, then? }` changes a variable, then runs `then`. `op` is `set` (default),
+  `add`, `sub`, `mul`, `div` (towards zero), `mod`, `and`, `or`, `xor`, or `random` (a whole number from
+  1 to `value`). Division or modulo by zero leaves the variable unchanged. Only `set` works on text.
+  Writable player state: setting `@audio`/`@subtitle`/`@angle` chooses the track for the next playback
+  (a DVD's SetSTN); setting `@focus` highlights a button (SetHL_BTN).
+- **`if`** `{ test, then, else? }` runs `then` when the test holds, otherwise `else` (or nothing).
+- **`do`** `{ steps }` runs actions in order and stops after the first one that navigates: opens a menu,
+  starts playback or a transition, or leaves. Like a DVD program, which ends at its link.
+- `if`, `do` and `set` MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
+  (a disc's conditional play-all), but not a bare `play`/`playAll`.
+
+**Focus from a variable.** A menu's `defaultButton` and a `goto`'s `button` MAY be `{"var": name}`
+holding a button id. When it doesn't name a button of that menu, the usual default applies.
+
+**Choosing tracks.** `play` and `playAll` items MAY have `audio` and `subtitle`, each a number or
+`{"var": name}`:
+- `audio: N` plays the Nth audio track of the media (1-based); `subtitle: N` shows the Nth subtitle
+  track; `subtitle: 0` turns subtitles off.
+- Without them, playback uses the current `@audio` and `@subtitle` when known, otherwise the player's
+  default. A number outside the media's tracks is ignored.
+
+**Randomness.** `random` draws from a generator the player seeds at start. The reference navigator uses
+`seed = (seed × 1103515245 + 12345) mod 2³¹`, result `1 + seed mod value`, so conformance cases can
+check it; players seed it unpredictably.
+
+**Players without Level 2** ignore these fields: menus open with their plain `defaultButton`, media play
+with default tracks, and `set`/`if`/`do` do nothing. Authors who need Level 1 players to work should keep
+important paths free of logic.
 
 ### 6.2 The remote's Back key
 
@@ -259,6 +317,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables with audio/subtitle selection. *(Next drafts)* Conditions, per-language menus, buttons during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection. Menus per language are separate menus chosen with `@menuLanguage`. *(Next drafts)* Angles, buttons and actions during playback, segment playlists for seamless branching (see [DVD profile: Not supported yet](profiles/dvd.md#not-supported-yet)). |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.
