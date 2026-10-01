@@ -1,0 +1,22 @@
+{
+  "description": "A manifest's level is the lowest at which its menus work as authored. Declaring one below the level the menus use is a warning (a player at that level would show them without what they need); so is leaving it out when the menus use Level 3. Declaring a higher level than used is fine.",
+  "level": 2,
+  "valid": true,
+  "warnings": ["/level"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 1,
+    "title": { "name": "Says Too Little" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "background": { "image": "menus/main.jpg", "video": { "src": "menus/main.mp4" } },
+        "buttons": [{ "id": "play", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

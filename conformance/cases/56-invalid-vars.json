@@ -1,6 +1,6 @@
 {
   "description": "Invalid Level 2 variables: a non-integer starting value, set/audio referring to an undeclared variable, a subtitle below 0, audio below 1, and set in a fallback item.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "schemaValid": false,
   "errors": [

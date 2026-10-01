@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { BUNDLE_EXTENSION, BUNDLE_MANIFEST_NAME, FORMAT_NAME, FORMAT_VERSION, isBundleFileName, MANIFEST_SUFFIX, menuAssets, parseManifest } from "@openvideomenu/core";
+import { BUNDLE_EXTENSION, BUNDLE_MANIFEST_NAME, FORMAT_NAME, FORMAT_VERSION, isBundleFileName, levelUsed, MANIFEST_SUFFIX, menuAssets, parseManifest } from "@openvideomenu/core";
 import { checkAssetFiles, checkIgnoreFiles, findManifests, isFaststart, memberDataOffset, packBundle, readBundle, readMember, unpackBundle } from "@openvideomenu/asset-server";
 import { startPreview } from "./serve.js";
 
@@ -38,7 +38,7 @@ async function validate(target: string): Promise<number> {
       continue;
     }
     const result = parseManifest(readFileSync(file, "utf8"));
-    console.log(`${result.ok ? "✓" : "✗"} ${file}`);
+    console.log(`${result.ok ? "✓" : "✗"} ${file}${result.ok ? `  (Level ${levelUsed(result.manifest)})` : ""}`);
     for (const e of result.errors) console.log(`    error    ${e.path || "/"}  ${e.message}`);
     for (const w of result.warnings) console.log(`    warning  ${w.path || "/"}  ${w.message}`);
     if (result.ok) {
@@ -65,7 +65,7 @@ async function validateBundle(file: string): Promise<boolean> {
   const errors = [...bundle.errors, ...(manifest ? [] : [`No ${BUNDLE_MANIFEST_NAME} at the bundle's root.`])];
   const result = manifest && bundle.errors.length === 0 ? parseManifest((await readMember(file, manifest)).toString("utf8")) : undefined;
   const ok = errors.length === 0 && result?.ok === true;
-  console.log(`${ok ? "✓" : "✗"} ${file}`);
+  console.log(`${ok ? "✓" : "✗"} ${file}${ok ? `  (Level ${levelUsed(result!.manifest)})` : ""}`);
   for (const e of errors) console.log(`    error    ${e}`);
   for (const e of result?.errors ?? []) console.log(`    error    ${e.path || "/"}  ${e.message}`);
   for (const w of result?.warnings ?? []) console.log(`    warning  ${w.path || "/"}  ${w.message}`);

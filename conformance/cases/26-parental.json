@@ -1,10 +1,11 @@
 {
   "description": "A parental level request (a disc's SetTmpPML): the navigator asks the player (askParental) and runs then or else when it answers (parental). Granted, @parentalLevel becomes the level asked for. Like a link, the request ends a do; an answer with nothing asked is ignored.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Ask First" },
     "media": {
       "film": { "ref": "Film.mkv", "kind": "feature" },

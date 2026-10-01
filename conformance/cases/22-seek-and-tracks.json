@@ -1,10 +1,11 @@
 {
   "description": "During playback a cue, an overlay's button or a key can move the title elsewhere on its timeline (seek: a disc's LinkCN/LinkPGN/LinkPTT, or a cell that loops by linking to itself) and change its tracks now (set on @audio, @subtitle or @angle: a disc's SetSTN in a cell command or a button over the film). A seek ends a do, as a link ends a disc's program. Tracks set during playback also stay for the next playback.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Moving Within a Title" },
     "media": {
       "film": {

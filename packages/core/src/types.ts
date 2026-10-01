@@ -17,25 +17,30 @@ export interface Manifest {
   firstPlay?: Action;
   fallback: FallbackGroup[];
   /**
-   * Level 2: named variables for the viewing session (the data-only stand-in for DVD registers), with
+   * Level 3: named variables for the viewing session (the data-only stand-in for DVD registers), with
    * their starting values: an integer or text, and a variable keeps that type. Set by "set", read by
    * conditions, play's audio/subtitle and focus. Player state is read as "@name" variables (logic.ts).
    */
   vars?: Record<string, Scalar>;
   /**
-   * Level 2: named actions, run from anywhere with {type: "run", action: name}, so logic many buttons
+   * Level 3: named actions, run from anywhere with {type: "run", action: name}, so logic many buttons
    * share (a disc's PGC entry, a dispatcher, an episode's end) is written once (spec §6.4).
    */
   actions?: Record<string, Action>;
   /**
-   * Level 2: how long the resume point lasts (spec §6.5). "untilEnd" (default): until that playback
+   * Level 3: how long the resume point lasts (spec §6.5). "untilEnd" (default): until that playback
    * completes. "untilUsed": like a disc's, until a resume uses it or it's replaced or cleared.
    */
   resumePoint?: "untilEnd" | "untilUsed";
+  /**
+   * The lowest conformance level at which the menus work as authored (spec §10): 0–3. A player below it
+   * shows the fallback list. Absent: players try the menus.
+   */
+  level?: 0 | 1 | 2 | 3;
   /** Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6). */
   keys?: MenuKeys;
   /**
-   * Level 2: integer variables of `vars` that count seconds by themselves, like a disc's registers in
+   * Level 3: integer variables of `vars` that count seconds by themselves, like a disc's registers in
    * counter mode (spec §6.7): each reads as its value plus the whole seconds since it was last set.
    */
   counters?: string[];
@@ -201,7 +206,7 @@ export interface Menu {
   canvas: Canvas;
   background?: Background;
   label?: string;
-  /** The button focused on entry: an id, or a variable holding one (Level 2). */
+  /** The button focused on entry: an id, or a variable holding one (Level 3). */
   defaultButton?: string | { var: string };
   /** When true, a missing nav direction moves to the nearest button in that direction. */
   autoNav?: boolean;
@@ -285,7 +290,7 @@ export type Scalar = number | string;
 export type Value = Scalar | { var: string };
 
 /**
- * Level 2: a condition. One comparison of a variable with a value (eq/ne for any value; lt/le/gt/ge
+ * Level 3: a condition. One comparison of a variable with a value (eq/ne for any value; lt/le/gt/ge
  * for integers; has = any of the value's bits set), or all/any/not of other tests.
  */
 export type Test =
@@ -337,7 +342,7 @@ export type Action =
   | {
       type: "goto";
       menu: string;
-      /** The button to focus: an id, or a variable holding one (Level 2). */
+      /** The button to focus: an id, or a variable holding one (Level 3). */
       button?: string | { var: string };
       /** Clip played before the menu opens (skippable). */
       transition?: string;
@@ -350,22 +355,22 @@ export type Action =
   /** Press a button of the current menu (its activated state shows, its action runs). Only in a menu's `back`. */
   | { type: "activate"; button: string }
   /**
-   * Level 2: change a variable, then (optionally) run another action — e.g. choose a soundtrack and
+   * Level 3: change a variable, then (optionally) run another action — e.g. choose a soundtrack and
    * return to the menu. op defaults to "set"; "@audio", "@subtitle", "@angle" and "@focus" can be set.
    */
   | { type: "set"; var: string; value: Value; op?: SetOp; then?: Action }
-  /** Level 2: run then or (optional) else, depending on a condition. */
+  /** Level 3: run then or (optional) else, depending on a condition. */
   | { type: "if"; test: Test; then: Action; else?: Action }
-  /** Level 2: run actions in order, stopping after the first that navigates (opens a menu, plays, leaves). */
+  /** Level 3: run actions in order, stopping after the first that navigates (opens a menu, plays, leaves). */
   | { type: "do"; steps: Action[] }
-  /** Level 2: run a named action from the manifest's `actions`, as if it were written here. */
+  /** Level 3: run a named action from the manifest's `actions`, as if it were written here. */
   | { type: "run"; action: string }
   /**
-   * Level 2: save the resume point (spec §6.5): `media` from `chapter` or `at` seconds; without
+   * Level 3: save the resume point (spec §6.5): `media` from `chapter` or `at` seconds; without
    * `media`, the playback in progress, at `at` (default: the cue's time).
    */
   | { type: "saveResume"; media?: string; at?: number; chapter?: number }
-  /** Level 2: forget the resume point. */
+  /** Level 3: forget the resume point. */
   | { type: "clearResume" }
   /**
    * Level 2: continue the playback in progress elsewhere on its timeline (spec §6.3): at `at` seconds or
@@ -373,16 +378,16 @@ export type Action =
    */
   | { type: "seek"; at?: number; chapter?: number }
   /**
-   * Level 2: start the navigation timer (spec §6.7): `action` runs after `after` seconds, wherever the
+   * Level 3: start the navigation timer (spec §6.7): `action` runs after `after` seconds, wherever the
    * viewer is (a disc's SetNVTMR). One timer: a new one replaces it.
    */
   | { type: "timer"; after: number; action: Action }
-  /** Level 2: stop the navigation timer. */
+  /** Level 3: stop the navigation timer. */
   | { type: "cancelTimer" }
   /** Level 2: stop and leave the title, as the player's own Stop would (a disc's Exit). */
   | { type: "exit" }
   /**
-   * Level 2: ask the player to allow parental level `level` for now (a disc's SetTmpPML): `then` runs if it
+   * Level 3: ask the player to allow parental level `level` for now (a disc's SetTmpPML): `then` runs if it
    * does (and @parentalLevel becomes `level`), `else` if not (spec §6.8).
    */
   | { type: "requestParental"; level: number; then: Action; else?: Action };

@@ -1,10 +1,11 @@
 {
   "description": "A disc-style resume point (resumePoint: untilUsed). Stopping saves the whole playback: resuming continues the item, then what was queued after it, then its after-action. A cue that calls a menu saves the point it names (saveResume, like a DVD's CallSS with a resume cell) instead of where the cue is. The point survives other playback completing, and resuming uses it up; @resumeMedia tells whether there is one.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Resume Like a Disc" },
     "resumePoint": "untilUsed",
     "media": {

@@ -27,19 +27,18 @@ Folder names follow the Plex/Jellyfin conventions people already use, so there's
 
 ## What a menu can do
 
-Players support the format in levels, and every manifest works at every level:
+Players support the format in levels, and every manifest works at every level (at worst as its list):
 
 - **Level 0:** a plain list of what to play. Every manifest carries one.
 - **Level 1:** menus: background art, buttons with highlight states, remote navigation, submenus, chapters, play-alls, resume, and a Back key that goes where the disc's would.
-- **Level 2:** everything a DVD can do, so an imported disc behaves like the disc:
+- **Level 2:** what a player shows and plays as written:
   - motion menus, menu music, intros and menus that move on by themselves;
-  - variables, conditions and shared named actions (a disc's registers and programs);
-  - soundtrack, subtitle and angle choices, including changes during the film;
-  - titles made of pieces of other files;
+  - soundtrack, subtitle and angle choices, and titles made of pieces of other files;
   - what happens during playback: cues, buttons over the film, jumps, and still frames that wait for the viewer;
-  - the remote's Menu and Title keys, the disc's resume point, timers, and parental requests.
+  - the remote's Menu and Title keys, and shuffled play-alls.
+- **Level 3:** a disc's logic, so an imported disc behaves like the disc: variables, conditions and shared named actions (its registers and programs), the disc's resume point, timers and parental requests. Menus that need it say so, and players without it show the list instead.
 
-  What a disc forbids (skipping the warning, fast-forwarding the logos) is recorded as information only. Players decide; by default the viewer can skip anything.
+What a disc forbids (skipping the warning, fast-forwarding the logos) is recorded as information only. Players decide; by default the viewer can skip anything.
 
 ## Try it
 
@@ -102,7 +101,7 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 ## Roadmap
 
 - **Importers:** tools that turn existing menus, such as DVDs, into manifests with their complete behaviour
-- **Players:** device testing of the newest Level 2 features on the TV apps, then a soft launch
+- **Players:** device testing of the newest Level 2 and 3 features on the TV apps, then a soft launch
 - **Jellyfin:** menus inside Jellyfin's own web, TV and mobile apps (the plugin serves them today)
 - **Tools:** `openvideomenu init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
 - **v1.0:** a final name, a frozen format, the compatibility charter in force

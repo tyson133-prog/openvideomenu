@@ -13,7 +13,7 @@ export type Key = Direction | "enter" | "back" | MenuKey;
 
 /**
  * What the player reports. Any event MAY carry `time`: the player's clock in seconds (any origin, never
- * going back), which counters and the navigation timer read (Level 2, spec §6.7).
+ * going back), which counters and the navigation timer read (Level 3, spec §6.7).
  */
 export type NavEvent = NavEventBody & { time?: number };
 
@@ -57,11 +57,11 @@ type NavEventBody =
    */
   | { type: "buttonSet"; index: number | null }
   /**
-   * Level 2: the navigation timer a "startNavTimer" effect asked for ran out. During playback, players
+   * Level 3: the navigation timer a "startNavTimer" effect asked for ran out. During playback, players
    * pass the position, as with a menu key.
    */
   | { type: "navTimer"; position?: number }
-  /** Level 2: the answer to an "askParental" effect: whether the viewer (or the player's settings) allowed it. */
+  /** Level 3: the answer to an "askParental" effect: whether the viewer (or the player's settings) allowed it. */
   | { type: "parental"; granted: boolean };
 
 /** Level 2: a cue the host watches for during playback, from the play effect. */
@@ -102,14 +102,14 @@ export type Effect =
    */
   | { type: "startTimer"; menu: string; after: number }
   /**
-   * Level 2: (re)start the navigation timer: report {type: "navTimer"} after [after] seconds, wherever
+   * Level 3: (re)start the navigation timer: report {type: "navTimer"} after [after] seconds, wherever
    * the viewer is, unless another startNavTimer replaces it or cancelNavTimer stops it (spec §6.7).
    */
   | { type: "startNavTimer"; after: number }
-  /** Level 2: stop the navigation timer. */
+  /** Level 3: stop the navigation timer. */
   | { type: "cancelNavTimer" }
   /**
-   * Level 2: a requestParental action asks for parental level [level] (spec §6.8): answer with
+   * Level 3: a requestParental action asks for parental level [level] (spec §6.8): answer with
    * {type: "parental", granted}, at once from the player's settings or after asking the viewer.
    */
   | { type: "askParental"; level: number }
@@ -119,13 +119,13 @@ export type Effect =
    */
   | { type: "seek"; position: number }
   /**
-   * Level 2: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
+   * Level 3: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
    * @angle during playback, a disc's SetSTN in a cell command): apply it now, from where playback is
    * (`at`, the cue's time, when the player doesn't know better).
    */
   | { type: "tracks"; audio?: number; subtitle?: number; angle?: number; at: number }
   /**
-   * Level 2: one event ran STEP_BUDGET actions (a named action running itself without end); the
+   * Level 3: one event ran STEP_BUDGET actions (a named action running itself without end); the
    * rest were dropped. For diagnostics: players carry on with the state as it is.
    */
   | { type: "budgetExceeded" };
@@ -161,13 +161,13 @@ export interface NavState {
   buttonSet?: number;
   /** Level 2: a button asked for on entering the menu that only one of its button sets has. */
   focusWanted?: string;
-  /** Level 2: the player's clock at the latest event that gave one (spec §6.7). */
+  /** Level 3: the player's clock at the latest event that gave one (spec §6.7). */
   now?: number;
-  /** Level 2: counter variables, and the time each was last set. */
+  /** Level 3: counter variables, and the time each was last set. */
   counters?: Record<string, number>;
-  /** Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known). */
+  /** Level 3: the navigation timer: what it runs, and when it runs out (when the clock is known). */
   navTimer?: { action: Action; ends?: number };
-  /** Level 2: a parental level request waiting for the player's answer, and how its branches run. */
+  /** Level 3: a parental level request waiting for the player's answer, and how its branches run. */
   parental?: { level: number; then: Action; else?: Action; opts: RunOptions };
   /**
    * The resume point, for "resume": where the viewer stopped last (or a saveResume put it). Hosts may
@@ -176,7 +176,7 @@ export interface NavState {
    * continues a play-all as a disc does.
    */
   lastStop?: ResumePoint;
-  /** Level 2: variable values for this session (from manifest.vars, changed by "set"). */
+  /** Level 3: variable values for this session (from manifest.vars, changed by "set"). */
   vars: Record<string, Scalar>;
   /** Level 2: player state ("@audio", "@audioLanguage", …) as reported by the player or changed by set. */
   player: Record<string, Scalar>;
@@ -209,13 +209,13 @@ export interface StepResult {
 
 export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true, vars: {}, player: {}, seed: 1, seq: 0 });
 
-/** Level 2: the most actions one event runs (spec §6.4), so a named action that runs itself still ends. */
+/** Level 3: the most actions one event runs (spec §6.4), so a named action that runs itself still ends. */
 export const STEP_BUDGET = 10_000;
 
 /** Actions the current event may still run; step() is synchronous, so one counter serves. */
 let stepsLeft = STEP_BUDGET;
 
-/** The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 2). */
+/** The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 3). */
 let resumeSet = false;
 
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
@@ -230,7 +230,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       s.history = [];
       s.playing = undefined;
       s.vars = { ...(manifest.vars ?? {}) };
-      // Level 2: counters start counting now; the navigation timer starts stopped.
+      // Level 3: counters start counting now; the navigation timer starts stopped.
       s.counters = manifest.counters?.length ? Object.fromEntries(manifest.counters.map((name) => [name, s.now ?? 0])) : undefined;
       s.navTimer = undefined;
       s.player = { ...(s.player ?? {}), ...(event.player ?? {}) };
@@ -322,7 +322,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       break;
 
     case "parental": {
-      // Level 2: the answer to a requestParental; its branch runs as the request would have.
+      // Level 3: the answer to a requestParental; its branch runs as the request would have.
       const ask = s.parental;
       if (!ask) break;
       s.parental = undefined;
@@ -335,7 +335,7 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     }
 
     case "navTimer": {
-      // Level 2: the navigation timer ran out. Nobody chose this: in menus it runs as a step up, like
+      // Level 3: the navigation timer ran out. Nobody chose this: in menus it runs as a step up, like
       // a timeout; during playback, like a cue's action where playback is.
       const timer = s.navTimer;
       if (!timer) break;
@@ -671,7 +671,7 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         if (s.lastStop) {
           // The stopped playback continues: the item from where it stopped (with the tracks as they are
           // now, which the viewer may have changed while watching), then what was queued after it, then
-          // its after-action. A disc's resume point is used up by resuming (Level 2).
+          // its after-action. A disc's resume point is used up by resuming (Level 3).
           const point = s.lastStop;
           const { chapter: _c, start: _s, audio: _a, subtitle: _t, angle: _g, ...item } = point.item ?? { media: point.media };
           if (manifest.resumePoint === "untilUsed") s.lastStop = undefined;
@@ -817,7 +817,7 @@ function leavePlayback(manifest: Manifest, s: NavState, at: number) {
 }
 
 /**
- * Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
+ * Level 3: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
  * command or a button over the film), not only to the next playback.
  */
 function liveTrack(manifest: Manifest, s: NavState, name: string, value: Scalar, at: number, effects: Effect[]) {

@@ -12,7 +12,7 @@ sub init()
     m.still.loadDisplayMode = "scaleToFill"
 
     m.motion.observeField("state", "onMotionState")
-    ' Level 2: answers a parental level request once the event that asked is done.
+    ' Level 3: answers a parental level request once the event that asked is done.
     m.parentalTimer = CreateObject("roSGNode", "Timer")
     m.parentalTimer.duration = 0.01
     m.parentalTimer.repeat = false
@@ -76,7 +76,7 @@ end function
 ' --- the navigator loop ------------------------------------------------------------------------
 
 sub stepWith(event as object)
-    ' Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    ' Level 3: the player's clock, for counters and the navigation timer (spec 6.7).
     if event.time = invalid then event.time = UpTime(0)
     before = m.nav
     result = msNavStep(m.manifest, m.nav, event)
@@ -118,17 +118,17 @@ sub apply(effect as object)
         if m.videoRole = "background" then m.motion.seek = at
         drawButtons()
     else if t = "askParental"
-        ' Level 2: this player has no parental lock of its own, so it allows any level; it answers just
+        ' Level 3: this player has no parental lock of its own, so it allows any level; it answers just
         ' after this event is done.
         m.parentalTimer.control = "start"
     else if t = "startNavTimer" or t = "cancelNavTimer"
-        ' Level 2: the scene keeps the navigation timer, so it can say where playback is when it runs out.
+        ' Level 3: the scene keeps the navigation timer, so it can say where playback is when it runs out.
         m.top.navTimerRequest = effect
     else if t = "seek"
         ' Level 2: the scene moves the title (spec 6.3).
         m.top.seekRequest = effect.position
     else if t = "tracks"
-        ' Level 2: the scene changes a track of the title now.
+        ' Level 3: the scene changes a track of the title now.
         m.top.tracksRequest = effect
     else if t = "budgetExceeded"
         ' A named action ran itself without end; the navigator dropped the rest. The menus carry on.
@@ -183,7 +183,7 @@ sub onParentalTimer()
     stepWith({ type: "parental", granted: true })
 end sub
 
-' Level 2: the navigation timer ran out; the scene passes where playback is (-1 when nothing plays).
+' Level 3: the navigation timer ran out; the scene passes where playback is (-1 when nothing plays).
 sub onNavTimerFired()
     event = { type: "navTimer" }
     if m.top.navTimerFired >= 0 then event.position = m.top.navTimerFired

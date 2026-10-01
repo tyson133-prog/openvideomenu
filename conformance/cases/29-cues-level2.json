@@ -1,0 +1,179 @@
+{
+  "description": "Level 2 cues without logic: an overlay whose buttons take the arrows and Enter while it shows (one branches to a featurette that returns to the film at the overlay's end), overlay end and re-entry, a point cue opening a menu (the film is remembered there for resume), and a play item with an end and its own cue.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Cues"
+    },
+    "media": {
+      "feature": {
+        "ref": "Film.mkv",
+        "cues": [
+          {
+            "from": 200,
+            "to": 215,
+            "canvas": {
+              "width": 1280,
+              "height": 720
+            },
+            "buttons": [
+              {
+                "id": "follow",
+                "rect": [
+                  900,
+                  600,
+                  200,
+                  60
+                ],
+                "nav": {
+                  "right": "skip"
+                },
+                "action": {
+                  "type": "play",
+                  "media": "rabbit"
+                }
+              },
+              {
+                "id": "skip",
+                "rect": [
+                  1110,
+                  600,
+                  120,
+                  60
+                ],
+                "nav": {
+                  "left": "follow"
+                },
+                "action": {
+                  "type": "back"
+                }
+              }
+            ]
+          },
+          {
+            "at": 300,
+            "action": {
+              "type": "goto",
+              "menu": "extras"
+            }
+          }
+        ]
+      },
+      "rabbit": {
+        "ref": "Rabbit.mkv"
+      },
+      "song": {
+        "ref": "Concert.mkv"
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "play",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "song"
+            },
+            "action": {
+              "type": "play",
+              "media": "feature"
+            }
+          },
+          {
+            "id": "song",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "play"
+            },
+            "action": {
+              "type": "play",
+              "media": "song",
+              "start": 50,
+              "end": 60,
+              "cues": [
+                {
+                  "at": 55,
+                  "action": {
+                    "type": "goto",
+                    "menu": "extras"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extras": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "feature"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"play"},{"type":"play","media":"feature","start":0,"cues":[{"id":"media/0","from":200,"to":215},{"id":"media/1","at":300}]}]}},
+    {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"playing","overlay":{"cue":"media/0","focus":"follow"},"effects":[]}},
+    {"event":{"type":"press","key":"right"},"expect":{"mode":"playing","overlay":{"cue":"media/0","focus":"skip"},"effects":[]}},
+    {"event":{"type":"cueEnd","id":"media/0"},"expect":{"mode":"playing","overlay":null,"effects":[]}},
+    {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"playing","overlay":{"cue":"media/0","focus":"follow"},"effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","cue":"media/0","button":"follow"},{"type":"play","media":"rabbit","start":0}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"play","media":"feature","start":215,"cues":[{"id":"media/0","from":200,"to":215},{"id":"media/1","at":300}]}]}},
+    {"event":{"type":"cue","id":"media/1"},"expect":{"mode":"menu","menu":"extras","focus":"resume","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"extras","button":"resume"},{"type":"play","media":"feature","start":300,"cues":[{"id":"media/0","from":200,"to":215},{"id":"media/1","at":300}]}]}},
+    {"event":{"type":"stopped","position":310},"expect":{"mode":"menu","menu":"extras","focus":"resume","effects":[]}},
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"song","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"song"},{"type":"play","media":"song","start":50,"end":60,"cues":[{"id":"item/0","at":55}]}]}},
+    {"event":{"type":"cue","id":"item/0"},"expect":{"mode":"menu","menu":"extras","focus":"resume","effects":[]}}
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "description": "Invalid angles: both angle files and angle tracks, an empty angle list, a bad angle ref, a single angle track, an angle the media doesn't have (with and without angles), and an angle from a text variable.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": [
     "/media/both/angleTracks",

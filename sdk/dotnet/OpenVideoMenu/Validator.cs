@@ -13,7 +13,7 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -218,6 +218,28 @@ internal sealed class Validator
         }
 
         Fallback(m["fallback"], mediaIds, menus);
+        Level(m, data);
+    }
+
+    /// <summary>The level the menus need (spec §10), against the level they use.</summary>
+    private void Level(Obj m, JsonElement data)
+    {
+        var used = Levels.Used(data);
+        if (m["level"] is { } level)
+        {
+            if (!(IsInteger(level) && level.GetDouble() is >= 0 and <= 3))
+            {
+                Error("/level", "Must be a level from 0 to 3.");
+            }
+            else if (level.GetDouble() < used)
+            {
+                Warn("/level", $"The menus use Level {used}; a player at Level {level.GetDouble()} would show them without what they need. Declare \"level\": {used}.");
+            }
+        }
+        else if (used == 3)
+        {
+            Warn("/level", "The menus use Level 3 (disc logic): declare \"level\": 3, so players below it show the fallback list.");
+        }
     }
 
     /// <summary>

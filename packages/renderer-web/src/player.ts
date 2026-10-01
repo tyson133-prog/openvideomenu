@@ -37,6 +37,11 @@ export interface PlayerOptions {
   input?: InputAdapter;
   /** "fallback" shows the Level 0 list even when menus exist. */
   view?: "menu" | "fallback";
+  /**
+   * The highest conformance level this host supports (spec §10), default 3. A manifest that needs more
+   * (its `level`) shows its fallback list instead of menus that would only partly work.
+   */
+  level?: 0 | 1 | 2 | 3;
   /** Show hidden fallback groups (easter eggs). */
   showHidden?: boolean;
   /** "back" pressed at the top menu. */
@@ -52,11 +57,11 @@ export interface PlayerOptions {
   /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
   initialLastStop?: { media: string; position: number };
   /**
-   * Level 2: answer a disc's request for a higher parental level (spec 6.8), e.g. after asking for a PIN.
+   * Level 3: answer a disc's request for a higher parental level (spec 6.8), e.g. after asking for a PIN.
    * Without it, levels up to `parentalLevel` are allowed.
    */
   answerParental?: (level: number) => boolean | Promise<boolean>;
-  /** Level 2: the highest parental level allowed without answerParental, 1-8 (default 8, unrestricted). */
+  /** Level 3: the highest parental level allowed without answerParental, 1-8 (default 8, unrestricted). */
   parentalLevel?: number;
   /**
    * Level 2: what the host knows of the viewer's setup, as "@" player state (e.g. "@audioLanguage",
@@ -168,8 +173,13 @@ export class MenuPlayer {
     this.preloadImages();
   }
 
+  /** Only the fallback list: asked for, or the menus need a higher level than this host supports. */
+  private listOnly(): boolean {
+    return this.options.view === "fallback" || (this.options.manifest.level ?? 0) > (this.options.level ?? 3);
+  }
+
   start() {
-    if (this.options.view === "fallback") this.showFallback();
+    if (this.listOnly()) this.showFallback();
     else
       this.dispatch({
         type: "start",
@@ -200,7 +210,7 @@ export class MenuPlayer {
   /** Feed a navigator event (also used by hosts with custom input). Returns false while busy. */
   dispatch(event: NavEvent): boolean {
     if (this.busy) return false;
-    // Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    // Level 3: the player's clock, for counters and the navigation timer (spec 6.7).
     const { state, effects } = step(this.options.manifest, this.state, { ...event, time: event.time ?? performance.now() / 1000 });
     const flash = effects.find((e): e is Extract<Effect, { type: "activated" }> => e.type === "activated");
     // A cue that opens a menu leaves playback without the player reporting a stop: stop it here.
@@ -346,7 +356,7 @@ export class MenuPlayer {
   }
 
   /**
-   * Level 2: answer a parental level request (spec 6.8) with the host's answerParental, or by its
+   * Level 3: answer a parental level request (spec 6.8) with the host's answerParental, or by its
    * parentalLevel setting (unrestricted by default). Answered after the event that asked is done.
    */
   private async answerParental(level: number) {
@@ -358,7 +368,7 @@ export class MenuPlayer {
     setTimeout(send, 0);
   }
 
-  /** Level 2: the navigation timer (spec 6.7), which runs wherever the viewer is. */
+  /** Level 3: the navigation timer (spec 6.7), which runs wherever the viewer is. */
   private navTimer?: ReturnType<typeof setTimeout>;
 
   private startNavTimer(after: number) {
@@ -854,7 +864,7 @@ export class MenuPlayer {
       return true;
     }
     if (key === "back") {
-      if (this.options.view !== "fallback" && this.options.manifest.menus && this.options.manifest.rootMenu) {
+      if (!this.listOnly() && this.options.manifest.menus && this.options.manifest.rootMenu) {
         this.fallbackEl!.remove();
         this.fallbackEl = undefined;
         this.dispatch({ type: "start" });

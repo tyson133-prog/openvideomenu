@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace OpenVideoMenu;
 
-// The logic layer (Level 2, spec §6.1): values, player-state variables, conditions and set operations.
+// The logic layer (Level 3, spec §6.1): values, player-state variables, conditions and set operations.
 // Mirrors packages/core/src/logic.ts.
 
 /// <summary>A variable's value: an integer or text.</summary>

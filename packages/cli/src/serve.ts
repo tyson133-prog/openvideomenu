@@ -50,6 +50,8 @@ function playerPage(): string {
   const manifestPath = /\.ovmz$/i.test(m) ? m + "/${BUNDLE_MANIFEST_NAME}" : m;
   window.menuPlayer = OpenVideoMenuPlayer.loadPlayer(document.getElementById("player"), "/media/" + manifestPath.split("/").map(encodeURIComponent).join("/"), {
     view,
+    // ?level=N plays as a player that supports only up to Level N (spec 10).
+    ...(params.has("level") ? { level: Number(params.get("level")) } : {}),
     showHidden: params.has("hidden"),
     onExit: () => { if (history.length > 1) history.back(); },
   });

@@ -54,11 +54,12 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `menus` | no | Map of menu id → [menu](#5-menus). |
 | `rootMenu` | if `menus` | The menu opened at start and after top-level playback ends. |
 | `firstPlay` | no | [Action](#6-actions) run at start instead of opening `rootMenu`, e.g. an intro. |
-| `vars` | no | *(Level 2)* Named integer variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
-| `actions` | no | *(Level 2)* [Named actions](#64-named-actions-level-2), run from anywhere with `run`. |
-| `resumePoint` | no | *(Level 2)* How long the [resume point](#65-the-resume-point-level-2) lasts: `"untilEnd"` (default) or `"untilUsed"`. |
+| `level` | no | The lowest [conformance level](#10-conformance-levels) at which the menus work as authored, 0–3. Players below it show the fallback list. |
+| `vars` | no | *(Level 3)* Named variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
+| `actions` | no | *(Level 3)* [Named actions](#64-named-actions-level-3), run from anywhere with `run`. |
+| `resumePoint` | no | *(Level 3)* How long the [resume point](#65-the-resume-point-level-3) lasts: `"untilEnd"` (default) or `"untilUsed"`. |
 | `keys` | no | *(Level 2)* What the remote's [menu keys](#66-remote-keys-and-prohibitions-level-2) do. |
-| `counters` | no | *(Level 2)* Variables that [count seconds](#67-time-the-navigation-timer-and-counters-level-2) by themselves. |
+| `counters` | no | *(Level 3)* Variables that [count seconds](#67-time-the-navigation-timer-and-counters-level-3) by themselves. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
 
@@ -258,16 +259,16 @@ Every action is an object with a `type`:
 | `goto` | `menu`, `button?`, `transition?`, `history?` | Open a menu, focusing `button` or its `defaultButton`. `transition` is a clip (path) played first, full screen. `history: "replace"` doesn't add the current menu to Back's history, for page turns (§6.2). |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
 | `activate` | `button` | Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu's `back` (§6.2). |
-| `set` | `var`, `value`, `op?`, `then?` | *(Level 2)* Change a variable or player state, then optionally run another action (§6.1). |
-| `if` | `test`, `then`, `else?` | *(Level 2)* Run `then` or `else` depending on a condition (§6.1). |
-| `do` | `steps` | *(Level 2)* Run actions in order until one navigates (§6.1). |
-| `run` | `action` | *(Level 2)* Run a named action from `actions`, as if it were written here (§6.4). |
-| `saveResume` | `media?`, `at?`, `chapter?` | *(Level 2)* Save the resume point (§6.5). |
-| `clearResume` | — | *(Level 2)* Forget the resume point (§6.5). |
+| `set` | `var`, `value`, `op?`, `then?` | *(Level 3)* Change a variable or player state, then optionally run another action (§6.1). |
+| `if` | `test`, `then`, `else?` | *(Level 3)* Run `then` or `else` depending on a condition (§6.1). |
+| `do` | `steps` | *(Level 3)* Run actions in order until one navigates (§6.1). |
+| `run` | `action` | *(Level 3)* Run a named action from `actions`, as if it were written here (§6.4). |
+| `saveResume` | `media?`, `at?`, `chapter?` | *(Level 3)* Save the resume point (§6.5). |
+| `clearResume` | — | *(Level 3)* Forget the resume point (§6.5). |
 | `seek` | `at` or `chapter` | *(Level 2)* During playback, continue the title elsewhere on its timeline (§6.3). |
-| `timer` | `after`, `action` | *(Level 2)* Start the navigation timer (§6.7). |
-| `cancelTimer` | — | *(Level 2)* Stop the navigation timer (§6.7). |
-| `requestParental` | `level`, `then`, `else?` | *(Level 2)* Ask the player to allow a parental level for now (§6.8). |
+| `timer` | `after`, `action` | *(Level 3)* Start the navigation timer (§6.7). |
+| `cancelTimer` | — | *(Level 3)* Stop the navigation timer (§6.7). |
+| `requestParental` | `level`, `then`, `else?` | *(Level 3)* Ask the player to allow a parental level for now (§6.8). |
 | `exit` | — | *(Level 2)* Leave the title, from a menu or during playback, as the player's own Stop would (a disc's Exit). The player closes the title; one that can't starts it again. |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a `playAll`, its `after`). When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
@@ -280,12 +281,18 @@ Every action is an object with a `type`:
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu (unless the player honours a `skipIntro` prohibition, §6.6). Hover is ignored.
 
-### 6.1 Variables and logic (Level 2)
+### 6.1 Variables and logic (Level 3)
 
 DVDs keep state in registers and decide with small command programs: which soundtrack was chosen,
 whether the film was started, the viewer's preferred language, which button to highlight. Open Video
-Menu expresses the same logic as **data, not scripts**: variables, player state, conditions and a
-few actions. It works on any media, not only discs, and the fallback list still works everywhere.
+Menu writes the same logic as **JSON data**: variables, player state, conditions and a few actions,
+which any player can read and any tool can inspect, with no scripting language. With named actions
+(§6.4) that logic can loop, as a disc's programs do, so it is a small program all the same: the step
+budget there keeps it from running without end. It works on any media, not only discs, and the
+fallback list still works everywhere.
+
+This section and §6.4–§6.8 are **Level 3**: the program state a player keeps. Everything else marked
+Level 2 a player shows or plays from the manifest as written.
 
 ```json
 "vars": { "audio": 1, "played": 0, "lang": "en" },
@@ -351,8 +358,8 @@ title starts.
 **Focus from a variable.** A menu's `defaultButton` and a `goto`'s `button` MAY be `{"var": name}`
 holding a button id. When it doesn't name a button of that menu, the usual default applies.
 
-**Choosing tracks.** `play` and `playAll` items MAY have `audio` and `subtitle`, each a number or
-`{"var": name}`:
+**Choosing tracks** *(Level 2; from a variable, Level 3)*. `play` and `playAll` items MAY have `audio`
+and `subtitle`, each a number or `{"var": name}`:
 - `audio: N` plays the Nth audio track of the media (1-based); `subtitle: N` shows the Nth subtitle
   track; `subtitle: 0` turns subtitles off.
 - Without them, playback uses the current `@audio` and `@subtitle` when known, otherwise the player's
@@ -363,9 +370,9 @@ holding a button id. When it doesn't name a button of that menu, the usual defau
 `seed = (seed × 1103515245 + 12345) mod 2³¹`, result `1 + seed mod value`, so conformance cases can
 check it; players seed it unpredictably.
 
-**Players without Level 2** ignore these fields: menus open with their plain `defaultButton`, media play
-with default tracks, and `set`/`if`/`do` do nothing. Authors who need Level 1 players to work should keep
-important paths free of logic.
+**Players without Level 3** ignore these fields: menus open with their plain `defaultButton`, media play
+with their own or default tracks, and `set`/`if`/`do` do nothing. Menus that need logic to work say so
+with the manifest's `level` (§10), and players below it show the fallback list instead.
 
 ### 6.2 The remote's Back key
 
@@ -431,7 +438,7 @@ icon some discs show in certain scenes that branches to a featurette and back.
     seeks: point cues on the way don't run, overlays follow the position. Like a link, it ends a `do`.
     `seek` only works during playback: validators reject it in menus' buttons, `back`, `timeout`,
     `firstPlay` and `after`.
-  - **Setting `@audio`, `@subtitle` or `@angle`** changes that track of the playback in progress now, as
+  - *(Level 3)* **Setting `@audio`, `@subtitle` or `@angle`** changes that track of the playback in progress now, as
     well as for the next playback (a disc's SetSTN in a cell command, or a commentary button over the
     film). The navigator emits `{ "type": "tracks", audio?, subtitle?, angle?, at }`; players SHOULD
     switch in place and MAY restart the title where it is with the new tracks.
@@ -459,7 +466,7 @@ icon some discs show in certain scenes that branches to a featurette and back.
   that can't draw over its video SHOULD still run point cues; without Level 2, cues are ignored and
   `end` plays to the end of the media.
 
-### 6.4 Named actions (Level 2)
+### 6.4 Named actions (Level 3)
 
 A disc's programs are shared: many buttons lead into the same title-start logic, the same dispatcher,
 the same end-of-episode check. Written out at every use, such logic multiplies along play-alls and
@@ -486,9 +493,9 @@ resume points until a manifest is megabytes long. Named actions write it once:
 - Named actions are shared by every menu, so they MUST NOT contain `activate` (which presses a button of
   one menu). Where a named action may run is checked through it: run from a cue, it must not start
   playback with `after` (§6.3), and a play's `after` must not come to another playback through it.
-- Players without Level 2 ignore `run`, as they do `set`, `if` and `do`.
+- Players without Level 3 ignore `run`, as they do `set`, `if` and `do`.
 
-### 6.5 The resume point (Level 2)
+### 6.5 The resume point (Level 3)
 
 There is one resume point: the playback `resume` continues. Stopping playback early saves it, and so
 does a cue that leaves playback for a menu. It holds the whole playback (the item, what was queued after
@@ -564,7 +571,7 @@ film.
   player that chooses to honour the matching prohibition MAY withhold it and still conforms. The
   conformance cases describe the default, a player that honours none.
 
-### 6.7 Time: the navigation timer and counters (Level 2)
+### 6.7 Time: the navigation timer and counters (Level 3)
 
 A disc can set a timer that jumps somewhere when it runs out, whatever is showing (SetNVTMR: "the film
 starts in ten seconds" over a title made of stills), and keep registers that count seconds by
@@ -593,7 +600,7 @@ themselves.
   when it runs out, with the playback position during playback. A report after the timer was replaced or
   stopped is ignored.
 
-### 6.8 Parental level requests (Level 2)
+### 6.8 Parental level requests (Level 3)
 
 A disc can ask the player to allow a higher parental level for a while (SetTmpPML), for example before
 an uncut version, and take another path when the player won't.
@@ -651,7 +658,20 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 | Level | A player must support |
 |---|---|
 | **0: Basic** | The fallback list and playback. |
-| **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6), button sets (§5.3), the navigation timer and counters (§6.7), parental level requests (§6.8). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **1: Menus** | Canvases and aspect, still backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, the actions `play`, `playAll`, `goto`, `back`, `resume` and `activate`, a menu's `back`, and the navigation semantics. |
+| **2: Enhanced** | What a player shows and plays from the manifest as written: motion backgrounds, menu audio, `buttonsAt`, transitions and skipping (§5.1), menu timeouts (§5.2), button sets (§5.3), angles (§4.1), segments (§4.2), track numbers on play items (§6.1), cues and buttons during playback, `end`, `seek` and holds (§6.3), menu keys (§6.6), `playAll` order and `exit` (§6). Prohibitions and `altRects` are information players MAY use. |
+| **3: Disc logic** | Program state: variables, player state, conditions and logic, and focus and tracks from variables (§6.1); live track changes (§6.3); named actions (§6.4); the resume point (§6.5); the navigation timer and counters (§6.7); parental level requests (§6.8). Menus per language are separate menus chosen with `@menuLanguage`. |
+
+Each level includes the ones below it. Players without a level ignore its fields and actions; a manifest
+says the level its menus need with `level`:
+
+- **`level`** is the lowest level at which the menus work as authored. Writers SHOULD give it when
+  the menus need Level 2 or 3. Menus whose Level 2 features only enrich them (a motion background with
+  a still poster) MAY declare a lower level; a translated disc, where nearly every button runs logic,
+  declares 3.
+- **A player below a manifest's `level`** SHOULD show the fallback list rather than menus that would
+  only partly work. It MAY offer the menus anyway. Without `level`, players try the menus.
+- Validators warn when `level` is lower than the level the manifest uses, or absent when it uses
+  Level 3. `openvideomenu validate` shows the level each manifest uses.
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

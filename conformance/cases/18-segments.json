@@ -1,10 +1,11 @@
 {
   "description": "Level 2 segments: a media made of pieces of other media plays as one title with its own timeline. Its chapters start playback on that timeline, a stop is remembered there for resume and @lastChapter, its cues are listed for it (not its segments' media), and a play's angle applies when a segment's media has angles.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Segments" },
     "vars": { "done": 0 },
     "media": {

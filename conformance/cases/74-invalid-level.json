@@ -1,0 +1,16 @@
+{
+  "description": "A manifest's level is 0, 1, 2 or 3.",
+  "level": 1,
+  "valid": false,
+  "errors": ["/level"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 5,
+    "title": { "name": "Off The Scale" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": { "main": { "canvas": { "width": 1280, "height": 720 }, "buttons": [{ "id": "play", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature" } }] } },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

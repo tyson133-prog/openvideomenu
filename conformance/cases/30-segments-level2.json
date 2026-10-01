@@ -1,0 +1,165 @@
+{
+  "description": "Level 2 segments without logic: a media made of pieces of other media plays as one title with its own timeline. Its chapters start playback on that timeline, a stop there is remembered for resume, its cues are its own (not its segments' media's), and a play's angle applies to segments whose media have angles.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Segments"
+    },
+    "media": {
+      "film": {
+        "ref": "Film.mkv",
+        "chapters": [
+          {
+            "time": 0
+          },
+          {
+            "time": 600
+          }
+        ],
+        "cues": [
+          {
+            "at": 30,
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      },
+      "scenes": {
+        "ref": "Scenes (angle 1).mkv",
+        "angles": [
+          "Scenes (angle 2).mkv"
+        ]
+      },
+      "extended": {
+        "label": "Extended cut",
+        "segments": [
+          {
+            "media": "film",
+            "end": 3120
+          },
+          {
+            "media": "scenes",
+            "start": 10,
+            "end": 105
+          },
+          {
+            "media": "film",
+            "start": 3120
+          }
+        ],
+        "chapters": [
+          {
+            "time": 0
+          },
+          {
+            "time": 3120
+          },
+          {
+            "time": 3215
+          }
+        ],
+        "cues": [
+          {
+            "at": 3150,
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "cut",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "scene"
+            },
+            "action": {
+              "type": "play",
+              "media": "extended"
+            }
+          },
+          {
+            "id": "scene",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "cut",
+              "down": "resume"
+            },
+            "action": {
+              "type": "play",
+              "media": "extended",
+              "chapter": 2,
+              "angle": 2
+            }
+          },
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              110,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "scene"
+            },
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Extended",
+            "action": {
+              "type": "play",
+              "media": "extended"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"cut","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"cut"},{"type":"play","media":"extended","start":0,"angle":1,"cues":[{"id":"media/0","at":3150}]}]}},
+    {"event":{"type":"stopped","position":100},"expect":{"mode":"menu","menu":"main","focus":"cut","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"scene","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"scene"},{"type":"play","media":"extended","start":3120,"angle":2,"cues":[{"id":"media/0","at":3150}]}]}},
+    {"event":{"type":"stopped","position":3300},"expect":{"mode":"menu","menu":"main","focus":"scene","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"resume","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"resume"},{"type":"play","media":"extended","start":3300,"angle":1,"cues":[{"id":"media/0","at":3150}]}]}},
+    {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"menu","menu":"main","focus":"cut","effects":[]}}
+  ]
+}

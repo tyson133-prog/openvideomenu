@@ -1,6 +1,6 @@
 {
   "description": "Invalid logic: a variable named like player state, setting read-only player state, arithmetic on text, a condition with two comparisons, lt on text, comparing an integer with text, an undeclared variable, an empty do, a focus variable holding an integer, and if in a fallback item.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": [
     "/vars/@mine",

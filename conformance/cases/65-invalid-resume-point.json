@@ -1,6 +1,6 @@
 {
   "description": "The resume point: resumePoint is untilEnd or untilUsed; saveResume names media that exists, a chapter it has, at or chapter but not both; @resumeMedia is read-only; fallback items can't save or clear it.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": ["/resumePoint", "/menus/main/buttons/0/action/media", "/menus/main/buttons/1/action/chapter", "/menus/main/buttons/2/action/at", "/menus/main/buttons/3/action/var", "/fallback/0/items/1/action/type"],
   "manifest": {

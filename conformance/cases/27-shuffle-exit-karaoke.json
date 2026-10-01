@@ -1,10 +1,11 @@
 {
   "description": "Smaller disc features: a playAll in shuffled order (every item once) or random order (count items picked at random), both drawn from the seeded generator; a writable @karaoke (a disc's karaoke mixing bits, which players may apply); exit, which leaves the title from a menu or from a cue during playback (a disc's Exit); and altRects, a button's place in the source's letterbox and pan-scan layouts, which is information for players.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": {
       "name": "Odds and Ends"
     },

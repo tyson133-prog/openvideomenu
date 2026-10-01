@@ -1,10 +1,11 @@
 {
   "description": "Named actions: logic written once and run from many places, as a disc's programs are shared. A named action may run itself (a disc's loop), and runs as if written in place: from firstPlay, a button, or a play's after. One event runs at most 10,000 actions; a loop that never ends stops there with budgetExceeded, leaving the viewer where they were.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Shared Logic" },
     "media": {
       "e1": { "ref": "Episode 1.mkv", "kind": "episode" },

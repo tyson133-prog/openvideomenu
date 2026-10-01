@@ -1,6 +1,6 @@
 # DVD import profile (early draft)
 
-This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. Level 1 rows give menus every player shows. Level 2 rows cover the rest of the disc's navigation model: motion menus and timeouts, the disc's programs (registers, conditions, named actions for shared programs), its resume point, remote keys and prohibitions, angles, segments, and what happens during playback (cues, seeks, track changes, still cells). An importer that translates the disc's programs, rather than simulating them, can write each PGC's commands once as named actions.
+This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. Level 1 rows give menus every player shows. Level 2 rows cover what a player shows and plays as written: motion menus and timeouts, button sets, angles, segments, remote keys, and what happens during playback (cues, seeks, still cells). Level 3 rows cover the disc's programs: registers, conditions, named actions for shared programs, the resume point, live track changes, the navigation timer, counters and parental requests. An importer that translates the disc's programs, rather than simulating them, can write each PGC's commands once as named actions.
 
 ## What to export
 
@@ -8,6 +8,10 @@ An importer that exports a disc's menus SHOULD export the whole disc: every titl
 reach, all audio and subtitle tracks, and the complete logic, so the menus behave as the disc does.
 Partial exports (only some titles, simplified logic) are valid manifests; how faithful to be is the
 importer's choice.
+
+An export with the disc's logic declares `"level": 3`, so players without Level 3 show its fallback list
+instead of menus whose buttons would do nothing. An export kept free of logic declares the level it uses
+(`openvideomenu validate` shows it).
 
 ## Mapping
 

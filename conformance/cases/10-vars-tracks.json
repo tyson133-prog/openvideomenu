@@ -1,10 +1,11 @@
 {
   "description": "Level 2 (variables and track selection): a Languages-style menu sets variables and returns; later plays pick their audio/subtitle tracks from those variables, while literal track numbers stay fixed. Variables reset on start.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Tracks" },
     "vars": { "audio": 1, "subs": 0 },
     "media": { "feature": { "ref": "Tracks.mp4", "chapters": [{ "time": 0 }, { "time": 120 }] } },

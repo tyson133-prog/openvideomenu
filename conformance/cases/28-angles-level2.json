@@ -1,0 +1,141 @@
+{
+  "description": "Level 2 angles without logic: media with angle files and with angle video tracks. Playback uses the item's angle, otherwise @angle as the player reports it (default 1); media without angles gets no angle in the play effect.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Angles"
+    },
+    "media": {
+      "feature": {
+        "ref": "Film.mkv",
+        "angles": [
+          "Film (angle 2).mkv",
+          "Film (angle 3).mkv"
+        ]
+      },
+      "sing": {
+        "ref": "Songs.mkv",
+        "angleTracks": 2
+      },
+      "extra": {
+        "ref": "Extra.mkv"
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "p1",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "p3"
+            },
+            "action": {
+              "type": "play",
+              "media": "feature"
+            }
+          },
+          {
+            "id": "p3",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "p1",
+              "down": "lyrics"
+            },
+            "action": {
+              "type": "play",
+              "media": "feature",
+              "angle": 3
+            }
+          },
+          {
+            "id": "lyrics",
+            "rect": [
+              100,
+              110,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "p3",
+              "down": "extra"
+            },
+            "action": {
+              "type": "play",
+              "media": "sing",
+              "angle": 2
+            }
+          },
+          {
+            "id": "extra",
+            "rect": [
+              100,
+              160,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "lyrics"
+            },
+            "action": {
+              "type": "play",
+              "media": "extra"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "feature"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"p1","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"p1"},{"type":"play","media":"feature","start":0,"angle":1}]}},
+    {"event":{"type":"stopped","position":10},"expect":{"mode":"menu","menu":"main","focus":"p1","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"p3","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"p3"},{"type":"play","media":"feature","start":0,"angle":3}]}},
+    {"event":{"type":"stopped","position":20},"expect":{"mode":"menu","menu":"main","focus":"p3","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"lyrics","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"lyrics"},{"type":"play","media":"sing","start":0,"angle":2}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"main","focus":"lyrics","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"extra","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"extra"},{"type":"play","media":"extra","start":0}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"main","focus":"extra","effects":[]}},
+    {"event":{"type":"player","values":{"@angle":2}},"expect":{"mode":"menu","menu":"main","focus":"extra","effects":[]}},
+    {"event":{"type":"press","key":"up"},"expect":{"mode":"menu","menu":"main","focus":"lyrics","effects":[]}},
+    {"event":{"type":"press","key":"up"},"expect":{"mode":"menu","menu":"main","focus":"p3","effects":[]}},
+    {"event":{"type":"press","key":"up"},"expect":{"mode":"menu","menu":"main","focus":"p1","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"p1"},{"type":"play","media":"feature","start":0,"angle":2}]}}
+  ]
+}

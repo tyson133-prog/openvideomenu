@@ -1,10 +1,11 @@
 {
   "description": "Level 2 logic layer: player state (@audioLanguage from the player, @audio set like a DVD's SetSTN, @lastChapter from where playback stopped, @region unset), if/else, do stopping after its first navigating step, set with add and a seeded random (seed 42 gives 1 for 1..3, then 265 for 1..1000), div truncating toward zero, mod keeping the dividend's sign, div by 0 leaving the variable unchanged, xor, all/any/not/has conditions, and a menu's focus from a text variable.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Logic" },
     "vars": { "sel": "a2", "count": 0, "flags": 5, "pick": 0, "n": 0, "m": 0, "x": 6 },
     "media": { "feature": { "ref": "Film.mkv", "chapters": [{ "time": 0 }, { "time": 100 }, { "time": 200 }] } },

@@ -1,10 +1,11 @@
 {
   "description": "Level 2 cues during playback: a point cue setting a variable, an overlay whose buttons take the arrows and Enter while it shows (one branches out to a featurette that returns to the film at the overlay's end, also when stopped with Back), overlay end and re-entry, a cue opening a menu (the film is remembered there for resume), and a play item with end and its own cue.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Cues" },
     "vars": { "seen": 0, "picked": 0 },
     "media": {

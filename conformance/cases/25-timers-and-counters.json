@@ -1,10 +1,11 @@
 {
   "description": "The navigation timer and counters, read against the player's clock (events' time). A timer action runs after its time wherever the viewer is: in menus as a step up, during playback like a cue's action at the position reported (leaving for a menu remembers it for resume). A new timer replaces the old; cancelTimer stops it, and a late report is ignored. @navTimer reads the seconds left. A counter (a disc's register in counter mode) reads as its value plus the whole seconds since it was last set.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Timers" },
     "vars": { "elapsed": 0 },
     "counters": ["elapsed"],

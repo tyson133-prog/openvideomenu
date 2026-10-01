@@ -42,26 +42,32 @@ public sealed partial class Manifest
     /// <summary>The plain list every player can show. At least one visible group.</summary>
     public List<FallbackGroup> Fallback { get; set; } = [];
 
-    /// <summary>Level 2: the manifest's own variables and their starting values (integer or text; a variable keeps its type).</summary>
+    /// <summary>Level 3: the manifest's own variables and their starting values (integer or text; a variable keeps its type).</summary>
     public Dictionary<string, Scalar>? Vars { get; set; }
 
     /// <summary>
-    /// Level 2: named actions, run from anywhere with <see cref="RunAction"/>, so logic many buttons
+    /// Level 3: named actions, run from anywhere with <see cref="RunAction"/>, so logic many buttons
     /// share (a disc's PGC entry, a dispatcher, an episode's end) is written once (spec §6.4).
     /// </summary>
     public Dictionary<string, MenuAction>? Actions { get; set; }
 
     /// <summary>
-    /// Level 2: how long the resume point lasts (spec §6.5): "untilEnd" (default), until that playback
+    /// Level 3: how long the resume point lasts (spec §6.5): "untilEnd" (default), until that playback
     /// completes; "untilUsed", like a disc's, until a resume uses it or it's replaced or cleared.
     /// </summary>
     public string? ResumePoint { get; set; }
+
+    /// <summary>
+    /// The lowest conformance level at which the menus work as authored (spec §10): 0–3. A player below
+    /// it shows the fallback list. Null: players try the menus. See <see cref="LevelUsed"/>.
+    /// </summary>
+    public int? Level { get; set; }
 
     /// <summary>Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6).</summary>
     public MenuKeys? Keys { get; set; }
 
     /// <summary>
-    /// Level 2: integer variables of <see cref="Vars"/> that count seconds by themselves, like a disc's
+    /// Level 3: integer variables of <see cref="Vars"/> that count seconds by themselves, like a disc's
     /// registers in counter mode (spec §6.7).
     /// </summary>
     public List<string>? Counters { get; set; }
@@ -206,7 +212,7 @@ public sealed class Menu
 
     public string? Label { get; set; }
 
-    /// <summary>The button focused on entry: an id, or (Level 2) a variable holding one.</summary>
+    /// <summary>The button focused on entry: an id, or (Level 3) a variable holding one.</summary>
     public ButtonRef? DefaultButton { get; set; }
 
     /// <summary>When true, a missing nav direction moves to the nearest button that way.</summary>
@@ -532,7 +538,7 @@ public sealed class FallbackItem
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }
 
-/// <summary>A number, or the current value of a variable (Level 2).</summary>
+/// <summary>A number (Level 2), or the current value of a variable (Level 3).</summary>
 /// <summary>
 /// Level 2 (spec §6.3): playback stops on the frame at <see cref="At"/> seconds and stays there for
 /// <see cref="For"/>: a number of seconds, or until the viewer goes on. A disc's still cell, a photo

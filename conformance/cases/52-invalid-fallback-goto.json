@@ -1,6 +1,6 @@
 {
   "description": "Invalid: fallback items must play something, because Level 0 players have no menus to go to.",
-  "level": 0,
+  "level": 1,
   "valid": false,
   "schemaValid": false,
   "errors": ["/fallback/0/items/0/action/type"],

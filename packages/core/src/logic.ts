@@ -1,5 +1,5 @@
 /**
- * The logic layer (Level 2): values, player-state variables, conditions and set operations.
+ * The logic layer (Level 3): values, player-state variables, conditions and set operations.
  * Data only: every manifest stays JSON that any player can read; this is how the navigator evaluates it.
  */
 import type { Scalar, SetOp, Test, Value } from "./types.js";
@@ -52,11 +52,11 @@ export interface LogicState {
   seed: number;
   /** The resume point, read as @resumeMedia. */
   lastStop?: { media: string };
-  /** Level 2: the player's clock (seconds) at the latest event that gave one; counters and @navTimer use it. */
+  /** Level 3: the player's clock (seconds) at the latest event that gave one; counters and @navTimer use it. */
   now?: number;
-  /** Level 2: counter variables, and the time each was last set. */
+  /** Level 3: counter variables, and the time each was last set. */
   counters?: Record<string, number>;
-  /** Level 2: when the navigation timer runs out, read as @navTimer. */
+  /** Level 3: when the navigation timer runs out, read as @navTimer. */
   navTimer?: { ends?: number };
 }
 

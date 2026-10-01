@@ -1,4 +1,5 @@
 import { FORMAT_ID, FORMAT_VERSION, isFormatId } from "./constants.js";
+import { levelUsed } from "./levels.js";
 import { MENU_KEYS, PLAYER_VARS, PROHIBITIONS, SET_OPS, TEST_OPS } from "./logic.js";
 import type { Action, Manifest, Menu, PlayItem } from "./types.js";
 
@@ -18,7 +19,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -152,6 +153,19 @@ class Validator {
     for (const [name, body] of this.named) this.namedAction(name, body, mediaIds, menus);
 
     this.fallback(data.fallback, mediaIds, menus);
+    this.level(data);
+  }
+
+  /** The level the menus need (spec §10), against the level they use. */
+  private level(data: Record<string, unknown>) {
+    const used = levelUsed(data);
+    if (data.level !== undefined) {
+      if (!(Number.isInteger(data.level) && (data.level as number) >= 0 && (data.level as number) <= 3)) this.error("/level", "Must be a level from 0 to 3.");
+      else if ((data.level as number) < used)
+        this.warn("/level", `The menus use Level ${used}; a player at Level ${String(data.level)} would show them without what they need. Declare "level": ${used}.`);
+    } else if (used === 3) {
+      this.warn("/level", 'The menus use Level 3 (disc logic): declare "level": 3, so players below it show the fallback list.');
+    }
   }
 
   /** Declared variables and their types (a variable keeps the type of its starting value). */
@@ -166,14 +180,14 @@ class Validator {
   /** Above 0 while checking named actions, which may run during playback wherever they're run from. */
   private namedDepth = 0;
 
-  /** Level 2: the manifest's named actions, by name. */
+  /** Level 3: the manifest's named actions, by name. */
   private named = new Map<string, unknown>();
 
   /** Named actions that start playback with an `after` (also through other named actions): not for cues. */
   private playsWithAfter = new Set<string>();
 
   /**
-   * Level 2: note every named action, and which of them start playback with an `after` when run
+   * Level 3: note every named action, and which of them start playback with an `after` when run
    * (directly or through the named actions they run), before any action that may run them is checked.
    */
   private collectActions(value: unknown) {

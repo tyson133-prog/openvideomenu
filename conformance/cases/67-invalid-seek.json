@@ -1,6 +1,6 @@
 {
   "description": "seek moves the playback in progress, so it belongs in cues, overlays and keys that run during playback (and named actions, which may run there); it needs at or chapter, not both.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": ["/menus/main/buttons/0/action/type", "/media/feature/cues/0/action/at", "/media/feature/cues/1/action", "/media/feature/cues/2/action/chapter"],
   "manifest": {

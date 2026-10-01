@@ -91,7 +91,7 @@ public sealed class GotoAction : MenuAction
 
     public string Menu { get; set; } = "";
 
-    /// <summary>The button to focus: an id, or (Level 2) a variable holding one.</summary>
+    /// <summary>The button to focus: an id, or (Level 3) a variable holding one.</summary>
     public ButtonRef? Button { get; set; }
 
     /// <summary>Clip played before the menu opens (skippable).</summary>
@@ -128,7 +128,7 @@ public sealed class ActivateAction : MenuAction
 }
 
 /// <summary>
-/// Level 2: change a variable (or writable player state: @audio, @subtitle, @angle, @focus), then
+/// Level 3: change a variable (or writable player state: @audio, @subtitle, @angle, @focus), then
 /// optionally run another action.
 /// </summary>
 public sealed class SetAction : MenuAction
@@ -145,7 +145,7 @@ public sealed class SetAction : MenuAction
     public MenuAction? Then { get; set; }
 }
 
-/// <summary>Level 2: run <see cref="Then"/> or <see cref="Else"/> depending on a condition.</summary>
+/// <summary>Level 3: run <see cref="Then"/> or <see cref="Else"/> depending on a condition.</summary>
 public sealed class IfAction : MenuAction
 {
     public override string Type => "if";
@@ -157,7 +157,7 @@ public sealed class IfAction : MenuAction
     public MenuAction? Else { get; set; }
 }
 
-/// <summary>Level 2: run a named action from <see cref="Manifest.Actions"/>, as if it were written here.</summary>
+/// <summary>Level 3: run a named action from <see cref="Manifest.Actions"/>, as if it were written here.</summary>
 public sealed class RunAction : MenuAction
 {
     public override string Type => "run";
@@ -167,7 +167,7 @@ public sealed class RunAction : MenuAction
 }
 
 /// <summary>
-/// Level 2: save the resume point (spec §6.5): <see cref="Media"/> from <see cref="Chapter"/> or
+/// Level 3: save the resume point (spec §6.5): <see cref="Media"/> from <see cref="Chapter"/> or
 /// <see cref="At"/> seconds; without a media, the playback in progress at <see cref="At"/> (default:
 /// the cue's time), like a disc's CallSS naming its resume cell.
 /// </summary>
@@ -197,7 +197,7 @@ public sealed class SeekAction : MenuAction
 }
 
 /// <summary>
-/// Level 2: start the navigation timer (spec §6.7): <see cref="Action"/> runs after <see cref="After"/>
+/// Level 3: start the navigation timer (spec §6.7): <see cref="Action"/> runs after <see cref="After"/>
 /// seconds, wherever the viewer is (a disc's SetNVTMR). One timer: a new one replaces it.
 /// </summary>
 public sealed class TimerAction : MenuAction
@@ -209,14 +209,14 @@ public sealed class TimerAction : MenuAction
     public MenuAction Action { get; set; } = new BackAction();
 }
 
-/// <summary>Level 2: stop the navigation timer.</summary>
+/// <summary>Level 3: stop the navigation timer.</summary>
 public sealed class CancelTimerAction : MenuAction
 {
     public override string Type => "cancelTimer";
 }
 
 /// <summary>
-/// Level 2: ask the player to allow parental level <see cref="Level"/> for now (a disc's SetTmpPML):
+/// Level 3: ask the player to allow parental level <see cref="Level"/> for now (a disc's SetTmpPML):
 /// <see cref="Then"/> runs if it does (and @parentalLevel becomes the level), <see cref="Else"/> if not.
 /// </summary>
 public sealed class RequestParentalAction : MenuAction
@@ -236,13 +236,13 @@ public sealed class ExitAction : MenuAction
     public override string Type => "exit";
 }
 
-/// <summary>Level 2: forget the resume point.</summary>
+/// <summary>Level 3: forget the resume point.</summary>
 public sealed class ClearResumeAction : MenuAction
 {
     public override string Type => "clearResume";
 }
 
-/// <summary>Level 2: run actions in order, stopping after the first that navigates.</summary>
+/// <summary>Level 3: run actions in order, stopping after the first that navigates.</summary>
 public sealed class DoAction : MenuAction
 {
     public override string Type => "do";

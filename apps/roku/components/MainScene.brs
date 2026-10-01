@@ -23,7 +23,7 @@ sub init()
     m.showRows.observeField("rowItemSelected", "onShowTileChosen")
 
     ' While a title plays, tell the server where we are, as its own apps do (~every 10 s).
-    ' Level 2: the navigation timer (spec 6.7).
+    ' Level 3: the navigation timer (spec 6.7).
     m.navTimer = CreateObject("roSGNode", "Timer")
     m.navTimer.repeat = false
     m.navTimer.observeField("fire", "onNavTimer")
@@ -1050,7 +1050,7 @@ sub cueClockAdvance(clock as object, last as dynamic, position as dynamic, playe
     end if
 end sub
 
-' Level 2: the menus start or stop the navigation timer.
+' Level 3: the menus start or stop the navigation timer.
 sub onNavTimerRequest()
     request = m.menu.navTimerRequest
     m.navTimer.control = "stop"

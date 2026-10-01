@@ -1,6 +1,6 @@
 {
   "description": "Forward compatibility: a manifest from a newer minor version with fields this reader doesn't know is still valid. Unknown fields are ignored (warnings only) and the menu works.",
-  "level": 0,
+  "level": 1,
   "valid": true,
   "schemaValid": true,
   "warnings": ["/version", "/menus/main/buttons/0/sparkle", "/menus/main/loopVideo"],

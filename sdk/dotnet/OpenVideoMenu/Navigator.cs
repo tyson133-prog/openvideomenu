@@ -38,7 +38,7 @@ public enum Key
 public abstract record NavEvent
 {
     /// <summary>
-    /// Level 2: the player's clock in seconds (any origin, never going back), which counters and the
+    /// Level 3: the player's clock in seconds (any origin, never going back), which counters and the
     /// navigation timer read (spec §6.7). Any event may carry it.
     /// </summary>
     public double? Time { get; init; }
@@ -95,12 +95,12 @@ public abstract record NavEvent
     public sealed record ButtonSetChanged(int? Index) : NavEvent;
 
     /// <summary>
-    /// Level 2: the navigation timer a StartNavTimer effect asked for ran out. During playback, players
+    /// Level 3: the navigation timer a StartNavTimer effect asked for ran out. During playback, players
     /// pass the <paramref name="Position"/>, as with a menu key.
     /// </summary>
     public sealed record NavTimer(double? Position = null) : NavEvent;
 
-    /// <summary>Level 2: the answer to an AskParental effect: whether the viewer (or the player's settings) allowed it.</summary>
+    /// <summary>Level 3: the answer to an AskParental effect: whether the viewer (or the player's settings) allowed it.</summary>
     public sealed record Parental(bool Granted) : NavEvent;
 }
 
@@ -158,17 +158,17 @@ public abstract record Effect
     public sealed record StartTimer(string Menu, double After) : Effect;
 
     /// <summary>
-    /// Level 2: (re)start the navigation timer: report <see cref="NavEvent.NavTimer"/> after
+    /// Level 3: (re)start the navigation timer: report <see cref="NavEvent.NavTimer"/> after
     /// <paramref name="After"/> seconds wherever the viewer is, unless another StartNavTimer replaces it
     /// or CancelNavTimer stops it (spec §6.7).
     /// </summary>
     public sealed record StartNavTimer(double After) : Effect;
 
-    /// <summary>Level 2: stop the navigation timer.</summary>
+    /// <summary>Level 3: stop the navigation timer.</summary>
     public sealed record CancelNavTimer : Effect;
 
     /// <summary>
-    /// Level 2: a requestParental action asks for parental level <paramref name="Level"/> (spec §6.8):
+    /// Level 3: a requestParental action asks for parental level <paramref name="Level"/> (spec §6.8):
     /// answer with <see cref="NavEvent.Parental"/>, at once from the player's settings or after asking.
     /// </summary>
     public sealed record AskParental(int Level) : Effect;
@@ -180,14 +180,14 @@ public abstract record Effect
     public sealed record Seek(double Position) : Effect;
 
     /// <summary>
-    /// Level 2: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
+    /// Level 3: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
     /// @angle during playback, a disc's SetSTN in a cell command): apply it now, from where playback is
     /// (<paramref name="At"/>, the cue's time, when the player doesn't know better).
     /// </summary>
     public sealed record Tracks(double At, int? Audio = null, int? Subtitle = null, int? Angle = null) : Effect;
 
     /// <summary>
-    /// Level 2: one event ran <see cref="Navigator.StepBudget"/> actions (a named action running itself
+    /// Level 3: one event ran <see cref="Navigator.StepBudget"/> actions (a named action running itself
     /// without end); the rest were dropped. For diagnostics: players carry on with the state as it is.
     /// </summary>
     public sealed record BudgetExceeded : Effect;
@@ -224,10 +224,10 @@ public sealed record OverlayFocus(string Cue, string Focus);
 /// </summary>
 public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null);
 
-/// <summary>Level 2: a parental level request waiting for an answer, and how its branches run.</summary>
+/// <summary>Level 3: a parental level request waiting for an answer, and how its branches run.</summary>
 public sealed record ParentalRequest(int Level, MenuAction Then, MenuAction? Else, bool PushHistory, bool Up, double? CueAt);
 
-/// <summary>Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known).</summary>
+/// <summary>Level 3: the navigation timer: what it runs, and when it runs out (when the clock is known).</summary>
 public sealed record NavTimerState(MenuAction Action, double? Ends);
 
 /// <summary>Navigation state. Treat as a value: <see cref="Navigator.Step"/> returns a new one.</summary>
@@ -265,22 +265,22 @@ public sealed record NavState
     /// <summary>Level 2: a button asked for on entering the menu that only one of its button sets has.</summary>
     public string? FocusWanted { get; init; }
 
-    /// <summary>Level 2: the player's clock at the latest event that gave one (spec §6.7).</summary>
+    /// <summary>Level 3: the player's clock at the latest event that gave one (spec §6.7).</summary>
     public double? Now { get; init; }
 
-    /// <summary>Level 2: counter variables, and the time each was last set.</summary>
+    /// <summary>Level 3: counter variables, and the time each was last set.</summary>
     public IReadOnlyDictionary<string, double>? Counters { get; init; }
 
-    /// <summary>Level 2: the navigation timer, if one runs.</summary>
+    /// <summary>Level 3: the navigation timer, if one runs.</summary>
     public NavTimerState? NavTimer { get; init; }
 
-    /// <summary>Level 2: a parental level request waiting for the player's answer.</summary>
+    /// <summary>Level 3: a parental level request waiting for the player's answer.</summary>
     public ParentalRequest? Parental { get; init; }
 
     /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
     public LastStop? LastStop { get; init; }
 
-    /// <summary>Level 2: variable values for this session.</summary>
+    /// <summary>Level 3: variable values for this session.</summary>
     public IReadOnlyDictionary<string, Scalar> Vars { get; init; } = new Dictionary<string, Scalar>();
 
     /// <summary>Level 2: player state ("@audio", "@audioLanguage", …) as reported by the player or changed by set.</summary>
@@ -295,7 +295,7 @@ public sealed record NavState
 
 public static class Navigator
 {
-    /// <summary>Level 2: the most actions one event runs (spec §6.4), so a named action that runs itself still ends.</summary>
+    /// <summary>Level 3: the most actions one event runs (spec §6.4), so a named action that runs itself still ends.</summary>
     public const int StepBudget = 10_000;
 
     /// <summary>Advance <paramref name="state"/> by one event. Pure: the input state isn't changed.</summary>
@@ -314,7 +314,7 @@ public static class Navigator
                 s.History.Clear();
                 s.Playing = null;
                 s.Vars = new Dictionary<string, Scalar>(manifest.Vars ?? []);
-                // Level 2: counters start counting now; the navigation timer starts stopped.
+                // Level 3: counters start counting now; the navigation timer starts stopped.
                 s.Counters = manifest.Counters is { Count: > 0 } counters ? counters.Distinct().ToDictionary(c => c, _ => s.Now ?? 0) : null;
                 s.NavTimer = null;
                 foreach (var (k, v) in start.Player ?? new Dictionary<string, Scalar>())
@@ -467,7 +467,7 @@ public static class Navigator
 
             case NavEvent.Parental answer:
             {
-                // Level 2: the answer to a requestParental; its branch runs as the request would have.
+                // Level 3: the answer to a requestParental; its branch runs as the request would have.
                 if (s.Parental is not { } ask)
                 {
                     break;
@@ -497,7 +497,7 @@ public static class Navigator
 
             case NavEvent.NavTimer navTimer:
             {
-                // Level 2: the navigation timer ran out. Nobody chose this: in menus it runs as a step up,
+                // Level 3: the navigation timer ran out. Nobody chose this: in menus it runs as a step up,
                 // like a timeout; during playback, like a cue's action where playback is.
                 if (s.NavTimer is not { } timer)
                 {
@@ -1266,7 +1266,7 @@ public static class Navigator
     }
 
     /// <summary>
-    /// Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a
+    /// Level 3: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a
     /// cell command or a button over the film), not only to the next playback.
     /// </summary>
     private static void LiveTrack(Manifest manifest, Working s, string name, Scalar value, double at, List<Effect> effects)
@@ -1467,7 +1467,7 @@ public static class Navigator
         /// <summary>Actions the current event may still run (not part of the state).</summary>
         public int StepsLeft { get; set; } = StepBudget;
 
-        /// <summary>The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 2).</summary>
+        /// <summary>The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 3).</summary>
         public bool ResumeSet { get; set; }
 
         public Scalar Read(string name)

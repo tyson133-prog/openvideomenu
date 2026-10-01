@@ -13,6 +13,6 @@ Open Video Menu is meant to outlive any one player, tool or maintainer. These ru
 
 ## What "compatible" means
 
-An implementation is compatible when it passes the conformance suite for the level it claims (0, 1 or 2). The name, and any "compatible" badge, is reserved for implementations that pass. (A trademark policy will say this formally before v1.0.)
+An implementation is compatible when it passes the conformance suite for the level it claims (0, 1, 2 or 3). The name, and any "compatible" badge, is reserved for implementations that pass. (A trademark policy will say this formally before v1.0.)
 
 The code is Apache-2.0, so forks are welcome. A fork that breaks these rules just can't call itself Open Video Menu compatible.

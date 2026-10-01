@@ -27,6 +27,15 @@ public sealed class ConformanceTests
 
     [Theory]
     [MemberData(nameof(Cases))]
+    public void Level(string name)
+    {
+        // Each case is for players at its level, so it must not use anything above it.
+        var c = Load(name);
+        Assert.Equal(c.GetProperty("level").GetInt32(), Levels.Used(c.GetProperty("manifest")));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cases))]
     public void Validator(string name)
     {
         var c = Load(name);

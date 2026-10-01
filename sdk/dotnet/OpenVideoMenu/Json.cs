@@ -67,6 +67,9 @@ public sealed partial class Manifest
     /// <summary>Write the manifest to a file as UTF-8 JSON (not validated; call <see cref="Validate()"/> first).</summary>
     public void Save(string path) => File.WriteAllText(path, ToJson() + "\n");
 
+    /// <summary>The conformance level these menus use (spec §10): what to declare as <see cref="Level"/>.</summary>
+    public int LevelUsed() => Levels.Used(JsonSerializer.SerializeToElement(this, JsonOptions));
+
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions

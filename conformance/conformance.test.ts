@@ -3,7 +3,7 @@
  * Other implementations (C#, native players) run the same case files with their own harness.
  *
  * Case file format (conformance/cases/*.json):
- *   description, level (0|1|2), manifest,
+ *   description, level (0|1|2|3, the level the manifest uses), manifest,
  *   valid        — the reference validator accepts it
  *   schemaValid  — the JSON Schema accepts it (defaults to `valid`)
  *   errors[]     — issue paths the validator must report (subset match)
@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
-import { initialState, step, validateManifest, type Effect, type NavEvent, type NavState } from "../packages/core/src/index.js";
+import { initialState, levelUsed, step, validateManifest, type Effect, type NavEvent, type NavState } from "../packages/core/src/index.js";
 
 interface Case {
   description: string;
@@ -53,6 +53,11 @@ describe.each(cases)("$file", ({ c }) => {
     for (const path of c.errors ?? []) expect(errorPaths, `missing error at ${path}`).toContain(path);
     const warningPaths = result.warnings.map((w) => w.path);
     for (const path of c.warnings ?? []) expect(warningPaths, `missing warning at ${path}`).toContain(path);
+  });
+
+  // Each case is for players at its level, so it must not use anything above it.
+  it(`level: uses Level ${c.level}`, () => {
+    expect(levelUsed(c.manifest)).toBe(c.level);
   });
 
   it(`schema: ${(c.schemaValid ?? c.valid) ? "accepts" : "rejects"}`, () => {

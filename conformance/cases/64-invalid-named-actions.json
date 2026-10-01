@@ -1,6 +1,6 @@
 {
   "description": "Named actions: a run must name an entry of actions; named actions are shared, so they can't press one menu's buttons (activate); runs that only run each other in a circle never do anything; a run in a cue must not start playback with after; a play's after must not come to another playback through a run; fallback items can't run logic.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": ["/menus/main/buttons/0/action/action", "/actions/press/type", "/actions/ping", "/actions/pong", "/media/feature/cues/0/action/action", "/menus/main/buttons/1/action/after", "/fallback/0/items/1/action/type"],
   "manifest": {

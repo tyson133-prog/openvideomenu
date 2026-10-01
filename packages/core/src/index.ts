@@ -8,3 +8,5 @@ export { MENU_KEYS, PROHIBITIONS } from "./logic.js";
 export { resolvePath, resolveMedia } from "./resolve.js";
 export type { MediaResolver } from "./resolve.js";
 export { menuAssets } from "./assets.js";
+export { levelUsed } from "./levels.js";
+export type { Level } from "./levels.js";

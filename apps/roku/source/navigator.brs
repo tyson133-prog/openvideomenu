@@ -11,7 +11,7 @@ function msNavInitialState() as object
     return { mode: "idle", history: [], intro: false, buttonsReady: true, vars: msNavNewVars(), player: msNavNewVars(), seed: 1&, seq: 0 }
 end function
 
-' Level 2: the most actions one event runs (spec 6.4), so a named action that runs itself still ends.
+' Level 3: the most actions one event runs (spec 6.4), so a named action that runs itself still ends.
 function msNavStepBudget() as integer
     return 10000
 end function
@@ -22,9 +22,9 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     s.history = msCopyArray(state.history)
     ' Actions this event may still run; not part of the state, so it goes before returning.
     s.stepsLeft = msNavStepBudget()
-    ' Whether this event saved or cleared the resume point itself (Level 2); not part of the state either.
+    ' Whether this event saved or cleared the resume point itself (Level 3); not part of the state either.
     s.resumeSet = false
-    ' Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    ' Level 3: the player's clock, for counters and the navigation timer (spec 6.7).
     if event["time"] <> invalid then s.now = event["time"]
     t = event["type"]
 
@@ -32,7 +32,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         s.history = []
         s.playing = invalid
         s.vars = msNavCopyVars(msOr(manifest["vars"], {}))
-        ' Level 2: counters start counting now; the navigation timer starts stopped.
+        ' Level 3: counters start counting now; the navigation timer starts stopped.
         s.counters = invalid
         if manifest["counters"] <> invalid
             s.counters = {}
@@ -141,7 +141,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         msNavButtonSet(manifest, s, event["index"])
 
     else if t = "parental"
-        ' Level 2: the answer to a requestParental; its branch runs as the request would have.
+        ' Level 3: the answer to a requestParental; its branch runs as the request would have.
         ask = s.parental
         if ask <> invalid
             s.parental = invalid
@@ -166,7 +166,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         end if
 
     else if t = "navTimer"
-        ' Level 2: the navigation timer ran out. In menus it runs as a step up, like a timeout; during
+        ' Level 3: the navigation timer ran out. In menus it runs as a step up, like a timeout; during
         ' playback, like a cue's action where playback is.
         timer = s.navTimer
         if timer <> invalid
@@ -610,7 +610,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         if s.lastStop <> invalid
             ' The stopped playback continues: the item from where it stopped (with the tracks as they
             ' are now, which the viewer may have changed while watching), then what was queued after
-            ' it, then its after-action. A disc's resume point is used up by resuming (Level 2).
+            ' it, then its after-action. A disc's resume point is used up by resuming (Level 3).
             point = s.lastStop
             item = { media: point.media, start: point.position }
             if point.item <> invalid
@@ -699,11 +699,11 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         s.lastStop = invalid
         s.resumeSet = true
     else if t = "requestParental"
-        ' Level 2: the branch runs when the player answers; like a link, the request ends a do.
+        ' Level 3: the branch runs when the player answers; like a link, the request ends a do.
         s.parental = { level: action["level"], then: action["then"], otherwise: action["else"], pushHistory: pushHistory, up: up, cueAt: s.cueAt }
         effects.push({ type: "askParental", level: action["level"] })
     else if t = "timer"
-        ' Level 2: one navigation timer, wherever the viewer is (a disc's SetNVTMR).
+        ' Level 3: one navigation timer, wherever the viewer is (a disc's SetNVTMR).
         s.navTimer = { action: action["action"] }
         if s.now <> invalid then s.navTimer.ends = s.now + action["after"]
         effects.push({ type: "startNavTimer", after: action["after"] })
@@ -724,7 +724,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             effects.push({ type: "seek", position: position })
         end if
     else if t = "run"
-        ' Level 2: as if the named action were written here: same history rules, same cue time.
+        ' Level 3: as if the named action were written here: same history rules, same cue time.
         named = manifest["actions"]
         if named <> invalid then return named[action["action"]]
     end if
@@ -827,7 +827,7 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
     if completed and playing.after <> invalid then msNavRun(manifest, s, playing.after, effects, true)
 end sub
 
-' Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
+' Level 3: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
 ' command or a button over the film), not only to the next playback.
 sub msNavLiveTrack(manifest as object, s as object, name as string, value as dynamic, at as dynamic, effects as object)
     if not msNavIsNumber(value) then return
@@ -1007,7 +1007,7 @@ function msNavNearestButton(menu as object, from as object, dir as string) as dy
     return best
 end function
 
-' --- logic layer (Level 2; a port of packages/core/src/logic.ts) -----------------------------
+' --- logic layer (Level 3; a port of packages/core/src/logic.ts) -----------------------------
 
 ' What an unset player-state variable reads as.
 function msNavPlayerDefault(name as string) as dynamic

@@ -1,10 +1,11 @@
 {
   "description": "Level 2 angles: media with angle files and with angle video tracks. Playback uses @angle (default 1), a set on @angle (a DVD's SetSTN), or the item's own angle from a variable; an angle the media doesn't have plays angle 1; media without angles gets no angle in the play effect.",
-  "level": 2,
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
+    "level": 3,
     "title": { "name": "Angles" },
     "vars": { "which": 2 },
     "media": {

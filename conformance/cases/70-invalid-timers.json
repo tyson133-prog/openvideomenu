@@ -1,6 +1,6 @@
 {
   "description": "The navigation timer needs a positive time and an action, which may run during playback, so it follows a cue's rules (no after on playback it starts). Counters name integer variables.",
-  "level": 2,
+  "level": 3,
   "valid": false,
   "errors": ["/counters/0", "/counters/1", "/menus/main/buttons/0/action/after", "/menus/main/buttons/1/action/action/after", "/fallback/0/items/1/action/type"],
   "manifest": {

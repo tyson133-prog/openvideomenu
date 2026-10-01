@@ -94,6 +94,12 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "level": {
+      "description": "The lowest conformance level at which the menus work as authored (spec 10): 0-3. A player below it shows the fallback list.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
     }
   },
   "dependentRequired": {
