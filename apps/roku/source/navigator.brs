@@ -140,6 +140,31 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     else if t = "buttonSet"
         msNavButtonSet(manifest, s, event["index"])
 
+    else if t = "parental"
+        ' Level 2: the answer to a requestParental; its branch runs as the request would have.
+        ask = s.parental
+        if ask <> invalid
+            s.parental = invalid
+            if event["granted"] = true
+                player = msNavCopyVars(s.player)
+                player["@parentalLevel"] = ask.level
+                s.player = player
+                branch = ask.then
+            else
+                branch = ask.otherwise
+            end if
+            if branch <> invalid
+                if ask.cueAt <> invalid and s.mode = "playing"
+                    msNavRunCue(manifest, s, branch, effects, ask.cueAt)
+                else if ask.cueAt <> invalid
+                    ' A cue's request answered after playback ended runs its branch as from a menu.
+                    msNavRunOpts(manifest, s, branch, effects, false, true)
+                else
+                    msNavRunOpts(manifest, s, branch, effects, ask.pushHistory, ask.up)
+                end if
+            end if
+        end if
+
     else if t = "navTimer"
         ' Level 2: the navigation timer ran out. In menus it runs as a step up, like a timeout; during
         ' playback, like a cue's action where playback is.
@@ -636,7 +661,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             msNavRunOpts(manifest, s, steps[k], effects, pushHistory, up)
             navigated = s.seq <> seq or s.mode <> mode or s.stepsLeft < 0
             for i = count to effects.Count() - 1
-                if effects[i].type = "exit" or effects[i].type = "transition" then navigated = true
+                if effects[i].type = "exit" or effects[i].type = "transition" or effects[i].type = "askParental" then navigated = true
             end for
             if navigated then return invalid
         end for
@@ -665,6 +690,10 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "clearResume"
         s.lastStop = invalid
         s.resumeSet = true
+    else if t = "requestParental"
+        ' Level 2: the branch runs when the player answers; like a link, the request ends a do.
+        s.parental = { level: action["level"], then: action["then"], otherwise: action["else"], pushHistory: pushHistory, up: up, cueAt: s.cueAt }
+        effects.push({ type: "askParental", level: action["level"] })
     else if t = "timer"
         ' Level 2: one navigation timer, wherever the viewer is (a disc's SetNVTMR).
         s.navTimer = { action: action["action"] }

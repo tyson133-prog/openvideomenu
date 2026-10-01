@@ -60,7 +60,9 @@ type NavEventBody =
    * Level 2: the navigation timer a "startNavTimer" effect asked for ran out. During playback, players
    * pass the position, as with a menu key.
    */
-  | { type: "navTimer"; position?: number };
+  | { type: "navTimer"; position?: number }
+  /** Level 2: the answer to an "askParental" effect: whether the viewer (or the player's settings) allowed it. */
+  | { type: "parental"; granted: boolean };
 
 /** Level 2: a cue the host watches for during playback, from the play effect. */
 export type CueWatch = { id: string; at: number } | { id: string; from: number; to: number };
@@ -106,6 +108,11 @@ export type Effect =
   | { type: "startNavTimer"; after: number }
   /** Level 2: stop the navigation timer. */
   | { type: "cancelNavTimer" }
+  /**
+   * Level 2: a requestParental action asks for parental level [level] (spec §6.8): answer with
+   * {type: "parental", granted}, at once from the player's settings or after asking the viewer.
+   */
+  | { type: "askParental"; level: number }
   /**
    * Level 2: move the playback in progress to [position] seconds on its timeline (a seek action, §6.3).
    * Cues behave as when the viewer seeks: point cues on the way are skipped, overlays follow the position.
@@ -160,6 +167,8 @@ export interface NavState {
   counters?: Record<string, number>;
   /** Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known). */
   navTimer?: { action: Action; ends?: number };
+  /** Level 2: a parental level request waiting for the player's answer, and how its branches run. */
+  parental?: { level: number; then: Action; else?: Action; opts: RunOptions };
   /**
    * The resume point, for "resume": where the viewer stopped last (or a saveResume put it). Hosts may
    * seed it from their own records with just media and position. Set by the navigator, it also holds
@@ -311,6 +320,19 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "cueEnd":
       if (s.overlay?.cue === event.id) s.overlay = undefined;
       break;
+
+    case "parental": {
+      // Level 2: the answer to a requestParental; its branch runs as the request would have.
+      const ask = s.parental;
+      if (!ask) break;
+      s.parental = undefined;
+      if (event.granted) s.player = { ...s.player, "@parentalLevel": ask.level };
+      const branch = event.granted ? ask.then : ask.else;
+      // A cue's request answered after playback ended runs its branch as from a menu.
+      const opts = ask.opts.cueAt !== undefined && s.mode !== "playing" ? { pushHistory: false, up: true } : ask.opts;
+      if (branch) run(manifest, s, branch, effects, opts);
+      break;
+    }
 
     case "navTimer": {
       // Level 2: the navigation timer ran out. Nobody chose this: in menus it runs as a step up, like
@@ -587,7 +609,10 @@ function currentPosition(s: NavState): MenuPosition | undefined {
  * `up`: running a menu's `back` (see remoteBack): gotos unwind history instead of adding to it.
  * `cueAt`: running a cue's action during playback (Level 2); the time interrupted playback resumes from.
  */
-function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean; cueAt?: number }) {
+/** How an action runs; see run(). */
+type RunOptions = { pushHistory: boolean; up?: boolean; cueAt?: number };
+
+function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], opts: RunOptions) {
   // An action in tail position (set's then, if's branches, do's last step, resume's otherwise, a
   // pressed button's action, a named action) continues this loop instead of nesting a call, so a
   // disc's loop, written as a named action that runs itself, goes round as often as the budget allows.
@@ -689,6 +714,11 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         if (s.navTimer) effects.push({ type: "cancelNavTimer" });
         s.navTimer = undefined;
         break;
+      case "requestParental":
+        // The branch runs when the player answers; like a link, the request ends a do.
+        s.parental = { level: action.level, then: action.then, ...(action.else ? { else: action.else } : {}), opts };
+        effects.push({ type: "askParental", level: action.level });
+        break;
       case "seek":
         // Only during playback: the title continues elsewhere, as a link ends a disc's program.
         if (duringPlayback) {
@@ -710,7 +740,9 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
           const before = { seq: s.seq, mode: s.mode, effects: effects.length };
           run(manifest, s, action.steps[i]!, effects, opts);
           const navigated =
-            s.seq !== before.seq || s.mode !== before.mode || effects.slice(before.effects).some((e) => e.type === "exit" || e.type === "transition");
+            s.seq !== before.seq ||
+            s.mode !== before.mode ||
+            effects.slice(before.effects).some((e) => e.type === "exit" || e.type === "transition" || e.type === "askParental");
           if (navigated || stepsLeft < 0) return;
         }
         next = action.steps[last];

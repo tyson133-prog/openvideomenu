@@ -207,6 +207,21 @@ public sealed class CancelTimerAction : MenuAction
     public override string Type => "cancelTimer";
 }
 
+/// <summary>
+/// Level 2: ask the player to allow parental level <see cref="Level"/> for now (a disc's SetTmpPML):
+/// <see cref="Then"/> runs if it does (and @parentalLevel becomes the level), <see cref="Else"/> if not.
+/// </summary>
+public sealed class RequestParentalAction : MenuAction
+{
+    public override string Type => "requestParental";
+
+    public int Level { get; set; }
+
+    public MenuAction Then { get; set; } = new BackAction();
+
+    public MenuAction? Else { get; set; }
+}
+
 /// <summary>Level 2: forget the resume point.</summary>
 public sealed class ClearResumeAction : MenuAction
 {

@@ -12,6 +12,11 @@ sub init()
     m.still.loadDisplayMode = "scaleToFill"
 
     m.motion.observeField("state", "onMotionState")
+    ' Level 2: answers a parental level request once the event that asked is done.
+    m.parentalTimer = CreateObject("roSGNode", "Timer")
+    m.parentalTimer.duration = 0.01
+    m.parentalTimer.repeat = false
+    m.parentalTimer.observeField("fire", "onParentalTimer")
     m.motion.observeField("position", "onMotionPosition")
     m.motion.notificationInterval = 0.1 ' fine enough to catch the last 0.3 s before a loop point
     m.music.observeField("state", "onMusicState")
@@ -112,6 +117,10 @@ sub apply(effect as object)
         at = msOr(menu["buttonsAt"], 0)
         if m.videoRole = "background" then m.motion.seek = at
         drawButtons()
+    else if t = "askParental"
+        ' Level 2: this player has no parental lock of its own, so it allows any level; it answers just
+        ' after this event is done.
+        m.parentalTimer.control = "start"
     else if t = "startNavTimer" or t = "cancelNavTimer"
         ' Level 2: the scene keeps the navigation timer, so it can say where playback is when it runs out.
         m.top.navTimerRequest = effect
@@ -168,6 +177,10 @@ end function
 ' Level 2: the scene passes the Menu key (*) pressed during playback, with the title's position.
 sub onMenuKey()
     stepWith({ type: "press", key: "menu", position: m.top.menuKey })
+end sub
+
+sub onParentalTimer()
+    stepWith({ type: "parental", granted: true })
 end sub
 
 ' Level 2: the navigation timer ran out; the scene passes where playback is (-1 when nothing plays).

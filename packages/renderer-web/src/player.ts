@@ -52,6 +52,13 @@ export interface PlayerOptions {
   /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
   initialLastStop?: { media: string; position: number };
   /**
+   * Level 2: answer a disc's request for a higher parental level (spec 6.8), e.g. after asking for a PIN.
+   * Without it, levels up to `parentalLevel` are allowed.
+   */
+  answerParental?: (level: number) => boolean | Promise<boolean>;
+  /** Level 2: the highest parental level allowed without answerParental, 1-8 (default 8, unrestricted). */
+  parentalLevel?: number;
+  /**
    * Level 2: what the host knows of the viewer's setup, as "@" player state (e.g. "@audioLanguage",
    * "@region"). Merged over the defaults: the browser's language for the three language preferences.
    */
@@ -299,6 +306,9 @@ export class MenuPlayer {
       case "cancelNavTimer":
         clearTimeout(this.navTimer);
         break;
+      case "askParental":
+        void this.answerParental(effect.level);
+        break;
       case "activated":
         // An overlay button pressed over a held frame goes on from it (Level 2).
         if ("cue" in effect) this.playback.endHold?.();
@@ -330,6 +340,19 @@ export class MenuPlayer {
     if (change.audio !== undefined && change.subtitle === undefined && change.angle === undefined && this.playback.switchAudio?.(change.audio)) return;
     const at = this.playback.currentPosition?.() ?? change.at;
     this.playMedia(next.media, at, next.audio, next.subtitle, next.angle, next.end, next.cues, next.holds);
+  }
+
+  /**
+   * Level 2: answer a parental level request (spec 6.8) with the host's answerParental, or by its
+   * parentalLevel setting (unrestricted by default). Answered after the event that asked is done.
+   */
+  private async answerParental(level: number) {
+    const { answerParental, parentalLevel = 8 } = this.options;
+    const granted = answerParental ? await answerParental(level) : level <= parentalLevel;
+    const send = () => {
+      if (!this.dispatch({ type: "parental", granted })) setTimeout(send, 50);
+    };
+    setTimeout(send, 0);
   }
 
   /** Level 2: the navigation timer (spec 6.7), which runs wherever the viewer is. */

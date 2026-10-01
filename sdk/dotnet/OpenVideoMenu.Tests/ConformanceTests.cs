@@ -160,6 +160,7 @@ public sealed class ConformanceTests
         "timeout" => new NavEvent.Timeout(e.GetProperty("menu").GetString()!),
         "cue" => new NavEvent.Cue(e.GetProperty("id").GetString()!),
         "cueEnd" => new NavEvent.CueEnd(e.GetProperty("id").GetString()!),
+        "parental" => new NavEvent.Parental(e.GetProperty("granted").GetBoolean()),
         "navTimer" => new NavEvent.NavTimer(e.TryGetProperty("position", out var timerPosition) ? timerPosition.GetDouble() : null),
         "buttonSet" => new NavEvent.ButtonSetChanged(e.GetProperty("index").ValueKind == JsonValueKind.Null ? null : e.GetProperty("index").GetInt32()),
         var other => throw new InvalidDataException($"Unknown event {other}"),
@@ -189,6 +190,7 @@ public sealed class ConformanceTests
             "seek" => new Effect.Seek(e.GetProperty("position").GetDouble()),
             "startNavTimer" => new Effect.StartNavTimer(e.GetProperty("after").GetDouble()),
             "cancelNavTimer" => new Effect.CancelNavTimer(),
+            "askParental" => new Effect.AskParental(e.GetProperty("level").GetInt32()),
             "tracks" => new Effect.Tracks(e.GetProperty("at").GetDouble(), Int("audio"), Int("subtitle"), Int("angle")),
             var other => throw new InvalidDataException($"Unknown effect {other}"),
         };

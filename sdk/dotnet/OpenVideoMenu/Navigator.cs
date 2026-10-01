@@ -99,6 +99,9 @@ public abstract record NavEvent
     /// pass the <paramref name="Position"/>, as with a menu key.
     /// </summary>
     public sealed record NavTimer(double? Position = null) : NavEvent;
+
+    /// <summary>Level 2: the answer to an AskParental effect: whether the viewer (or the player's settings) allowed it.</summary>
+    public sealed record Parental(bool Granted) : NavEvent;
 }
 
 /// <summary>Something the player must do.</summary>
@@ -165,6 +168,12 @@ public abstract record Effect
     public sealed record CancelNavTimer : Effect;
 
     /// <summary>
+    /// Level 2: a requestParental action asks for parental level <paramref name="Level"/> (spec §6.8):
+    /// answer with <see cref="NavEvent.Parental"/>, at once from the player's settings or after asking.
+    /// </summary>
+    public sealed record AskParental(int Level) : Effect;
+
+    /// <summary>
     /// Level 2: move the playback in progress to <paramref name="Position"/> seconds on its timeline (a
     /// seek action, spec §6.3). Cues behave as when the viewer seeks.
     /// </summary>
@@ -215,6 +224,9 @@ public sealed record OverlayFocus(string Cue, string Focus);
 /// </summary>
 public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null);
 
+/// <summary>Level 2: a parental level request waiting for an answer, and how its branches run.</summary>
+public sealed record ParentalRequest(int Level, MenuAction Then, MenuAction? Else, bool PushHistory, bool Up, double? CueAt);
+
 /// <summary>Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known).</summary>
 public sealed record NavTimerState(MenuAction Action, double? Ends);
 
@@ -261,6 +273,9 @@ public sealed record NavState
 
     /// <summary>Level 2: the navigation timer, if one runs.</summary>
     public NavTimerState? NavTimer { get; init; }
+
+    /// <summary>Level 2: a parental level request waiting for the player's answer.</summary>
+    public ParentalRequest? Parental { get; init; }
 
     /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
     public LastStop? LastStop { get; init; }
@@ -449,6 +464,36 @@ public static class Navigator
                 }
 
                 break;
+
+            case NavEvent.Parental answer:
+            {
+                // Level 2: the answer to a requestParental; its branch runs as the request would have.
+                if (s.Parental is not { } ask)
+                {
+                    break;
+                }
+
+                s.Parental = null;
+                if (answer.Granted)
+                {
+                    s.Player["@parentalLevel"] = ask.Level;
+                }
+
+                if ((answer.Granted ? ask.Then : ask.Else) is { } branch)
+                {
+                    // A cue's request answered after playback ended runs its branch as from a menu.
+                    if (ask.CueAt is not null && s.Mode != NavMode.Playing)
+                    {
+                        Run(manifest, s, branch, effects, pushHistory: false, up: true);
+                    }
+                    else
+                    {
+                        Run(manifest, s, branch, effects, ask.PushHistory, ask.Up, ask.CueAt);
+                    }
+                }
+
+                break;
+            }
 
             case NavEvent.NavTimer navTimer:
             {
@@ -1045,6 +1090,11 @@ public static class Navigator
 
                     s.NavTimer = null;
                     break;
+                case RequestParentalAction request:
+                    // The branch runs when the player answers; like a link, the request ends a do.
+                    s.Parental = new ParentalRequest(request.Level, request.Then, request.Else, pushHistory, up, cueAt);
+                    effects.Add(new Effect.AskParental(request.Level));
+                    break;
                 case SeekAction seek:
                     // Only during playback: the title continues elsewhere, as a link ends a disc's program.
                     if (duringPlayback)
@@ -1108,7 +1158,7 @@ public static class Navigator
                     {
                         var (seq, mode, count) = (s.Seq, s.Mode, effects.Count);
                         Run(manifest, s, doAction.Steps[i], effects, pushHistory, up, cueAt);
-                        if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition) || s.StepsLeft < 0)
+                        if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition or Effect.AskParental) || s.StepsLeft < 0)
                         {
                             return;
                         }
@@ -1358,6 +1408,8 @@ public static class Navigator
 
         public NavTimerState? NavTimer { get; set; } = from.NavTimer;
 
+        public ParentalRequest? Parental { get; set; } = from.Parental;
+
         public LastStop? LastStop { get; set; } = from.LastStop;
 
         public IReadOnlyDictionary<string, Scalar> Vars { get; set; } = from.Vars;
@@ -1411,6 +1463,7 @@ public static class Navigator
             Now = Now,
             Counters = Counters,
             NavTimer = NavTimer,
+            Parental = Parental,
             LastStop = LastStop,
             Vars = Vars,
             Player = Player,

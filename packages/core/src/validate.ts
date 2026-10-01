@@ -54,6 +54,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   seek: ["type", "at", "chapter"],
   timer: ["type", "after", "action"],
   cancelTimer: ["type"],
+  requestParental: ["type", "level", "then", "else"],
   clearResume: ["type"],
 };
 
@@ -881,6 +882,12 @@ class Validator {
         else if (value.chapter !== undefined && !(Number.isInteger(value.chapter) && (value.chapter as number) >= 1))
           this.error(`${path}/chapter`, "Must be a chapter number (from 1).");
         break;
+      case "requestParental":
+        if (!(Number.isInteger(value.level) && (value.level as number) >= 1 && (value.level as number) <= 8))
+          this.error(`${path}/level`, "Must be a parental level from 1 to 8.");
+        this.action(value.then, `${path}/then`, mediaIds, menus, ownButtons);
+        if (value.else !== undefined) this.action(value.else, `${path}/else`, mediaIds, menus, ownButtons);
+        break;
       case "timer":
         if (!(isFiniteNumber(value.after) && value.after > 0)) this.error(`${path}/after`, "Must be a positive number of seconds.");
         // It runs wherever the viewer is when the time is up, playback included: as a cue's action.
@@ -948,7 +955,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek" || t === "timer" || t === "cancelTimer")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek" || t === "timer" || t === "cancelTimer" || t === "requestParental")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

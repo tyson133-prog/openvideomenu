@@ -51,6 +51,7 @@ internal sealed class Validator
         ("seek", ["type", "at", "chapter"]),
         ("timer", ["type", "after", "action"]),
         ("cancelTimer", ["type"]),
+        ("requestParental", ["type", "level", "then", "else"]),
         ("clearResume", ["type"]),
     ];
 
@@ -1733,6 +1734,19 @@ internal sealed class Validator
                 break;
             }
 
+            case "requestParental":
+                if (!(action["level"] is { } level && IsInteger(level) && level.GetDouble() is >= 1 and <= 8))
+                {
+                    Error($"{path}/level", "Must be a parental level from 1 to 8.");
+                }
+
+                Action(action["then"], $"{path}/then", mediaIds, menus, ownButtons);
+                if (action["else"] is { } elseBranch)
+                {
+                    Action(elseBranch, $"{path}/else", mediaIds, menus, ownButtons);
+                }
+
+                break;
             case "timer":
                 if (!(action["after"] is { } after && IsFiniteNumber(after) && after.GetDouble() > 0))
                 {
@@ -1861,7 +1875,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek" or "timer" or "cancelTimer")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek" or "timer" or "cancelTimer" or "requestParental")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

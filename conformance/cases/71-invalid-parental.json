@@ -1,0 +1,23 @@
+{
+  "description": "A parental level request asks for a level from 1 to 8 and needs then; its branches are checked like any action; fallback items can't ask.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/buttons/0/action/level", "/menus/main/buttons/1/action/then", "/menus/main/buttons/1/action/else/menu", "/fallback/0/items/1/action/type"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Requests" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "requestParental", "level": 9, "then": { "type": "back" } } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "requestParental", "level": 3, "else": { "type": "goto", "menu": "nowhere" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }, { "label": "Ask", "action": { "type": "requestParental", "level": 3, "then": { "type": "play", "media": "feature" } } }] }]
+  }
+}

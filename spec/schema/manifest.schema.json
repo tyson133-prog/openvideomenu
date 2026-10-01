@@ -655,7 +655,8 @@
                 "saveResume",
                 "clearResume",
                 "timer",
-                "cancelTimer"
+                "cancelTimer",
+                "requestParental"
               ]
             }
           }
@@ -684,7 +685,8 @@
             "clearResume",
             "seek",
             "timer",
-            "cancelTimer"
+            "cancelTimer",
+            "requestParental"
           ]
         }
       },
@@ -1030,6 +1032,35 @@
           },
           "then": {
             "description": "Level 2: stop the navigation timer."
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "requestParental"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: ask the player to allow a parental level for now (a disc's SetTmpPML): then runs if it does, else if not (spec 6.8).",
+            "required": [
+              "level",
+              "then"
+            ],
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "then": {
+                "$ref": "#/$defs/action"
+              },
+              "else": {
+                "$ref": "#/$defs/action"
+              }
+            }
           }
         }
       ]

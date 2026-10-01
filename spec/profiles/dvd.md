@@ -38,6 +38,8 @@ importer's choice.
 | Menu that moves on by itself (still time or end of the menu's video, then a link) | If the next part has the same buttons, it's the same menu looping: `background.video` with `loopStart`. Otherwise menu `timeout` with `after` = the time until it moves on and the link as its `action`; `restartOnInput: false` to match the disc's timer exactly. |
 | Next / previous page (`LinkNextPG`, `LinkPrevPG`, PGC next/prev) | `goto` with `history: "replace"`, so paging adds no Back steps. |
 | General registers (GPRM 0–15) | Manifest `vars` (integers). Registers in counter mode (SetGPRMMD) are also listed in `counters`. |
+| Temporary parental level (SetTmpPML level, line) | `requestParental` with `level`; `then` is the program from that line, `else` what follows the command. |
+| Parental blocks (PGCs chosen by the player's parental level) | `if` on `@parentalLevel` choosing the play. |
 | Navigation timer (SetNVTMR; SPRM 9 and 10) | `timer` with `after` = the seconds and `action` = a `run` of the PGC it names (a `play` of that title); a time of 0 is `cancelTimer`. SPRM 9 reads as `@navTimer`. |
 | Register commands (Set: mov, add, sub, mul, div, mod, and, or, xor, rnd) | `set` with the matching `op` (`rnd` → `random`). |
 | Conditional commands (`if (a op b)`), Goto/Break programs | `if`, `do`; a program's skipped lines become `else` branches. |

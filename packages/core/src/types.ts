@@ -363,7 +363,12 @@ export type Action =
    */
   | { type: "timer"; after: number; action: Action }
   /** Level 2: stop the navigation timer. */
-  | { type: "cancelTimer" };
+  | { type: "cancelTimer" }
+  /**
+   * Level 2: ask the player to allow parental level `level` for now (a disc's SetTmpPML): `then` runs if it
+   * does (and @parentalLevel becomes `level`), `else` if not (spec §6.8).
+   */
+  | { type: "requestParental"; level: number; then: Action; else?: Action };
 
 export type ActionType = Action["type"];
 

@@ -1,0 +1,45 @@
+{
+  "description": "A parental level request (a disc's SetTmpPML): the navigator asks the player (askParental) and runs then or else when it answers (parental). Granted, @parentalLevel becomes the level asked for. Like a link, the request ends a do; an answer with nothing asked is ignored.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Ask First" },
+    "media": {
+      "film": { "ref": "Film.mkv", "kind": "feature" },
+      "cut": { "ref": "Film (Family Cut).mkv", "kind": "feature" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "check" },
+            "action": { "type": "do", "steps": [
+              { "type": "requestParental", "level": 7, "then": { "type": "play", "media": "film" }, "else": { "type": "play", "media": "cut" } },
+              { "type": "goto", "menu": "never" } ] } },
+          { "id": "check", "rect": [100, 160, 200, 40], "nav": { "up": "play" },
+            "action": { "type": "if", "test": { "var": "@parentalLevel", "ge": 7 }, "then": { "type": "goto", "menu": "never" } } }
+        ]
+      },
+      "never": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 100, 200, 40], "action": { "type": "back" } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Family cut", "action": { "type": "play", "media": "cut" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start", "player": { "@parentalLevel": 4 } }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "parental", "granted": true }, "expect": { "mode": "menu", "menu": "main", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "askParental", "level": 7 }] } },
+    { "event": { "type": "parental", "granted": false }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "cut", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "check" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "check" } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "askParental", "level": 7 }] } },
+    { "event": { "type": "parental", "granted": true }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "film", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "check" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "never" } }
+  ]
+}

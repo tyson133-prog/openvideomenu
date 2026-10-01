@@ -266,6 +266,7 @@ Every action is an object with a `type`:
 | `seek` | `at` or `chapter` | *(Level 2)* During playback, continue the title elsewhere on its timeline (§6.3). |
 | `timer` | `after`, `action` | *(Level 2)* Start the navigation timer (§6.7). |
 | `cancelTimer` | — | *(Level 2)* Stop the navigation timer (§6.7). |
+| `requestParental` | `level`, `then`, `else?` | *(Level 2)* Ask the player to allow a parental level for now (§6.8). |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a `playAll`, its `after`). When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -312,7 +313,7 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 | `@lastMedia` | text | `""` | Media id of the last playback. |
 | `@lastChapter` | integer | 0 | Chapter (1-based) that playback started in, updated to where it stopped. |
 | `@region` | integer | 0 (unknown) | Player region, 1–8. |
-| `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. |
+| `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. A granted `requestParental` raises it (§6.8). |
 | `@country` | text | `""` | ISO 3166-1 alpha-2. |
 | `@aspect` | text | `"16:9"` | The TV's shape: `"16:9"` or `"4:3"`. |
 | `@resumeMedia` | text | `""` | Media id of the resume point (§6.5); `""` when there is none. |
@@ -336,8 +337,8 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 - **`if`** `{ test, then, else? }` runs `then` when the test holds, otherwise `else` (or nothing).
 - **`do`** `{ steps }` runs actions in order and stops after the first one that navigates: opens a menu,
   starts playback or a transition, or leaves. Like a DVD program, which ends at its link.
-- `if`, `do`, `set`, `run`, `saveResume`, `clearResume`, `timer` and `cancelTimer` MUST NOT be used in
-  the fallback list. `after` MAY be an `if` or `do` that plays
+- `if`, `do`, `set`, `run`, `saveResume`, `clearResume`, `timer`, `cancelTimer` and `requestParental`
+  MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
   (a disc's conditional play-all), but not a bare `play`/`playAll`.
 
 **Focus from a variable.** A menu's `defaultButton` and a `goto`'s `button` MAY be `{"var": name}`
@@ -580,6 +581,28 @@ themselves.
   when it runs out, with the playback position during playback. A report after the timer was replaced or
   stopped is ignored.
 
+### 6.8 Parental level requests (Level 2)
+
+A disc can ask the player to allow a higher parental level for a while (SetTmpPML), for example before
+an uncut version, and take another path when the player won't.
+
+```json
+{ "type": "requestParental", "level": 7,
+  "then": { "type": "play", "media": "uncut" },
+  "else": { "type": "play", "media": "theatrical" } }
+```
+
+- **`requestParental`** `{ level, then, else? }` asks for parental level `level` (1–8). If the player
+  allows it, `@parentalLevel` becomes `level` and `then` runs; otherwise `else` runs (or nothing).
+- Players decide how to answer: at once from their own settings, or after asking the viewer (for a PIN).
+  A player without parental controls SHOULD allow every request.
+- Like a link, the request ends a `do`: what a disc does when the request is refused goes in `else`.
+- **Navigation model:** the navigator emits `{ "type": "askParental", "level" }` and runs the branch when
+  the player reports `{ "type": "parental", "granted" }`, with the same history and cue rules the request
+  had. An answer with nothing asked is ignored; a new request replaces one still waiting.
+- Choosing what plays by parental level (a disc's parental block) needs no request: `if` on
+  `@parentalLevel`.
+
 ## 7. Cross-reference rules
 
 Validators MUST reject a manifest when:
@@ -617,6 +640,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6), button sets (§5.3), the navigation timer and counters (§6.7). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6), button sets (§5.3), the navigation timer and counters (§6.7), parental level requests (§6.8). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.
