@@ -13,7 +13,7 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
@@ -44,6 +44,7 @@ internal sealed class Validator
         ("back", ["type"]),
         ("resume", ["type", "otherwise"]),
         ("activate", ["type", "button"]),
+        ("run", ["type", "action"]),
     ];
 
     private static readonly string[] Directions = ["up", "down", "left", "right"];
@@ -59,6 +60,12 @@ internal sealed class Validator
 
     /// <summary>Media id → how many angles it has (1 without angles).</summary>
     private readonly Dictionary<string, int> _angleCounts = new(StringComparer.Ordinal);
+
+    /// <summary>Level 2: the manifest's named actions, by name, in document order.</summary>
+    private readonly Dictionary<string, JsonElement> _named = new(StringComparer.Ordinal);
+
+    /// <summary>Named actions that start playback with an after (also through other named actions): not for cues.</summary>
+    private readonly HashSet<string> _playsWithAfter = new(StringComparer.Ordinal);
 
     public static (List<Issue> Errors, List<Issue> Warnings) Run(JsonElement data)
     {
@@ -105,6 +112,7 @@ internal sealed class Validator
         }
 
         Vars(m["vars"]);
+        CollectActions(m["actions"]);
         var mediaIds = Media(m["media"]);
         var menus = Menus(m["menus"], mediaIds);
 
@@ -141,7 +149,129 @@ internal sealed class Validator
             Action(firstPlay, "/firstPlay", mediaIds, menus);
         }
 
+        foreach (var (name, body) in _named)
+        {
+            NamedAction(name, body, mediaIds, menus);
+        }
+
         Fallback(m["fallback"], mediaIds, menus);
+    }
+
+    /// <summary>
+    /// Level 2: note every named action, and which of them start playback with an after when run
+    /// (directly or through the named actions they run), before any action that may run them is checked.
+    /// </summary>
+    private void CollectActions(JsonElement? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        if (!Obj.TryFrom(value, out var actions))
+        {
+            Error("/actions", "Must be an object of name → action.");
+            return;
+        }
+
+        var runs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var (name, body) in actions.Entries)
+        {
+            _named[name] = body;
+            var targets = new HashSet<string>(StringComparer.Ordinal);
+            runs[name] = targets;
+            SameContext(body, a =>
+            {
+                var type = a["type"] is { ValueKind: JsonValueKind.String } t ? t.GetString() : null;
+                if (type is "play" or "playAll" && a["after"] is not null)
+                {
+                    _playsWithAfter.Add(name);
+                }
+
+                if (type == "run" && a["action"] is { ValueKind: JsonValueKind.String } target)
+                {
+                    targets.Add(target.GetString()!);
+                }
+            });
+        }
+
+        for (var changed = true; changed;)
+        {
+            changed = false;
+            foreach (var (name, targets) in runs)
+            {
+                if (!_playsWithAfter.Contains(name) && targets.Any(_playsWithAfter.Contains))
+                {
+                    _playsWithAfter.Add(name);
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    /// <summary>Check a named action's body. One that only runs other named actions in a circle never does anything.</summary>
+    private void NamedAction(string name, JsonElement body, Dictionary<string, int> mediaIds, Dictionary<string, HashSet<string>> menus)
+    {
+        var path = $"/actions/{name}";
+        var seen = new HashSet<string>(StringComparer.Ordinal) { name };
+        JsonElement? a = body;
+        while (RunTarget(a) is { } target)
+        {
+            if (!seen.Add(target))
+            {
+                Error(path, $"Only runs named actions in a circle (back to \"{target}\"); it would never do anything.");
+                return;
+            }
+
+            a = _named.TryGetValue(target, out var next) ? next : null;
+        }
+
+        Action(body, path, mediaIds, menus);
+    }
+
+    /// <summary>The named action a run names, or null when the value isn't a run.</summary>
+    private static string? RunTarget(JsonElement? value) =>
+        Obj.TryFrom(value, out var o) && o["type"] is { ValueKind: JsonValueKind.String } t && t.GetString() == "run" &&
+        o["action"] is { ValueKind: JsonValueKind.String } target
+            ? target.GetString()
+            : null;
+
+    /// <summary>The action a run (or a chain of them) comes to, or the action itself.</summary>
+    private JsonElement? ResolveRun(JsonElement? value)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (RunTarget(value) is { } target && seen.Add(target))
+        {
+            value = _named.TryGetValue(target, out var next) ? next : null;
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Visit an action and the actions it runs in the same place (set's then, if's branches, do's steps,
+    /// resume's otherwise); not after-actions or cues, which run later, at playback's end or during it.
+    /// </summary>
+    private static void SameContext(JsonElement? action, Action<Obj> visit)
+    {
+        if (!Obj.TryFrom(action, out var a))
+        {
+            return;
+        }
+
+        visit(a);
+        foreach (var key in new[] { "then", "else", "otherwise" })
+        {
+            SameContext(a[key], visit);
+        }
+
+        if (a["steps"] is { ValueKind: JsonValueKind.Array } steps)
+        {
+            foreach (var step in steps.EnumerateArray())
+            {
+                SameContext(step, visit);
+            }
+        }
     }
 
     private void Vars(JsonElement? value)
@@ -1252,6 +1382,21 @@ internal sealed class Validator
                 }
 
                 break;
+            case "run":
+            {
+                var target = action["action"];
+                if (!IsNonEmptyString(target) || !_named.ContainsKey(target!.Value.GetString()!))
+                {
+                    Error($"{path}/action", $"No action \"{JsString(target)}\" in /actions.");
+                }
+                else if (_cueDepth > 0 && _playsWithAfter.Contains(target.Value.GetString()!))
+                {
+                    Error($"{path}/action", $"Action \"{target.Value.GetString()}\" starts playback with after; playback started during playback returns to it, so after is not allowed here.");
+                }
+
+                break;
+            }
+
             case "activate":
                 if (ownButtons is null)
                 {
@@ -1296,9 +1441,10 @@ internal sealed class Validator
         {
             Error($"{path}/after", "Playback started during playback returns to it when done; after is not allowed here.");
         }
-        else if (type is "play" or "playAll" && action["after"] is { } after)
+        else if (type is "play" or "playAll" && action["after"] is { } givenAfter)
         {
-            var afterOtherwise = Obj.TryFrom(after, out var ra) && ra["type"] is { ValueKind: JsonValueKind.String } rt && rt.GetString() == "resume" ? ra["otherwise"] : null;
+            var after = ResolveRun(givenAfter);
+            var afterOtherwise = Obj.TryFrom(after, out var ra) && ra["type"] is { ValueKind: JsonValueKind.String } rt && rt.GetString() == "resume" ? ResolveRun(ra["otherwise"]) : null;
             if (Obj.TryFrom(after, out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } at && at.GetString() is "play" or "playAll")
             {
                 Error($"{path}/after", "After-playback action must not start another playback; use playAll instead.");
@@ -1309,7 +1455,7 @@ internal sealed class Validator
             }
             else
             {
-                Action(after, $"{path}/after", mediaIds, menus);
+                Action(givenAfter, $"{path}/after", mediaIds, menus);
             }
         }
     }
@@ -1368,7 +1514,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

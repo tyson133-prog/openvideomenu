@@ -47,6 +47,7 @@ export function menuAssets(manifest: Manifest): string[] {
     walkButtons(menu.buttons);
   }
   walkAction(manifest.firstPlay);
+  for (const action of Object.values(manifest.actions ?? {})) walkAction(action);
   for (const group of manifest.fallback ?? []) for (const item of group.items ?? []) walkAction(item.action);
   for (const media of Object.values(manifest.media)) {
     for (const chapter of media.chapters ?? []) add(chapter.thumbnail);

@@ -22,6 +22,11 @@ export interface Manifest {
    * conditions, play's audio/subtitle and focus. Player state is read as "@name" variables (logic.ts).
    */
   vars?: Record<string, Scalar>;
+  /**
+   * Level 2: named actions, run from anywhere with {type: "run", action: name}, so logic many buttons
+   * share (a disc's PGC entry, a dispatcher, an episode's end) is written once (spec §6.4).
+   */
+  actions?: Record<string, Action>;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -271,7 +276,9 @@ export type Action =
   /** Level 2: run then or (optional) else, depending on a condition. */
   | { type: "if"; test: Test; then: Action; else?: Action }
   /** Level 2: run actions in order, stopping after the first that navigates (opens a menu, plays, leaves). */
-  | { type: "do"; steps: Action[] };
+  | { type: "do"; steps: Action[] }
+  /** Level 2: run a named action from the manifest's `actions`, as if it were written here. */
+  | { type: "run"; action: string };
 
 export type ActionType = Action["type"];
 

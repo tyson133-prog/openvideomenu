@@ -14,6 +14,8 @@ An Open Video Menu manifest adds a menu to media that already exists: a film and
 - A manifest is a UTF-8 JSON file named `<Title>.openvideomenu.json`, placed next to the main media file, for example `Sintel (2010)/Sintel (2010).openvideomenu.json`.
 - **Relative paths resolve against the manifest's own URL or location.** They use forward slashes, and they MAY contain spaces and other characters (readers percent-encode as needed).
 - Absolute URLs are allowed anywhere a path is.
+- **Readers MUST accept JSON nested at least 256 levels deep** (actions inside actions). Writers with
+  deeper logic SHOULD share it with named actions (§6.4), which keeps manifests shallow.
 - **Keep menu art away from media scanners.** Put menu assets in their own folder (e.g. `menus/`). If it holds video or audio, include a `.plexignore` containing `*` and an empty `.ignore` (Jellyfin), or media servers will list the clips as titles or as extra versions of the film. `openvideomenu validate` warns when these are missing.
 
 ### 2.1 Bundles
@@ -53,6 +55,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `rootMenu` | if `menus` | The menu opened at start and after top-level playback ends. |
 | `firstPlay` | no | [Action](#6-actions) run at start instead of opening `rootMenu`, e.g. an intro. |
 | `vars` | no | *(Level 2)* Named integer variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
+| `actions` | no | *(Level 2)* [Named actions](#64-named-actions-level-2), run from anywhere with `run`. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
 
@@ -224,6 +227,7 @@ Every action is an object with a `type`:
 | `set` | `var`, `value`, `op?`, `then?` | *(Level 2)* Change a variable or player state, then optionally run another action (§6.1). |
 | `if` | `test`, `then`, `else?` | *(Level 2)* Run `then` or `else` depending on a condition (§6.1). |
 | `do` | `steps` | *(Level 2)* Run actions in order until one navigates (§6.1). |
+| `run` | `action` | *(Level 2)* Run a named action from `actions`, as if it were written here (§6.4). |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped. When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -291,7 +295,7 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 - **`if`** `{ test, then, else? }` runs `then` when the test holds, otherwise `else` (or nothing).
 - **`do`** `{ steps }` runs actions in order and stops after the first one that navigates: opens a menu,
   starts playback or a transition, or leaves. Like a DVD program, which ends at its link.
-- `if`, `do` and `set` MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
+- `if`, `do`, `set` and `run` MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
   (a disc's conditional play-all), but not a bare `play`/`playAll`.
 
 **Focus from a variable.** A menu's `defaultButton` and a `goto`'s `button` MAY be `{"var": name}`
@@ -376,10 +380,40 @@ icon some discs show in certain scenes that branches to a featurette and back.
   that can't draw over its video SHOULD still run point cues; without Level 2, cues are ignored and
   `end` plays to the end of the media.
 
+### 6.4 Named actions (Level 2)
+
+A disc's programs are shared: many buttons lead into the same title-start logic, the same dispatcher,
+the same end-of-episode check. Written out at every use, such logic multiplies along play-alls and
+resume points until a manifest is megabytes long. Named actions write it once:
+
+```json
+"actions": {
+  "episode-end": { "type": "if", "test": { "var": "playingAll", "eq": 1 },
+    "then": { "type": "goto", "menu": "episodes", "button": "next" },
+    "else": { "type": "goto", "menu": "main" } }
+}
+...
+{ "type": "play", "media": "e1", "after": { "type": "run", "action": "episode-end" } }
+```
+
+- **`actions`** maps names to actions. **`run`** `{ action }` runs one **as if it were written in
+  place**: the same history rules (a button's `goto` adds history, one in a menu's `back` steps up), the
+  same `do` stopping, and in a cue, the same cue time.
+- A named action MAY run others and itself: that is how a disc's loops (a program jumping back to an
+  earlier line) are written. **One event runs at most 10,000 actions**; when a loop reaches that, the
+  rest are dropped and the viewer stays where they were. Players MUST support loops of that length:
+  an action in tail position (a `set`'s `then`, an `if`'s branches, a `do`'s last step, a `resume`'s
+  `otherwise`, a `run`) continues the current action rather than nesting inside it.
+- Named actions are shared by every menu, so they MUST NOT contain `activate` (which presses a button of
+  one menu). Where a named action may run is checked through it: run from a cue, it must not start
+  playback with `after` (§6.3), and a play's `after` must not come to another playback through it.
+- Players without Level 2 ignore `run`, as they do `set`, `if` and `do`.
+
 ## 7. Cross-reference rules
 
 Validators MUST reject a manifest when:
-- a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button` or `nav` target doesn't exist, or
+- a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button`, `nav` or `run.action` target doesn't exist, or
+- a named action contains `activate`, or only runs named actions in a circle (it would never do anything), or
 - `activate` is used anywhere but a menu's `back` or `timeout`, or
 - a `resume`'s `otherwise` is another `resume`, or
 - button ids are duplicated within a menu, or
@@ -412,6 +446,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

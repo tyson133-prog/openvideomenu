@@ -111,6 +111,12 @@ public abstract record Effect
     /// replaces it or the viewer leaves that menu first.
     /// </summary>
     public sealed record StartTimer(string Menu, double After) : Effect;
+
+    /// <summary>
+    /// Level 2: one event ran <see cref="Navigator.StepBudget"/> actions (a named action running itself
+    /// without end); the rest were dropped. For diagnostics: players carry on with the state as it is.
+    /// </summary>
+    public sealed record BudgetExceeded : Effect;
 }
 
 public enum NavMode
@@ -187,6 +193,9 @@ public sealed record NavState
 
 public static class Navigator
 {
+    /// <summary>Level 2: the most actions one event runs (spec §6.4), so a named action that runs itself still ends.</summary>
+    public const int StepBudget = 10_000;
+
     /// <summary>Advance <paramref name="state"/> by one event. Pure: the input state isn't changed.</summary>
     public static (NavState State, IReadOnlyList<Effect> Effects) Step(Manifest manifest, NavState state, NavEvent navEvent)
     {
@@ -698,150 +707,169 @@ public static class Navigator
     /// <paramref name="up"/>: running a menu's back (see RemoteBack): gotos unwind history instead of adding to it.
     /// <paramref name="cueAt"/>: running a cue's action during playback (Level 2); the time interrupted playback resumes from.
     /// </summary>
-    private static void Run(Manifest manifest, Working s, MenuAction action, List<Effect> effects, bool pushHistory, bool up = false, double? cueAt = null)
+    private static void Run(Manifest manifest, Working s, MenuAction first, List<Effect> effects, bool pushHistory, bool up = false, double? cueAt = null)
     {
-        var duringPlayback = cueAt is not null && s.Mode == NavMode.Playing && s.Playing is not null;
-        switch (action)
+        // An action in tail position (set's then, if's branches, do's last step, resume's otherwise, a
+        // pressed button's action, a named action) continues this loop instead of nesting a call, so a
+        // disc's loop, written as a named action that runs itself, goes round as often as the budget allows.
+        var next = first;
+        while (next is not null)
         {
-            case GotoAction g:
+            if (s.StepsLeft <= 0)
             {
-                // A cue opening a menu leaves playback, remembered for resume where the cue is.
-                if (duringPlayback)
+                if (s.StepsLeft == 0)
                 {
-                    LeavePlayback(manifest, s, cueAt!.Value);
+                    effects.Add(new Effect.BudgetExceeded());
                 }
 
-                var here = CurrentPosition(s);
-                if (up)
-                {
-                    // Going up to a menu already in history: drop it and everything after it.
-                    var i = s.History.FindLastIndex(h => h.Menu == g.Menu);
-                    if (i >= 0)
-                    {
-                        s.History.RemoveRange(i, s.History.Count - i);
-                    }
-                }
-                else if (pushHistory && here is not null && g.History != "replace")
-                {
-                    s.History.Add(here);
-                }
-
-                if (!string.IsNullOrEmpty(g.Transition))
-                {
-                    s.Mode = NavMode.Transition;
-                    // A variable button is read now, when the viewer chose it.
-                    s.TransitionTo = (g.Menu, ResolveButton(s, MenuOf(manifest, g.Menu), g.Button));
-                    effects.Add(new Effect.Transition(g.Transition));
-                }
-                else
-                {
-                    EnterMenu(manifest, s, g.Menu, g.Button, intro: true, effects);
-                }
-
-                break;
+                s.StepsLeft = -1;
+                return;
             }
 
-            case BackAction:
-                // From a cue: like the remote's Back during playback.
-                if (duringPlayback)
-                {
-                    FinishPlayback(manifest, s, effects, completed: false, stoppedAt: cueAt);
-                }
-                else
-                {
-                    GoBack(manifest, s, effects);
-                }
-
-                break;
-            case PlayAction p:
-                StartPlayback(manifest, s, [p.ToItem()], p.After, effects, cueAt);
-                break;
-            case PlayAllAction pa:
-                StartPlayback(manifest, s, pa.Items, pa.After, effects, cueAt);
-                break;
-            case ResumeAction resume:
-                if (s.LastStop is { } stop)
-                {
-                    StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects, cueAt);
-                }
-                else if (resume.Otherwise is not null)
-                {
-                    // Nothing to resume: the fallback runs as if it were the action itself.
-                    Run(manifest, s, resume.Otherwise, effects, pushHistory, up, cueAt);
-                }
-
-                break;
-            case SetAction set:
+            s.StepsLeft--;
+            var action = next;
+            next = null;
+            var duringPlayback = cueAt is not null && s.Mode == NavMode.Playing && s.Playing is not null;
+            switch (action)
             {
-                var operand = set.Value.Var is { } v ? s.Read(v) : set.Value.Literal!.Value;
-                var seed = s.Seed;
-                var next = Logic.Apply(ref seed, s.Read(set.Var), set.Op ?? "set", operand);
-                s.Seed = seed;
-                if (next is { } value)
+                case GotoAction g:
                 {
-                    if (set.Var == "@focus")
+                    // A cue opening a menu leaves playback, remembered for resume where the cue is.
+                    if (duringPlayback)
                     {
-                        // Highlight a button of the current menu (a DVD's SetHL_BTN).
-                        if (s.Menu is not null && FindButton(MenuOf(manifest, s.Menu), value.ToString()) is not null)
+                        LeavePlayback(manifest, s, cueAt!.Value);
+                    }
+
+                    var here = CurrentPosition(s);
+                    if (up)
+                    {
+                        // Going up to a menu already in history: drop it and everything after it.
+                        var i = s.History.FindLastIndex(h => h.Menu == g.Menu);
+                        if (i >= 0)
                         {
-                            s.Focus = value.ToString();
+                            s.History.RemoveRange(i, s.History.Count - i);
                         }
                     }
-                    else if (set.Var.StartsWith('@'))
+                    else if (pushHistory && here is not null && g.History != "replace")
                     {
-                        s.Player[set.Var] = value;
+                        s.History.Add(here);
+                    }
+
+                    if (!string.IsNullOrEmpty(g.Transition))
+                    {
+                        s.Mode = NavMode.Transition;
+                        // A variable button is read now, when the viewer chose it.
+                        s.TransitionTo = (g.Menu, ResolveButton(s, MenuOf(manifest, g.Menu), g.Button));
+                        effects.Add(new Effect.Transition(g.Transition));
                     }
                     else
                     {
-                        s.Vars = new Dictionary<string, Scalar>(s.Vars) { [set.Var] = value };
+                        EnterMenu(manifest, s, g.Menu, g.Button, intro: true, effects);
                     }
-                }
 
-                if (set.Then is not null)
-                {
-                    Run(manifest, s, set.Then, effects, pushHistory, up, cueAt);
-                }
-
-                break;
-            }
-
-            case IfAction ifAction:
-                if (Logic.Eval(ifAction.Test, s.Read))
-                {
-                    Run(manifest, s, ifAction.Then, effects, pushHistory, up, cueAt);
-                }
-                else if (ifAction.Else is not null)
-                {
-                    Run(manifest, s, ifAction.Else, effects, pushHistory, up, cueAt);
-                }
-
-                break;
-            case DoAction doAction:
-                // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
-                foreach (var stepAction in doAction.Steps)
-                {
-                    var (seq, mode, count) = (s.Seq, s.Mode, effects.Count);
-                    Run(manifest, s, stepAction, effects, pushHistory, up, cueAt);
-                    if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition))
-                    {
-                        break;
-                    }
-                }
-
-                break;
-            case ActivateAction a:
-            {
-                // Press a button of the current menu, as if the viewer had: focus, activated state, action.
-                var button = s.Menu is not null ? FindButton(MenuOf(manifest, s.Menu), a.Button) : null;
-                if (button is null)
-                {
                     break;
                 }
 
-                s.Focus = button.Id;
-                effects.Add(new Effect.Activated(s.Menu!, button.Id));
-                Run(manifest, s, button.Action, effects, pushHistory, up);
-                break;
+                case BackAction:
+                    // From a cue: like the remote's Back during playback.
+                    if (duringPlayback)
+                    {
+                        FinishPlayback(manifest, s, effects, completed: false, stoppedAt: cueAt);
+                    }
+                    else
+                    {
+                        GoBack(manifest, s, effects);
+                    }
+
+                    break;
+                case PlayAction p:
+                    StartPlayback(manifest, s, [p.ToItem()], p.After, effects, cueAt);
+                    break;
+                case PlayAllAction pa:
+                    StartPlayback(manifest, s, pa.Items, pa.After, effects, cueAt);
+                    break;
+                case ResumeAction resume:
+                    if (s.LastStop is { } stop)
+                    {
+                        StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects, cueAt);
+                    }
+                    else
+                    {
+                        // Nothing to resume: the fallback runs as if it were the action itself.
+                        next = resume.Otherwise;
+                    }
+
+                    break;
+                case SetAction set:
+                {
+                    var operand = set.Value.Var is { } v ? s.Read(v) : set.Value.Literal!.Value;
+                    var seed = s.Seed;
+                    var result = Logic.Apply(ref seed, s.Read(set.Var), set.Op ?? "set", operand);
+                    s.Seed = seed;
+                    if (result is { } value)
+                    {
+                        if (set.Var == "@focus")
+                        {
+                            // Highlight a button of the current menu (a DVD's SetHL_BTN).
+                            if (s.Menu is not null && FindButton(MenuOf(manifest, s.Menu), value.ToString()) is not null)
+                            {
+                                s.Focus = value.ToString();
+                            }
+                        }
+                        else if (set.Var.StartsWith('@'))
+                        {
+                            s.Player[set.Var] = value;
+                        }
+                        else
+                        {
+                            s.Vars = new Dictionary<string, Scalar>(s.Vars) { [set.Var] = value };
+                        }
+                    }
+
+                    next = set.Then;
+                    break;
+                }
+
+                case IfAction ifAction:
+                    next = Logic.Eval(ifAction.Test, s.Read) ? ifAction.Then : ifAction.Else;
+                    break;
+                case DoAction doAction:
+                {
+                    // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
+                    var last = doAction.Steps.Count - 1;
+                    for (var i = 0; i < last; i++)
+                    {
+                        var (seq, mode, count) = (s.Seq, s.Mode, effects.Count);
+                        Run(manifest, s, doAction.Steps[i], effects, pushHistory, up, cueAt);
+                        if (s.Seq != seq || s.Mode != mode || effects.Skip(count).Any(e => e is Effect.Exit or Effect.Transition) || s.StepsLeft < 0)
+                        {
+                            return;
+                        }
+                    }
+
+                    next = last >= 0 ? doAction.Steps[last] : null;
+                    break;
+                }
+
+                case ActivateAction a:
+                {
+                    // Press a button of the current menu, as if the viewer had: focus, activated state, action.
+                    var button = s.Menu is not null ? FindButton(MenuOf(manifest, s.Menu), a.Button) : null;
+                    if (button is null)
+                    {
+                        break;
+                    }
+
+                    s.Focus = button.Id;
+                    effects.Add(new Effect.Activated(s.Menu!, button.Id));
+                    next = button.Action;
+                    break;
+                }
+
+                case RunAction r:
+                    // As if the named action were written here: same history rules, same cue time.
+                    next = manifest.Actions?.GetValueOrDefault(r.Action);
+                    break;
             }
         }
     }
@@ -1019,6 +1047,9 @@ public static class Navigator
         public long Seed { get; set; } = from.Seed;
 
         public int Seq { get; set; } = from.Seq;
+
+        /// <summary>Actions the current event may still run (not part of the state).</summary>
+        public int StepsLeft { get; set; } = StepBudget;
 
         public Scalar Read(string name) => Logic.Read(Vars, Player, Focus, name);
 

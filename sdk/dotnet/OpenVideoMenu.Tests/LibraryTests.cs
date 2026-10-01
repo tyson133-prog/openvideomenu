@@ -76,6 +76,32 @@ public sealed class LibraryTests : IDisposable
     }
 
     [Fact]
+    public void DeeplyNestedActionsAreRead()
+    {
+        // The spec asks readers to accept at least 256 levels; System.Text.Json's default is 64.
+        var action = """{ "type": "goto", "menu": "main" }""";
+        for (var i = 0; i < 150; i++)
+        {
+            action = $$"""{ "type": "set", "var": "n", "op": "add", "value": 1, "then": {{action}} }""";
+        }
+
+        var json = $$"""
+            {
+              "format": "openvideomenu", "version": "0.1", "title": { "name": "Deep" }, "vars": { "n": 0 },
+              "media": { "f": { "ref": "f.mp4" } }, "rootMenu": "main", "firstPlay": {{action}},
+              "menus": { "main": { "canvas": { "width": 10, "height": 10 }, "buttons": [{ "id": "a", "rect": [0, 0, 5, 5], "action": { "type": "play", "media": "f" } }] } },
+              "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "f" } }] }]
+            }
+            """;
+        var result = Manifest.Parse(json);
+        Assert.True(result.Ok, string.Join("\n", result.Errors));
+        var (state, _) = Navigator.Step(result.Manifest!, new NavState(), new NavEvent.Start());
+        Assert.Equal("main", state.Menu);
+        Assert.Equal(150, state.Vars["n"]);
+        Assert.True(Manifest.Parse(result.Manifest!.ToJson()).Ok);
+    }
+
+    [Fact]
     public void ExtensionsAndUnknownFieldsSurviveARoundTrip()
     {
         var json = """

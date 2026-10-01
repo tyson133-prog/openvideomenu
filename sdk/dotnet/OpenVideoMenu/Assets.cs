@@ -106,6 +106,10 @@ public sealed partial class Manifest
         }
 
         Walk(FirstPlay);
+        foreach (var action in Actions?.Values ?? [])
+        {
+            Walk(action);
+        }
         foreach (var group in Fallback)
         {
             foreach (var item in group.Items)

@@ -2,6 +2,13 @@
 
 This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup, angles, segments and cues during playback) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
 
+## What to export
+
+An importer that exports a disc's menus SHOULD export the whole disc: every title its navigation can
+reach, all audio and subtitle tracks, and the complete logic, so the menus behave as the disc does.
+Partial exports (only some titles, simplified logic) are valid manifests; how faithful to be is the
+importer's choice.
+
 ## Mapping
 
 | Disc concept | Manifest |
@@ -38,6 +45,7 @@ This profile describes how a tool that reads a DVD's menu structure (from an une
 | Other cell commands during a title (SetGPRM, CallSS to a menu, conditional links) | Point cues `{ at, action }` at the cell's end time: `set`, `goto`, `if`. Jumps within the title (LinkCN/LinkPGN) wait for segment playlists. |
 | Buttons in a title's navigation packets (highlights shown over the film) | Overlays `{ from, to, buttons }` on the media, one per run of VOBUs with the same buttons; a button that calls a featurette (and resumes with RSM) is a `play` from the overlay, which returns to the film. |
 | Titles that share video, or play it out of order (a play-all and its episodes, songs of a concert, cuts of a film; seamless branching's interleaved cells) | Either one file per title as the rip made them, or, to keep one copy of shared video, a media with `segments` per title over the ranges of the files that hold each run of cells. Chapters and cues then count on the title's own timeline. |
+| Shared programs: PGCs many links lead into (their pre-commands), menu-domain dispatchers, title post-commands, loops (a Goto back to an earlier line) | Named `actions`, each written once and reached with `run`. A loop is a named action that runs itself in tail position. Keeps the export about the size of the disc's own programs. |
 | SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
 | Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |

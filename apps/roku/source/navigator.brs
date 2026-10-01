@@ -11,10 +11,17 @@ function msNavInitialState() as object
     return { mode: "idle", history: [], intro: false, buttonsReady: true, vars: msNavNewVars(), player: msNavNewVars(), seed: 1&, seq: 0 }
 end function
 
+' Level 2: the most actions one event runs (spec 6.4), so a named action that runs itself still ends.
+function msNavStepBudget() as integer
+    return 10000
+end function
+
 function msNavStep(manifest as object, state as object, event as object) as object
     effects = []
     s = msCopyAA(state)
     s.history = msCopyArray(state.history)
+    ' Actions this event may still run; not part of the state, so it goes before returning.
+    s.stepsLeft = msNavStepBudget()
     t = event["type"]
 
     if t = "start"
@@ -118,6 +125,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         if s.overlay <> invalid and s.overlay.cue = event["id"] then s.overlay = invalid
     end if
 
+    s.Delete("stepsLeft")
     return { state: s, effects: effects }
 end function
 
@@ -369,7 +377,24 @@ sub msNavRun(manifest as object, s as object, action as object, effects as objec
 end sub
 
 ' up: running a menu's back (see msNavRemoteBack): gotos unwind history instead of adding to it.
-sub msNavRunOpts(manifest as object, s as object, action as object, effects as object, pushHistory as boolean, up as boolean)
+' An action in tail position (set's then, if's branches, do's last step, resume's otherwise, a pressed
+' button's action, a named action) continues this loop instead of nesting a call, so a disc's loop,
+' written as a named action that runs itself, goes round as often as the budget allows.
+sub msNavRunOpts(manifest as object, s as object, first as object, effects as object, pushHistory as boolean, up as boolean)
+    action = first
+    while action <> invalid
+        if s.stepsLeft <= 0
+            if s.stepsLeft = 0 then effects.push({ type: "budgetExceeded" })
+            s.stepsLeft = -1
+            return
+        end if
+        s.stepsLeft = s.stepsLeft - 1
+        action = msNavRunOne(manifest, s, action, effects, pushHistory, up)
+    end while
+end sub
+
+' Runs one action; returns the action in its tail position to run next, or invalid.
+function msNavRunOne(manifest as object, s as object, action as object, effects as object, pushHistory as boolean, up as boolean) as dynamic
     t = action["type"]
     duringPlayback = s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
     if t = "goto"
@@ -414,10 +439,10 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
     else if t = "resume"
         if s.lastStop <> invalid
             msNavStartPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], invalid, effects)
-        else if action["otherwise"] <> invalid
+        else
             ' Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if
             ' stopped, LinkRSM, else go to the picker").
-            msNavRunOpts(manifest, s, action["otherwise"], effects, pushHistory, up)
+            return action["otherwise"]
         end if
     else if t = "set"
         name = action["var"]
@@ -437,36 +462,41 @@ sub msNavRunOpts(manifest as object, s as object, action as object, effects as o
                 s.vars = vars
             end if
         end if
-        if action["then"] <> invalid then msNavRunOpts(manifest, s, action["then"], effects, pushHistory, up)
+        return action["then"]
     else if t = "if"
-        if msNavEvalTest(s, action["test"])
-            msNavRunOpts(manifest, s, action["then"], effects, pushHistory, up)
-        else if action["else"] <> invalid
-            msNavRunOpts(manifest, s, action["else"], effects, pushHistory, up)
-        end if
+        if msNavEvalTest(s, action["test"]) then return action["then"]
+        return action["else"]
     else if t = "do"
         ' In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
-        for each stepAction in action["steps"]
+        steps = action["steps"]
+        last = steps.Count() - 1
+        for k = 0 to last - 1
             seq = s.seq
             mode = s.mode
             count = effects.Count()
-            msNavRunOpts(manifest, s, stepAction, effects, pushHistory, up)
-            navigated = s.seq <> seq or s.mode <> mode
+            msNavRunOpts(manifest, s, steps[k], effects, pushHistory, up)
+            navigated = s.seq <> seq or s.mode <> mode or s.stepsLeft < 0
             for i = count to effects.Count() - 1
                 if effects[i].type = "exit" or effects[i].type = "transition" then navigated = true
             end for
-            if navigated then exit for
+            if navigated then return invalid
         end for
+        if last >= 0 then return steps[last]
     else if t = "activate"
         ' Press a button of the current menu, as if the viewer had: focus, activated state, action.
-        if s.menu = invalid then return
+        if s.menu = invalid then return invalid
         button = msNavFindButton(msNavMenu(manifest, s.menu), action["button"])
-        if button = invalid then return
+        if button = invalid then return invalid
         s.focus = button["id"]
         effects.push({ type: "activated", menu: s.menu, button: button["id"] })
-        msNavRunOpts(manifest, s, button["action"], effects, pushHistory, up)
+        return button["action"]
+    else if t = "run"
+        ' Level 2: as if the named action were written here: same history rules, same cue time.
+        named = manifest["actions"]
+        if named <> invalid then return named[action["action"]]
     end if
-end sub
+    return invalid
+end function
 
 ' Started by a cue during playback (s.cueAt set): interrupts the current playback, which continues
 ' from the cue's time when this ends or is stopped (Level 2).

@@ -18,7 +18,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
@@ -47,6 +47,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   back: ["type"],
   resume: ["type", "otherwise"],
   activate: ["type", "button"],
+  run: ["type", "action"],
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -108,6 +109,7 @@ class Validator {
     if (data.source !== undefined) this.source(data.source);
 
     this.vars(data.vars);
+    this.collectActions(data.actions);
     const mediaIds = this.media(data.media);
     const menus = this.menus(data.menus, mediaIds);
     // Media cues run actions, so they're checked once every menu is known.
@@ -123,6 +125,7 @@ class Validator {
     }
 
     if (data.firstPlay !== undefined) this.action(data.firstPlay, "/firstPlay", mediaIds, menus);
+    for (const [name, body] of this.named) this.namedAction(name, body, mediaIds, menus);
 
     this.fallback(data.fallback, mediaIds, menus);
   }
@@ -135,6 +138,66 @@ class Validator {
 
   /** Media id → how many angles it has (1 without angles). */
   private angleCounts = new Map<string, number>();
+
+  /** Level 2: the manifest's named actions, by name. */
+  private named = new Map<string, unknown>();
+
+  /** Named actions that start playback with an `after` (also through other named actions): not for cues. */
+  private playsWithAfter = new Set<string>();
+
+  /**
+   * Level 2: note every named action, and which of them start playback with an `after` when run
+   * (directly or through the named actions they run), before any action that may run them is checked.
+   */
+  private collectActions(value: unknown) {
+    if (value === undefined) return;
+    if (!isObject(value)) {
+      this.error("/actions", "Must be an object of name → action.");
+      return;
+    }
+    const runs = new Map<string, Set<string>>();
+    for (const [name, body] of Object.entries(value)) {
+      this.named.set(name, body);
+      const targets = new Set<string>();
+      runs.set(name, targets);
+      sameContext(body, (a) => {
+        if ((a.type === "play" || a.type === "playAll") && a.after !== undefined) this.playsWithAfter.add(name);
+        if (a.type === "run" && typeof a.action === "string") targets.add(a.action);
+      });
+    }
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const [name, targets] of runs)
+        if (!this.playsWithAfter.has(name) && [...targets].some((t) => this.playsWithAfter.has(t))) {
+          this.playsWithAfter.add(name);
+          changed = true;
+        }
+    }
+  }
+
+  /** Check a named action's body. One that only runs other named actions in a circle never does anything. */
+  private namedAction(name: string, body: unknown, mediaIds: Map<string, number>, menus: Map<string, Set<string>>) {
+    const path = `/actions/${name}`;
+    const seen = new Set<string>([name]);
+    for (let a = body; isObject(a) && a.type === "run" && typeof a.action === "string"; a = this.named.get(a.action)) {
+      if (seen.has(a.action)) {
+        this.error(path, `Only runs named actions in a circle (back to "${a.action}"); it would never do anything.`);
+        return;
+      }
+      seen.add(a.action);
+    }
+    this.action(body, path, mediaIds, menus);
+  }
+
+  /** The action a run (or a chain of them) comes to, or the action itself. */
+  private resolveRun(value: unknown): unknown {
+    const seen = new Set<string>();
+    while (isObject(value) && value.type === "run" && typeof value.action === "string" && !seen.has(value.action)) {
+      seen.add(value.action);
+      value = this.named.get(value.action);
+    }
+    return value;
+  }
 
   private vars(value: unknown) {
     if (value === undefined) return;
@@ -666,6 +729,11 @@ class Validator {
           else this.action(value.otherwise, `${path}/otherwise`, mediaIds, menus, ownButtons);
         }
         break;
+      case "run":
+        if (!isNonEmptyString(value.action) || !this.named.has(value.action)) this.error(`${path}/action`, `No action "${String(value.action)}" in /actions.`);
+        else if (this.cueDepth > 0 && this.playsWithAfter.has(value.action))
+          this.error(`${path}/action`, `Action "${value.action}" starts playback with after; playback started during playback returns to it, so after is not allowed here.`);
+        break;
       case "activate":
         if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back or timeout.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
@@ -687,13 +755,13 @@ class Validator {
     if ((type === "play" || type === "playAll") && value.after !== undefined && this.cueDepth > 0) {
       this.error(`${path}/after`, "Playback started during playback returns to it when done; after is not allowed here.");
     } else if ((type === "play" || type === "playAll") && value.after !== undefined) {
-      const after: unknown = value.after;
-      const otherwise: unknown = isObject(after) && after.type === "resume" ? after.otherwise : undefined;
+      const after: unknown = this.resolveRun(value.after);
+      const otherwise: unknown = isObject(after) && after.type === "resume" ? this.resolveRun(after.otherwise) : undefined;
       if (isObject(after) && (after.type === "play" || after.type === "playAll"))
         this.error(`${path}/after`, "After-playback action must not start another playback; use playAll instead.");
       else if (isObject(otherwise) && (otherwise.type === "play" || otherwise.type === "playAll"))
         this.error(`${path}/after/otherwise`, "After-playback action must not start another playback; use playAll instead.");
-      else this.action(after, `${path}/after`, mediaIds, menus);
+      else this.action(value.after, `${path}/after`, mediaIds, menus);
     }
   }
 
@@ -726,7 +794,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;
@@ -734,6 +802,17 @@ class Validator {
     if (visibleItems === 0)
       this.error("/fallback", "At least one fallback group must be visible (not hidden).");
   }
+}
+
+/**
+ * Visit an action and the actions it runs in the same place (set's then, if's branches, do's steps,
+ * resume's otherwise); not after-actions or cues, which run later, at playback's end or during it.
+ */
+function sameContext(action: unknown, visit: (a: Record<string, unknown>) => void) {
+  if (!isObject(action)) return;
+  visit(action);
+  for (const key of ["then", "else", "otherwise"]) sameContext(action[key], visit);
+  if (Array.isArray(action.steps)) for (const st of action.steps) sameContext(st, visit);
 }
 
 /** Parse "16:9", "4:3", "1.85" or a number into width/height ratio. */

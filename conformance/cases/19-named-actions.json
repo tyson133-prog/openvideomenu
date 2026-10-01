@@ -1,0 +1,46 @@
+{
+  "description": "Named actions: logic written once and run from many places, as a disc's programs are shared. A named action may run itself (a disc's loop), and runs as if written in place: from firstPlay, a button, or a play's after. One event runs at most 10,000 actions; a loop that never ends stops there with budgetExceeded, leaving the viewer where they were.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Shared Logic" },
+    "media": {
+      "e1": { "ref": "Episode 1.mkv", "kind": "episode" },
+      "e2": { "ref": "Episode 2.mkv", "kind": "episode" }
+    },
+    "vars": { "n": 0, "ep": 0, "spin": 0 },
+    "actions": {
+      "count": { "type": "set", "var": "n", "op": "add", "value": 1, "then": {
+        "type": "if", "test": { "var": "n", "ge": 5 }, "then": { "type": "goto", "menu": "main", "button": "loop" }, "else": { "type": "run", "action": "count" } } },
+      "play-ep": { "type": "if", "test": { "var": "ep", "eq": 1 },
+        "then": { "type": "play", "media": "e1", "after": { "type": "run", "action": "next" } },
+        "else": { "type": "if", "test": { "var": "ep", "eq": 2 },
+          "then": { "type": "play", "media": "e2", "after": { "type": "run", "action": "next" } },
+          "else": { "type": "goto", "menu": "main", "button": "all" } } },
+      "next": { "type": "set", "var": "ep", "op": "add", "value": 1, "then": { "type": "run", "action": "play-ep" } },
+      "forever": { "type": "set", "var": "spin", "op": "add", "value": 1, "then": { "type": "run", "action": "forever" } }
+    },
+    "firstPlay": { "type": "run", "action": "count" },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "all", "rect": [100, 100, 200, 40], "nav": { "down": "loop" }, "action": { "type": "set", "var": "ep", "value": 1, "then": { "type": "run", "action": "play-ep" } } },
+          { "id": "loop", "rect": [100, 160, 200, 40], "nav": { "up": "all" }, "action": { "type": "run", "action": "forever" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Episodes", "items": [{ "label": "Episode 1", "action": { "type": "play", "media": "e1" } }, { "label": "Episode 2", "action": { "type": "play", "media": "e2" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "loop", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "loop", "effects": [{ "type": "activated", "menu": "main", "button": "loop" }, { "type": "budgetExceeded" }] } },
+    { "event": { "type": "press", "key": "up" }, "expect": { "focus": "all" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "all" }, { "type": "play", "media": "e1", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "e2", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "all", "effects": [] } }
+  ]
+}

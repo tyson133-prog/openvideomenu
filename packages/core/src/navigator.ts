@@ -74,7 +74,12 @@ export type Effect =
    * Level 2: (re)start the countdown for [menu]'s timeout: report {type: "timeout", menu} after
    * [after] seconds, unless another startTimer replaces it or the viewer leaves that menu first.
    */
-  | { type: "startTimer"; menu: string; after: number };
+  | { type: "startTimer"; menu: string; after: number }
+  /**
+   * Level 2: one event ran STEP_BUDGET actions (a named action running itself without end); the
+   * rest were dropped. For diagnostics: players carry on with the state as it is.
+   */
+  | { type: "budgetExceeded" };
 
 export interface MenuPosition {
   menu: string;
@@ -130,8 +135,15 @@ export interface StepResult {
 
 export const initialState = (): NavState => ({ mode: "idle", history: [], intro: false, buttonsReady: true, vars: {}, player: {}, seed: 1, seq: 0 });
 
+/** Level 2: the most actions one event runs (spec §6.4), so a named action that runs itself still ends. */
+export const STEP_BUDGET = 10_000;
+
+/** Actions the current event may still run; step() is synchronous, so one counter serves. */
+let stepsLeft = STEP_BUDGET;
+
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
   const effects: Effect[] = [];
+  stepsLeft = STEP_BUDGET;
   const s: NavState = { ...state, history: [...state.history] };
 
   switch (event.type) {
@@ -429,80 +441,100 @@ function currentPosition(s: NavState): MenuPosition | undefined {
  * `up`: running a menu's `back` (see remoteBack): gotos unwind history instead of adding to it.
  * `cueAt`: running a cue's action during playback (Level 2); the time interrupted playback resumes from.
  */
-function run(manifest: Manifest, s: NavState, action: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean; cueAt?: number }) {
-  const duringPlayback = opts.cueAt !== undefined && s.mode === "playing" && s.playing !== undefined;
-  switch (action.type) {
-    case "goto": {
-      // A cue opening a menu leaves playback, remembered for resume where the cue is.
-      if (duringPlayback) leavePlayback(manifest, s, opts.cueAt!);
-      const here = currentPosition(s);
-      if (opts.up) {
-        // Going up to a menu already in history: drop it and everything after it.
-        const i = s.history.map((h) => h.menu).lastIndexOf(action.menu);
-        if (i >= 0) s.history.length = i;
-      } else if (opts.pushHistory && here && action.history !== "replace") s.history.push(here);
-      if (action.transition) {
-        s.mode = "transition";
-        // A variable button is read now, when the viewer chose it.
-        const button = buttonRef(s, menuOf(manifest, action.menu), action.button);
-        s.transitionTo = { menu: action.menu, ...(button !== undefined ? { button } : {}) };
-        effects.push({ type: "transition", src: action.transition });
-      } else {
-        enterMenu(manifest, s, action.menu, action.button, "intro", effects);
-      }
-      break;
+function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], opts: { pushHistory: boolean; up?: boolean; cueAt?: number }) {
+  // An action in tail position (set's then, if's branches, do's last step, resume's otherwise, a
+  // pressed button's action, a named action) continues this loop instead of nesting a call, so a
+  // disc's loop, written as a named action that runs itself, goes round as often as the budget allows.
+  let next: Action | undefined = first;
+  while (next) {
+    if (stepsLeft <= 0) {
+      if (stepsLeft === 0) effects.push({ type: "budgetExceeded" });
+      stepsLeft = -1;
+      return;
     }
-    case "back":
-      // From a cue: like the remote's Back during playback.
-      if (duringPlayback) finishPlayback(manifest, s, effects, { stoppedAt: opts.cueAt });
-      else goBack(manifest, s, effects);
-      break;
-    case "play":
-      startPlayback(manifest, s, [action], action.after, effects, opts.cueAt);
-      break;
-    case "playAll":
-      startPlayback(manifest, s, action.items, action.after, effects, opts.cueAt);
-      break;
-    case "resume":
-      if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects, opts.cueAt);
-      // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
-      // LinkRSM, else go to the picker").
-      else if (action.otherwise) run(manifest, s, action.otherwise, effects, opts);
-      break;
-    case "set": {
-      const next = applyOp(s, readVar(s, action.var), action.op ?? "set", valueOf(s, action.value));
-      if (next !== undefined) {
-        if (action.var === "@focus") {
-          // Highlight a button of the current menu (a DVD's SetHL_BTN).
-          if (s.menu && findButton(menuOf(manifest, s.menu), String(next))) s.focus = String(next);
-        } else if (action.var.startsWith("@")) s.player = { ...s.player, [action.var]: next };
-        else s.vars = { ...s.vars, [action.var]: next };
+    stepsLeft--;
+    const action: Action = next;
+    next = undefined;
+    const duringPlayback = opts.cueAt !== undefined && s.mode === "playing" && s.playing !== undefined;
+    switch (action.type) {
+      case "goto": {
+        // A cue opening a menu leaves playback, remembered for resume where the cue is.
+        if (duringPlayback) leavePlayback(manifest, s, opts.cueAt!);
+        const here = currentPosition(s);
+        if (opts.up) {
+          // Going up to a menu already in history: drop it and everything after it.
+          const i = s.history.map((h) => h.menu).lastIndexOf(action.menu);
+          if (i >= 0) s.history.length = i;
+        } else if (opts.pushHistory && here && action.history !== "replace") s.history.push(here);
+        if (action.transition) {
+          s.mode = "transition";
+          // A variable button is read now, when the viewer chose it.
+          const button = buttonRef(s, menuOf(manifest, action.menu), action.button);
+          s.transitionTo = { menu: action.menu, ...(button !== undefined ? { button } : {}) };
+          effects.push({ type: "transition", src: action.transition });
+        } else {
+          enterMenu(manifest, s, action.menu, action.button, "intro", effects);
+        }
+        break;
       }
-      if (action.then) run(manifest, s, action.then, effects, opts);
-      break;
-    }
-    case "if":
-      if (evalTest(s, action.test)) run(manifest, s, action.then, effects, opts);
-      else if (action.else) run(manifest, s, action.else, effects, opts);
-      break;
-    case "do":
-      // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
-      for (const stepAction of action.steps) {
-        const before = { seq: s.seq, mode: s.mode, effects: effects.length };
-        run(manifest, s, stepAction, effects, opts);
-        const navigated =
-          s.seq !== before.seq || s.mode !== before.mode || effects.slice(before.effects).some((e) => e.type === "exit" || e.type === "transition");
-        if (navigated) break;
+      case "back":
+        // From a cue: like the remote's Back during playback.
+        if (duringPlayback) finishPlayback(manifest, s, effects, { stoppedAt: opts.cueAt });
+        else goBack(manifest, s, effects);
+        break;
+      case "play":
+        startPlayback(manifest, s, [action], action.after, effects, opts.cueAt);
+        break;
+      case "playAll":
+        startPlayback(manifest, s, action.items, action.after, effects, opts.cueAt);
+        break;
+      case "resume":
+        if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects, opts.cueAt);
+        // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
+        // LinkRSM, else go to the picker").
+        else next = action.otherwise;
+        break;
+      case "set": {
+        const value = applyOp(s, readVar(s, action.var), action.op ?? "set", valueOf(s, action.value));
+        if (value !== undefined) {
+          if (action.var === "@focus") {
+            // Highlight a button of the current menu (a DVD's SetHL_BTN).
+            if (s.menu && findButton(menuOf(manifest, s.menu), String(value))) s.focus = String(value);
+          } else if (action.var.startsWith("@")) s.player = { ...s.player, [action.var]: value };
+          else s.vars = { ...s.vars, [action.var]: value };
+        }
+        next = action.then;
+        break;
       }
-      break;
-    case "activate": {
-      // Press a button of the current menu, as if the viewer had: focus, activated state, action.
-      const button = s.menu ? findButton(menuOf(manifest, s.menu), action.button) : undefined;
-      if (!button) break;
-      s.focus = button.id;
-      effects.push({ type: "activated", menu: s.menu!, button: button.id });
-      run(manifest, s, button.action, effects, opts);
-      break;
+      case "if":
+        next = evalTest(s, action.test) ? action.then : action.else;
+        break;
+      case "do": {
+        // In order, until a step navigates: opens a menu, starts playback or a transition, or leaves.
+        const last = action.steps.length - 1;
+        for (let i = 0; i < last; i++) {
+          const before = { seq: s.seq, mode: s.mode, effects: effects.length };
+          run(manifest, s, action.steps[i]!, effects, opts);
+          const navigated =
+            s.seq !== before.seq || s.mode !== before.mode || effects.slice(before.effects).some((e) => e.type === "exit" || e.type === "transition");
+          if (navigated || stepsLeft < 0) return;
+        }
+        next = action.steps[last];
+        break;
+      }
+      case "activate": {
+        // Press a button of the current menu, as if the viewer had: focus, activated state, action.
+        const button = s.menu ? findButton(menuOf(manifest, s.menu), action.button) : undefined;
+        if (!button) break;
+        s.focus = button.id;
+        effects.push({ type: "activated", menu: s.menu!, button: button.id });
+        next = button.action;
+        break;
+      }
+      case "run":
+        // As if the named action were written here: same history rules, same cue time.
+        next = manifest.actions?.[action.action];
+        break;
     }
   }
 }

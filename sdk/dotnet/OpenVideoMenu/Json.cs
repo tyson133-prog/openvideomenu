@@ -13,13 +13,19 @@ public sealed partial class Manifest
     /// </summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateOptions();
 
+    /// <summary>
+    /// How deep manifest JSON may nest. The spec asks readers for at least 256 levels; System.Text.Json
+    /// stops at 64 unless told otherwise.
+    /// </summary>
+    public const int MaxDepth = 1024;
+
     /// <summary>Parse and validate manifest JSON. <see cref="ValidationResult.Manifest"/> is set when it's valid.</summary>
     public static ValidationResult Parse(string json)
     {
         JsonDocument doc;
         try
         {
-            doc = JsonDocument.Parse(json);
+            doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = MaxDepth });
         }
         catch (JsonException e)
         {
@@ -69,6 +75,7 @@ public sealed partial class Manifest
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = true,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            MaxDepth = MaxDepth,
         };
         options.Converters.Add(new WholeNumberConverter());
         options.MakeReadOnly(populateMissingResolver: true);
@@ -133,6 +140,7 @@ internal sealed class MenuActionConverter : JsonConverter<MenuAction>
             "set" => typeof(SetAction),
             "if" => typeof(IfAction),
             "do" => typeof(DoAction),
+            "run" => typeof(RunAction),
             var other => throw new JsonException($"Unknown action type \"{other}\"."),
         };
         var action = (MenuAction)el.Deserialize(target, options)!;

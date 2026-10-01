@@ -45,6 +45,12 @@ public sealed partial class Manifest
     /// <summary>Level 2: the manifest's own variables and their starting values (integer or text; a variable keeps its type).</summary>
     public Dictionary<string, Scalar>? Vars { get; set; }
 
+    /// <summary>
+    /// Level 2: named actions, run from anywhere with <see cref="RunAction"/>, so logic many buttons
+    /// share (a disc's PGC entry, a dispatcher, an episode's end) is written once (spec §6.4).
+    /// </summary>
+    public Dictionary<string, MenuAction>? Actions { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

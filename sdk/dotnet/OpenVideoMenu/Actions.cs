@@ -140,6 +140,15 @@ public sealed class IfAction : MenuAction
     public MenuAction? Else { get; set; }
 }
 
+/// <summary>Level 2: run a named action from <see cref="Manifest.Actions"/>, as if it were written here.</summary>
+public sealed class RunAction : MenuAction
+{
+    public override string Type => "run";
+
+    /// <summary>The name of an entry in <see cref="Manifest.Actions"/>.</summary>
+    public string Action { get; set; } = "";
+}
+
 /// <summary>Level 2: run actions in order, stopping after the first that navigates.</summary>
 public sealed class DoAction : MenuAction
 {

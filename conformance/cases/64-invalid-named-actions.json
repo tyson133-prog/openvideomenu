@@ -1,0 +1,30 @@
+{
+  "description": "Named actions: a run must name an entry of actions; named actions are shared, so they can't press one menu's buttons (activate); runs that only run each other in a circle never do anything; a run in a cue must not start playback with after; a play's after must not come to another playback through a run; fallback items can't run logic.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/buttons/0/action/action", "/actions/press/type", "/actions/ping", "/actions/pong", "/media/feature/cues/0/action/action", "/menus/main/buttons/1/action/after", "/fallback/0/items/1/action/type"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Shared Logic" },
+    "media": { "feature": { "ref": "a.mp4", "cues": [{ "at": 10, "action": { "type": "run", "action": "watch" } }] } },
+    "actions": {
+      "press": { "type": "activate", "button": "a" },
+      "ping": { "type": "run", "action": "pong" },
+      "pong": { "type": "run", "action": "ping" },
+      "watch": { "type": "do", "steps": [{ "type": "play", "media": "feature", "after": { "type": "back" } }] },
+      "again": { "type": "play", "media": "feature" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "run", "action": "missing" } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "play", "media": "feature", "after": { "type": "run", "action": "again" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }, { "label": "Logic", "action": { "type": "run", "action": "again" } }] }]
+  }
+}

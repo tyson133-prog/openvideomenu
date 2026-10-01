@@ -273,6 +273,10 @@ export class MenuPlayer {
         break;
       case "activated":
         break;
+      case "budgetExceeded":
+        // A named action ran itself without end; the navigator dropped the rest. The menus carry on.
+        console.warn("Open Video Menu: an action loop reached the step budget and was stopped.");
+        break;
     }
   }
 

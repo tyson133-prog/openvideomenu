@@ -290,7 +290,7 @@ public sealed class MenuCatalog
         JsonDocument doc;
         try
         {
-            doc = JsonDocument.Parse(text);
+            doc = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = Manifest.MaxDepth });
         }
         catch (JsonException e)
         {
