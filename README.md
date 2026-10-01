@@ -25,6 +25,22 @@ Sintel (2010)/
 
 Folder names follow the Plex/Jellyfin conventions people already use, so there's nothing to reorganize.
 
+## What a menu can do
+
+Players support the format in levels, and every manifest works at every level:
+
+- **Level 0:** a plain list of what to play. Every manifest carries one.
+- **Level 1:** menus: background art, buttons with highlight states, remote navigation, submenus, chapters, play-alls, resume, and a Back key that goes where the disc's would.
+- **Level 2:** everything a DVD can do, so an imported disc behaves like the disc:
+  - motion menus, menu music, intros and menus that move on by themselves;
+  - variables, conditions and shared named actions (a disc's registers and programs);
+  - soundtrack, subtitle and angle choices, including changes during the film;
+  - titles made of pieces of other files;
+  - what happens during playback: cues, buttons over the film, jumps, and still frames that wait for the viewer;
+  - the remote's Menu and Title keys, the disc's resume point, timers, and parental requests.
+
+  What a disc forbids (skipping the warning, fast-forwarding the logos) is recorded as information only. Players decide; by default the viewer can skip anything.
+
 ## Try it
 
 You'll need Node.js 22.2+ and ffmpeg.
@@ -59,17 +75,23 @@ node packages/cli/dist/main.js validate <file-or-folder>
 | [`conformance/`](conformance) | Language-neutral test cases: manifests, input events, expected results |
 | [`packages/core`](packages/core) | Validator and navigation state machine (TypeScript, no dependencies) |
 | [`packages/renderer-web`](packages/renderer-web) | Reference web player: 10-foot UI, remote keys, pluggable playback |
-| [`packages/cli`](packages/cli) | `openvideomenu validate` and `openvideomenu preview` |
+| [`packages/cli`](packages/cli) | `openvideomenu validate`, `preview`, `pack` and `unpack` (bundles) |
+| [`packages/asset-server`](packages/asset-server) | A small read-only server that hands menus to TV apps next to Plex or Jellyfin (proof of concept) |
+| [`sdk/dotnet`](sdk/dotnet) | .NET library: read, write and validate manifests, and the same navigator, for C# tools such as importers |
+| [`plugins/jellyfin`](plugins/jellyfin) | Jellyfin plugin that serves menus from the media server itself (proof of concept) |
+| [`apps/androidtv`](apps/androidtv), [`apps/roku`](apps/roku) | ovmplayer, TV apps that play menus from your Plex or Jellyfin library (proofs of concept) |
+| [`docker/`](docker), [`packaging/`](packaging) | Ways to run the asset server |
 | [`examples/`](examples) | Sintel (Blender open movie) and a synthetic DVD-shaped title |
+| [`site/`](site) | The website, openvideomenu.org |
 
 ## For player developers
 
 A player plugs in three small pieces:
 - **playback:** play a URL from a time, report when it ends or stops
-- **input:** turn remote or keyboard presses into up/down/left/right/enter/back
+- **input:** turn remote or keyboard presses into up/down/left/right/enter/back (and, at Level 2, the Menu and Title keys)
 - **media resolver:** turn a media reference into a playable URL
 
-Navigation logic is a pure function (`step(manifest, state, event)`) that you can reuse or re-implement. Either way, the [conformance cases](conformance/cases) tell you exactly how it must behave.
+Navigation logic is a pure function (`step(manifest, state, event)`) that you can reuse or re-implement: the TypeScript, .NET and Roku (BrightScript) versions here all pass the same [conformance cases](conformance/cases), which tell you exactly how it must behave.
 
 A **Level 0** player only needs the fallback list, which takes about an afternoon of work.
 
@@ -79,9 +101,9 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 
 ## Roadmap
 
-- **Level 2:** motion menus, menu music, timeouts, variables, and audio/subtitle setup menus
-- **Jellyfin plugin:** menus inside Jellyfin's web, TV and mobile apps
-- **.NET library:** so C# tools, such as importers and the Jellyfin plugin, can read and write manifests
+- **DVD import:** exporting discs with their complete menus, in DVD Tamer (a separate tool)
+- **Players:** device testing of the newest Level 2 features on the TV apps, then a soft launch
+- **Jellyfin:** menus inside Jellyfin's own web, TV and mobile apps (the plugin serves them today)
 - **Tools:** `openvideomenu init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
 - **v1.0:** a final name, a frozen format, the compatibility charter in force
 
