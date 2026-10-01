@@ -106,7 +106,7 @@ public sealed partial class Manifest
         }
 
         Walk(FirstPlay);
-        foreach (var action in Actions?.Values ?? [])
+        foreach (var action in Actions?.Values ?? Enumerable.Empty<MenuAction>())
         {
             Walk(action);
         }
