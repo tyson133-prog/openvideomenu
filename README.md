@@ -101,7 +101,7 @@ From v1.0: old manifests work forever, fields are never removed or redefined, un
 
 ## Roadmap
 
-- **DVD import:** exporting discs with their complete menus, in DVD Tamer (a separate tool)
+- **Importers:** tools that turn existing menus, such as DVDs, into manifests with their complete behaviour
 - **Players:** device testing of the newest Level 2 features on the TV apps, then a soft launch
 - **Jellyfin:** menus inside Jellyfin's own web, TV and mobile apps (the plugin serves them today)
 - **Tools:** `openvideomenu init` to build a menu from an existing Plex/Jellyfin folder, plus a visual menu editor
