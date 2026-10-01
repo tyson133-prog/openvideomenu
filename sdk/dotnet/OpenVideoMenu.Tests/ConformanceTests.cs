@@ -154,6 +154,7 @@ public sealed class ConformanceTests
         "timeout" => new NavEvent.Timeout(e.GetProperty("menu").GetString()!),
         "cue" => new NavEvent.Cue(e.GetProperty("id").GetString()!),
         "cueEnd" => new NavEvent.CueEnd(e.GetProperty("id").GetString()!),
+        "buttonSet" => new NavEvent.ButtonSetChanged(e.GetProperty("index").ValueKind == JsonValueKind.Null ? null : e.GetProperty("index").GetInt32()),
         var other => throw new InvalidDataException($"Unknown event {other}"),
     };
 

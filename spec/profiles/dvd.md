@@ -34,6 +34,7 @@ importer's choice.
 | Buttons unreachable by arrows / tiny hidden buttons | Keep them. Put their media in a `fallback` group with `hidden: true`. |
 | Titles and chapters (PTT) | `media` entries with `chapters` (start time in seconds within the output file) |
 | Remote Return (Go Up) | Menu `back`, chosen per menu to behave like the disc: the PGC's **Go Up** target when it has one (`goto` that menu); otherwise the menu's own **on-screen back button**, i.e. a button that returns to the menu this one was entered from (`activate` it, so its highlight shows and the viewer lands on the right item); otherwise leave `back` out (history). |
+| Highlight information that changes during a menu cell (new HLI start/end times in the menu's navigation packets) | `buttonSets` on the menu: one set per run of the cell with the same buttons, `from`/`to` on the menu video's clock; the menu's own `buttons` are the ones it shows longest. |
 | Menu that moves on by itself (still time or end of the menu's video, then a link) | If the next part has the same buttons, it's the same menu looping: `background.video` with `loopStart`. Otherwise menu `timeout` with `after` = the time until it moves on and the link as its `action`; `restartOnInput: false` to match the disc's timer exactly. |
 | Next / previous page (`LinkNextPG`, `LinkPrevPG`, PGC next/prev) | `goto` with `history: "replace"`, so paging adds no Back steps. |
 | General registers (GPRM 0–15) | Manifest `vars` (integers). Registers in counter mode (SetGPRMMD) count seconds; keep them in `x-dvd` for now. |

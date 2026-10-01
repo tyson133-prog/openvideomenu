@@ -1,0 +1,27 @@
+{
+  "description": "Button sets: windows {from, to?} on the menu's clock that don't overlap, each with buttons whose nav and defaultButton stay within the set. A menu's back may press a button of any of its sets.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/buttonSets/1/from", "/menus/main/buttonSets/2/to", "/menus/main/buttonSets/0/buttons/0/nav/down", "/menus/main/buttonSets/0/defaultButton", "/menus/main/buttonSets/3/buttons"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Button Sets" },
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "back": { "type": "activate", "button": "s1" },
+        "buttons": [{ "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature" } }],
+        "buttonSets": [
+          { "from": 0, "to": 10, "defaultButton": "a", "buttons": [{ "id": "s1", "rect": [0, 0, 10, 10], "nav": { "down": "a" }, "action": { "type": "back" } }] },
+          { "from": 5, "to": 15, "buttons": [{ "id": "s2", "rect": [0, 0, 10, 10], "action": { "type": "back" } }] },
+          { "from": 30, "to": 20, "buttons": [{ "id": "s3", "rect": [0, 0, 10, 10], "action": { "type": "back" } }] },
+          { "from": 40, "buttons": [] }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

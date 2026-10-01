@@ -25,7 +25,8 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   hold: ["at", "for"],
   segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
-  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
+  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits", "buttonSets"],
+  buttonSet: ["from", "to", "buttons", "defaultButton", "autoNav"],
   timeout: ["after", "action", "restartOnInput"],
   cue: ["at", "action"],
   overlay: ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
@@ -457,11 +458,12 @@ class Validator {
       this.error("/menus", "Must be an object of menus.");
       return menus;
     }
-    // First pass: collect button ids so goto targets can be checked in any order.
+    // First pass: collect button ids (the menu's own and its button sets') so goto targets can be
+    // checked in any order.
     for (const [id, m] of Object.entries(value)) {
       const buttons = new Set<string>();
-      if (isObject(m) && Array.isArray(m.buttons))
-        for (const b of m.buttons) if (isObject(b) && isNonEmptyString(b.id)) buttons.add(b.id);
+      const lists = isObject(m) ? [m.buttons, ...(Array.isArray(m.buttonSets) ? m.buttonSets.map((set) => (isObject(set) ? set.buttons : undefined)) : [])] : [];
+      for (const list of lists) if (Array.isArray(list)) for (const b of list) if (isObject(b) && isNonEmptyString(b.id)) buttons.add(b.id);
       menus.set(id, buttons);
     }
     for (const [id, m] of Object.entries(value)) this.menu(m, `/menus/${id}`, mediaIds, menus);
@@ -497,6 +499,8 @@ class Validator {
     const own = this.buttons(value, path, canvas, mediaIds, menus, "this menu");
     if (!own) return;
     if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
+    // Level 2: buttons that change while the menu plays. back, timeout and keys may press any of them.
+    if (value.buttonSets !== undefined) this.buttonSets(value.buttonSets, `${path}/buttonSets`, canvas, mediaIds, menus, own);
     // What the remote's Back does here; may press one of this menu's own buttons.
     if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
     // Like back, a menu's keys may press one of its own buttons.
@@ -603,6 +607,47 @@ class Validator {
       }
     });
     return own;
+  }
+
+  /** Level 2: a menu's button sets (spec 5.3): windows on its clock that don't overlap, each with its buttons. */
+  private buttonSets(
+    value: unknown,
+    path: string,
+    canvas: { width: number; height: number } | undefined,
+    mediaIds: Map<string, number>,
+    menus: Map<string, Set<string>>,
+    own: Set<string>,
+  ) {
+    if (!Array.isArray(value) || value.length === 0) {
+      this.error(path, "Must be a list of at least one button set {from, to?, buttons}.");
+      return;
+    }
+    const windows: { from: number; to: number; i: number }[] = [];
+    value.forEach((set, i) => {
+      const sp = `${path}/${i}`;
+      if (!isObject(set)) {
+        this.error(sp, "Must be a button set {from, to?, buttons}.");
+        return;
+      }
+      this.unknownKeys(set, KNOWN_KEYS.buttonSet!, sp);
+      const okFrom = isFiniteNumber(set.from) && set.from >= 0;
+      if (!okFrom) this.error(`${sp}/from`, "Must be a non-negative number of seconds.");
+      const okTo = set.to === undefined || (okFrom && isFiniteNumber(set.to) && set.to > (set.from as number));
+      if (!okTo) this.error(`${sp}/to`, "Must be a number of seconds after from.");
+      else if (okFrom) {
+        const from = set.from as number;
+        const to = (set.to as number | undefined) ?? Infinity;
+        const other = windows.find((w) => from < w.to && w.from < to);
+        if (other) this.error(`${sp}/from`, `Overlaps button set ${other.i}; one set shows at a time.`);
+        windows.push({ from, to, i });
+      }
+      if (set.autoNav !== undefined && typeof set.autoNav !== "boolean") this.error(`${sp}/autoNav`, "Must be true or false.");
+      const ids = this.buttons(set, sp, canvas, mediaIds, menus, "this button set");
+      if (ids) {
+        if (set.defaultButton !== undefined) this.buttonRef(set.defaultButton, `${sp}/defaultButton`, ids, "this button set");
+        for (const id of ids) own.add(id);
+      }
+    });
   }
 
   /**

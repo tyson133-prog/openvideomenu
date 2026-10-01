@@ -114,6 +114,10 @@ public sealed partial class Manifest
             Walk(menu.Timeout?.Action);
             WalkKeys(menu.Keys);
             WalkButtons(menu.Buttons);
+            foreach (var set in menu.ButtonSets ?? [])
+            {
+                WalkButtons(set.Buttons);
+            }
         }
 
         Walk(FirstPlay);

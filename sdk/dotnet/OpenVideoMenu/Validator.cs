@@ -20,7 +20,8 @@ internal sealed class Validator
         ["hold"] = ["at", "for"],
         ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
-        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
+        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits", "buttonSets"],
+        ["buttonSet"] = ["from", "to", "buttons", "defaultButton", "autoNav"],
         ["timeout"] = ["after", "action", "restartOnInput"],
         ["cue"] = ["at", "action"],
         ["overlay"] = ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
@@ -802,17 +803,32 @@ internal sealed class Validator
             return menus;
         }
 
-        // First pass: collect button ids so goto targets can be checked in any order.
+        // First pass: collect button ids (the menu's own and its button sets') so goto targets can be
+        // checked in any order.
         foreach (var (id, m) in all.Entries)
         {
             var buttons = new HashSet<string>(StringComparer.Ordinal);
-            if (Obj.TryFrom(m, out var mo) && mo["buttons"] is { ValueKind: JsonValueKind.Array } bs)
+            if (Obj.TryFrom(m, out var mo))
             {
-                foreach (var b in bs.EnumerateArray())
+                var lists = new List<JsonElement?> { mo["buttons"] };
+                if (mo["buttonSets"] is { ValueKind: JsonValueKind.Array } sets)
                 {
-                    if (Obj.TryFrom(b, out var bo) && IsNonEmptyString(bo["id"]))
+                    lists.AddRange(sets.EnumerateArray().Select(set => Obj.TryFrom(set, out var so) ? so["buttons"] : null));
+                }
+
+                foreach (var list in lists)
+                {
+                    if (list is not { ValueKind: JsonValueKind.Array } bs)
                     {
-                        buttons.Add(bo["id"]!.Value.GetString()!);
+                        continue;
+                    }
+
+                    foreach (var b in bs.EnumerateArray())
+                    {
+                        if (Obj.TryFrom(b, out var bo) && IsNonEmptyString(bo["id"]))
+                        {
+                            buttons.Add(bo["id"]!.Value.GetString()!);
+                        }
                     }
                 }
             }
@@ -888,6 +904,12 @@ internal sealed class Validator
             ButtonRef(defaultButton, $"{path}/defaultButton", own, "this menu");
         }
 
+        // Level 2: buttons that change while the menu plays. back, timeout and keys may press any of them.
+        if (menu["buttonSets"] is { } buttonSets)
+        {
+            ButtonSets(buttonSets, $"{path}/buttonSets", canvas, mediaIds, menus, own);
+        }
+
         // What the remote's Back does here; may press one of this menu's own buttons.
         if (menu["back"] is { } back)
         {
@@ -961,6 +983,77 @@ internal sealed class Validator
     }
 
     /// <summary>The buttons of a menu or overlay; returns their ids, or null when there are none.</summary>
+    /// <summary>Level 2: a menu's button sets (spec §5.3): windows on its clock that don't overlap, each with its buttons.</summary>
+    private void ButtonSets(
+        JsonElement value,
+        string path,
+        (double Width, double Height)? canvas,
+        Dictionary<string, int> mediaIds,
+        Dictionary<string, HashSet<string>> menus,
+        HashSet<string> own)
+    {
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() == 0)
+        {
+            Error(path, "Must be a list of at least one button set {from, to?, buttons}.");
+            return;
+        }
+
+        var windows = new List<(double From, double To, int I)>();
+        var i = 0;
+        foreach (var setEl in value.EnumerateArray())
+        {
+            var sp = $"{path}/{i}";
+            if (!Obj.TryFrom(setEl, out var set))
+            {
+                Error(sp, "Must be a button set {from, to?, buttons}.");
+                i++;
+                continue;
+            }
+
+            UnknownKeys(set, KnownKeys["buttonSet"], sp);
+            var okFrom = set["from"] is { } f && IsFiniteNumber(f) && f.GetDouble() >= 0;
+            if (!okFrom)
+            {
+                Error($"{sp}/from", "Must be a non-negative number of seconds.");
+            }
+
+            var okTo = set["to"] is not { } t || (okFrom && IsFiniteNumber(t) && t.GetDouble() > set["from"]!.Value.GetDouble());
+            if (!okTo)
+            {
+                Error($"{sp}/to", "Must be a number of seconds after from.");
+            }
+            else if (okFrom)
+            {
+                var from = set["from"]!.Value.GetDouble();
+                var to = set["to"] is { } toEl ? toEl.GetDouble() : double.PositiveInfinity;
+                var other = windows.FindIndex(w => from < w.To && w.From < to);
+                if (other >= 0)
+                {
+                    Error($"{sp}/from", $"Overlaps button set {windows[other].I}; one set shows at a time.");
+                }
+
+                windows.Add((from, to, i));
+            }
+
+            if (set["autoNav"] is { } autoNav && !IsBoolean(autoNav))
+            {
+                Error($"{sp}/autoNav", "Must be true or false.");
+            }
+
+            if (Buttons(set, sp, canvas, mediaIds, menus, "this button set") is { } ids)
+            {
+                if (set["defaultButton"] is { } defaultButton)
+                {
+                    ButtonRef(defaultButton, $"{sp}/defaultButton", ids, "this button set");
+                }
+
+                own.UnionWith(ids);
+            }
+
+            i++;
+        }
+    }
+
     private HashSet<string>? Buttons(
         Obj menu,
         string path,

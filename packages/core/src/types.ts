@@ -217,7 +217,21 @@ export interface Menu {
   keys?: MenuKeys;
   /** Level 2: what the source forbids on this menu, as information (spec §6.6). */
   prohibits?: Prohibitions;
+  /**
+   * Level 2: buttons that change while the menu plays (spec §5.3), each set over a window of the menu's
+   * clock; outside every window, `buttons` apply.
+   */
+  buttonSets?: ButtonSet[];
   [extension: `x-${string}`]: unknown;
+}
+
+/** Level 2 (spec §5.3): the buttons a menu shows from `from` to `to` seconds on its clock (to its loop's end without `to`). */
+export interface ButtonSet {
+  from: number;
+  to?: number;
+  buttons: Button[];
+  defaultButton?: string | { var: string };
+  autoNav?: boolean;
 }
 
 /**

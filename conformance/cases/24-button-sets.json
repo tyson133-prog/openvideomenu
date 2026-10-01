@@ -1,0 +1,50 @@
+{
+  "description": "Button sets: a motion menu's buttons can change while it plays (a disc's highlight information changing mid-cell). The player reports which set's window the menu's clock is in (buttonSet), or none (the menu's own buttons). The highlighted button stays by id when the new buttons have it, otherwise by its place, as a disc keeps the selected button number. A goto naming a button only a set has focuses it when that set shows. Buttons not shown can't be selected or pressed.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Changing Buttons" },
+    "media": { "film": { "ref": "Film.mkv", "kind": "feature" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "background": { "video": { "src": "menus/main.mp4", "loopStart": 5 } },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "extras" }, "action": { "type": "play", "media": "film" } },
+          { "id": "extras", "rect": [100, 160, 200, 40], "nav": { "up": "play", "down": "jump" }, "action": { "type": "goto", "menu": "other" } },
+          { "id": "jump", "rect": [100, 220, 200, 40], "nav": { "up": "extras" }, "action": { "type": "goto", "menu": "other", "button": "b" } }
+        ],
+        "buttonSets": [
+          { "from": 0, "to": 5, "buttons": [{ "id": "skip", "rect": [500, 400, 100, 40], "action": { "type": "goto", "menu": "main" } }] },
+          { "from": 10, "to": 20, "defaultButton": "e2", "buttons": [
+            { "id": "p2", "rect": [100, 300, 200, 40], "nav": { "down": "e2" }, "action": { "type": "play", "media": "film" } },
+            { "id": "e2", "rect": [100, 340, 200, 40], "nav": { "up": "p2", "down": "more" }, "action": { "type": "goto", "menu": "other" } },
+            { "id": "more", "rect": [100, 380, 200, 40], "nav": { "up": "e2" }, "action": { "type": "goto", "menu": "other" } }
+          ] }
+        ]
+      },
+      "other": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [{ "id": "a", "rect": [100, 100, 200, 40], "action": { "type": "back" } }],
+        "buttonSets": [{ "from": 3, "buttons": [{ "id": "b", "rect": [100, 200, 200, 40], "action": { "type": "back" } }] }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "buttonSet", "index": 0 }, "expect": { "focus": "skip" } },
+    { "event": { "type": "select", "button": "extras" }, "expect": { "focus": "skip" } },
+    { "event": { "type": "buttonSet", "index": null }, "expect": { "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "extras" } },
+    { "event": { "type": "buttonSet", "index": 1 }, "expect": { "focus": "e2" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "more" } },
+    { "event": { "type": "buttonSet", "index": null }, "expect": { "focus": "jump" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "other", "focus": "a", "effects": [{ "type": "activated", "menu": "main", "button": "jump" }] } },
+    { "event": { "type": "buttonSet", "index": 0 }, "expect": { "focus": "b" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "jump", "effects": [{ "type": "activated", "menu": "other", "button": "b" }] } }
+  ]
+}

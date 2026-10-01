@@ -5,7 +5,7 @@
  * describes expected behaviour in exactly these terms, so every implementation (TS, C#, native)
  * can be checked against the same cases.
  */
-import type { Action, Button, Cue, Direction, Hold, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
+import type { Action, Button, ButtonSet, Cue, Direction, Hold, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
 import { applyOp, evalTest, MENU_KEYS, readVar, valueOf } from "./logic.js";
 
 /** A remote key: the arrows, Enter and Back, and (Level 2) the menu keys (spec §6.6). */
@@ -44,7 +44,12 @@ export type NavEvent =
    */
   | { type: "cue"; id: string }
   /** Level 2: playback passed an overlay's `to` (or left its window by seeking): its buttons go. */
-  | { type: "cueEnd"; id: string };
+  | { type: "cueEnd"; id: string }
+  /**
+   * Level 2: the menu's clock entered the window of one of its button sets (its index), or left them all
+   * (null): those buttons show now (spec §5.3).
+   */
+  | { type: "buttonSet"; index: number | null };
 
 /** Level 2: a cue the host watches for during playback, from the play effect. */
 export type CueWatch = { id: string; at: number } | { id: string; from: number; to: number };
@@ -127,6 +132,10 @@ export interface NavState {
   playing?: Playing;
   /** Level 2: the overlay showing during playback (its cue id) and its focused button. */
   overlay?: { cue: string; focus: string };
+  /** Level 2: the menu's button set showing (its index in buttonSets); absent: the menu's own buttons. */
+  buttonSet?: number;
+  /** Level 2: a button asked for on entering the menu that only one of its button sets has. */
+  focusWanted?: string;
   /**
    * The resume point, for "resume": where the viewer stopped last (or a saveResume put it). Hosts may
    * seed it from their own records with just media and position. Set by the navigator, it also holds
@@ -274,6 +283,28 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "cueEnd":
       if (s.overlay?.cue === event.id) s.overlay = undefined;
       break;
+
+    case "buttonSet": {
+      if (s.mode !== "menu" || !s.menu) break;
+      const menu = menuOf(manifest, s.menu);
+      const index = event.index ?? undefined;
+      if (index !== undefined && !menu.buttonSets?.[index]) break;
+      if (index === s.buttonSet) break;
+      // The highlighted button stays: by id when the new buttons have it, otherwise by its place (a
+      // disc keeps the selected button number when its highlights change mid-cell).
+      const before = buttonsShown(manifest, s);
+      const place = before.buttons.findIndex((b) => b.id === s.focus);
+      s.buttonSet = index;
+      const now = buttonsShown(manifest, s);
+      const wanted = s.focusWanted && findButton(now, s.focusWanted) ? s.focusWanted : undefined;
+      if (wanted) s.focusWanted = undefined;
+      s.focus =
+        wanted ??
+        (findButton(now, s.focus!) ? s.focus! : place >= 0 ? now.buttons[Math.min(place, now.buttons.length - 1)]!.id : undefined) ??
+        buttonRef(s, now, now.defaultButton) ??
+        now.buttons[0]!.id;
+      break;
+    }
   }
   return { state: s, effects };
 }
@@ -313,7 +344,7 @@ function handleInput(
         break;
       }
       if (s.mode !== "menu" || event.button === s.focus) break;
-      const button = findButton(menuOf(manifest, s.menu!), event.button);
+      const button = findButton(buttonsShown(manifest, s), event.button);
       if (button) focusButton(manifest, s, button, effects);
       break;
     }
@@ -325,7 +356,7 @@ function handleInput(
         break;
       }
       if (s.mode !== "menu") break;
-      if (findButton(menuOf(manifest, s.menu!), event.button)) {
+      if (findButton(buttonsShown(manifest, s), event.button)) {
         s.focus = event.button;
         activate(manifest, s, event.button, effects);
       }
@@ -362,6 +393,15 @@ function menuOf(manifest: Manifest, id: string): Menu {
   const menu = manifest.menus?.[id];
   if (!menu) throw new Error(`No menu "${id}"`);
   return menu;
+}
+
+/**
+ * The buttons the current menu shows now, with their defaultButton and autoNav: a button set's while
+ * its window runs (Level 2), otherwise the menu's own. For renderers to draw.
+ */
+export function buttonsShown(manifest: Manifest, s: NavState): Pick<ButtonSet, "buttons" | "defaultButton" | "autoNav"> {
+  const menu = menuOf(manifest, s.menu!);
+  return (s.buttonSet !== undefined ? menu.buttonSets?.[s.buttonSet] : undefined) ?? menu;
 }
 
 function findButton(menu: { buttons: Button[] }, id: string): Button | undefined {
@@ -429,7 +469,11 @@ function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: st
   s.mode = "menu";
   s.menu = menuId;
   s.seq += 1;
+  s.buttonSet = undefined;
   s.focus = buttonRef(s, menu, buttonId) ?? buttonRef(s, menu, menu.defaultButton) ?? menu.buttons[0]!.id;
+  // Level 2: a button only a button set has is focused when its set shows (the player reports it).
+  const asked = typeof buttonId === "object" ? String(readVar(s, buttonId.var)) : buttonId;
+  s.focusWanted = asked !== undefined && asked !== s.focus && menu.buttonSets?.some((set) => findButton(set, asked)) ? asked : undefined;
   s.intro = how === "intro";
   s.buttonsReady = !(s.intro && (menu.buttonsAt ?? 0) > 0);
   s.transitionTo = undefined;
@@ -448,7 +492,7 @@ function focusButton(manifest: Manifest, s: NavState, button: Button, effects: E
 }
 
 function move(manifest: Manifest, s: NavState, dir: Direction, effects: Effect[]) {
-  const menu = menuOf(manifest, s.menu!);
+  const menu = buttonsShown(manifest, s);
   const current = findButton(menu, s.focus!)!;
   let targetId = current.nav?.[dir];
   if (!targetId && menu.autoNav) targetId = nearestButton(menu, current, dir)?.id;
@@ -457,7 +501,7 @@ function move(manifest: Manifest, s: NavState, dir: Direction, effects: Effect[]
 }
 
 function activate(manifest: Manifest, s: NavState, buttonId: string, effects: Effect[]) {
-  const button = findButton(menuOf(manifest, s.menu!), buttonId)!;
+  const button = findButton(buttonsShown(manifest, s), buttonId)!;
   effects.push({ type: "activated", menu: s.menu!, button: button.id });
   run(manifest, s, button.action, effects, { pushHistory: true });
 }
@@ -584,7 +628,7 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         if (value !== undefined) {
           if (action.var === "@focus") {
             // Highlight a button of the current menu (a DVD's SetHL_BTN).
-            if (s.menu && findButton(menuOf(manifest, s.menu), String(value))) s.focus = String(value);
+            if (s.menu && findButton(buttonsShown(manifest, s), String(value))) s.focus = String(value);
           } else if (action.var.startsWith("@")) {
             s.player = { ...s.player, [action.var]: value };
             if (duringPlayback) liveTrack(manifest, s, action.var, value, opts.cueAt!, effects);
@@ -622,7 +666,7 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
       }
       case "activate": {
         // Press a button of the current menu, as if the viewer had: focus, activated state, action.
-        const button = s.menu ? findButton(menuOf(manifest, s.menu), action.button) : undefined;
+        const button = s.menu ? findButton(buttonsShown(manifest, s), action.button) : undefined;
         if (!button) break;
         s.focus = button.id;
         effects.push({ type: "activated", menu: s.menu!, button: button.id });

@@ -1,4 +1,5 @@
 import {
+  buttonsShown,
   canvasAspect,
   initialState,
   MENU_KEYS,
@@ -175,6 +176,7 @@ export class MenuPlayer {
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.resizeObserver.disconnect();
     this.stopIntroWatch();
+    this.stopButtonSetWatch();
     this.stopBackground();
     this.transitionVideo.pause();
     this.playback.destroy();
@@ -392,6 +394,8 @@ export class MenuPlayer {
     const menu = this.currentMenu();
     const menuChanged = !!menu && s.menu !== this.renderedMenu;
     if (menuChanged) this.buildMenu(s.menu!, menu!);
+    // Level 2: a button set's buttons while its window runs (spec 5.3).
+    if (menu && s.mode === "menu" && s.buttonSet !== this.renderedSet) this.rebuildMenuButtons(menu);
     this.stage.hidden = s.mode !== "menu";
     // While a title plays, the page is see-through: a native host's video shows behind overlay buttons.
     this.root.classList.toggle("ms-playing", s.mode === "playing");
@@ -403,8 +407,10 @@ export class MenuPlayer {
     if (entered && menu) {
       this.startBackground(menu, s.intro);
       if (!s.buttonsReady) this.watchIntro(menu);
+      this.watchButtonSets(menu);
     } else if (s.mode !== "menu") {
       this.stopBackground();
+      this.stopButtonSetWatch();
     }
     if (s.buttonsReady) this.stopIntroWatch();
     this.stage.classList.toggle("ms-intro", s.mode === "menu" && !s.buttonsReady);
@@ -491,6 +497,49 @@ export class MenuPlayer {
     if (this.soundUnlocked) return;
     this.soundUnlocked = true;
     for (const el of [this.bgVideo, this.bgAudio, this.transitionVideo]) if (el) el.muted = false;
+  }
+
+  /** The button set whose buttons are built (undefined: the menu's own). */
+  private renderedSet?: number;
+  private buttonSetFrame?: number;
+
+  /**
+   * Level 2: report which button set's window the menu's clock is in (spec 5.3): the background video's
+   * time when there is one, otherwise the time since the menu appeared.
+   */
+  private watchButtonSets(menu: Menu) {
+    this.stopButtonSetWatch();
+    const sets = menu.buttonSets;
+    if (!sets?.length) return;
+    const opened = performance.now();
+    const video = menu.background?.video ? this.bgVideo : undefined;
+    const tick = () => {
+      this.buttonSetFrame = requestAnimationFrame(tick);
+      if (this.state.mode !== "menu" || this.currentMenu() !== menu) return;
+      const t = video ? video.currentTime : (performance.now() - opened) / 1000;
+      const i = sets.findIndex((set) => set.from <= t && (set.to === undefined || t < set.to));
+      const index = i >= 0 ? i : undefined;
+      // dispatch() refuses while a button flash runs; the next frame tries again.
+      if (index !== this.state.buttonSet) this.dispatch({ type: "buttonSet", index: index ?? null });
+    };
+    this.buttonSetFrame = requestAnimationFrame(tick);
+  }
+
+  private stopButtonSetWatch() {
+    if (this.buttonSetFrame !== undefined) cancelAnimationFrame(this.buttonSetFrame);
+    this.buttonSetFrame = undefined;
+  }
+
+  /** Replace the menu's buttons with those it shows now (its own, or a button set's). */
+  private rebuildMenuButtons(menu: Menu) {
+    for (const view of this.buttonViews.values()) {
+      view.hit.remove();
+      for (const img of Object.values(view.overlays)) img?.remove();
+    }
+    this.buttonViews.clear();
+    this.renderedSet = this.state.buttonSet;
+    this.buildButtons(this.stage, menu.canvas, buttonsShown(this.options.manifest, this.state).buttons, this.buttonViews);
+    this.layout();
   }
 
   /** Wait for the intro to reach buttonsAt: on the background video's clock, or a timer without one. */
@@ -583,6 +632,7 @@ export class MenuPlayer {
     }
 
     this.buildButtons(this.stage, menu.canvas, menu.buttons, this.buttonViews);
+    this.renderedSet = undefined;
     this.layout();
   }
 
@@ -691,7 +741,7 @@ export class MenuPlayer {
     const paths = new Set<string>();
     for (const menu of Object.values(this.options.manifest.menus ?? {})) {
       if (menu.background?.image) paths.add(menu.background.image);
-      for (const b of menu.buttons)
+      for (const b of [...menu.buttons, ...(menu.buttonSets ?? []).flatMap((set) => set.buttons)])
         for (const s of Object.values(b.states ?? {})) if (s?.image) paths.add(s.image);
     }
     for (const p of paths) new Image().src = this.asset(p);

@@ -223,6 +223,30 @@ public sealed class Menu
     /// <summary>Level 2: what the source forbids on this menu, as information (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
 
+    /// <summary>
+    /// Level 2: buttons that change while the menu plays (spec §5.3), each set over a window of the
+    /// menu's clock; outside every window, <see cref="Buttons"/> apply.
+    /// </summary>
+    public List<ButtonSet>? ButtonSets { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+}
+
+/// <summary>Level 2 (spec §5.3): the buttons a menu shows from <see cref="From"/> to <see cref="To"/> seconds on its clock.</summary>
+public sealed class ButtonSet
+{
+    public double From { get; set; }
+
+    /// <summary>Absent: to the end of the menu's loop.</summary>
+    public double? To { get; set; }
+
+    public List<Button> Buttons { get; set; } = [];
+
+    public ButtonRef? DefaultButton { get; set; }
+
+    public bool? AutoNav { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

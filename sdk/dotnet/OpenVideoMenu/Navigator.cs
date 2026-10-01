@@ -81,6 +81,12 @@ public abstract record NavEvent
 
     /// <summary>Level 2: playback passed an overlay's to (or left its window by seeking): its buttons go.</summary>
     public sealed record CueEnd(string Id) : NavEvent;
+
+    /// <summary>
+    /// Level 2: the menu's clock entered the window of its button set <paramref name="Index"/>, or left
+    /// them all (null): those buttons show now (spec §5.3).
+    /// </summary>
+    public sealed record ButtonSetChanged(int? Index) : NavEvent;
 }
 
 /// <summary>Something the player must do.</summary>
@@ -215,6 +221,12 @@ public sealed record NavState
 
     /// <summary>Level 2: the overlay showing during playback, if any.</summary>
     public OverlayFocus? Overlay { get; init; }
+
+    /// <summary>Level 2: the menu's button set showing (its index in ButtonSets); null: the menu's own buttons.</summary>
+    public int? ButtonSet { get; init; }
+
+    /// <summary>Level 2: a button asked for on entering the menu that only one of its button sets has.</summary>
+    public string? FocusWanted { get; init; }
 
     /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
     public LastStop? LastStop { get; init; }
@@ -396,6 +408,38 @@ public static class Navigator
                 }
 
                 break;
+
+            case NavEvent.ButtonSetChanged changed:
+            {
+                if (s.Mode != NavMode.Menu || s.Menu is null)
+                {
+                    break;
+                }
+
+                var menu = MenuOf(manifest, s.Menu);
+                if ((changed.Index is { } i && (menu.ButtonSets is null || i < 0 || i >= menu.ButtonSets.Count)) || changed.Index == s.ButtonSet)
+                {
+                    break;
+                }
+
+                // The highlighted button stays: by id when the new buttons have it, otherwise by its
+                // place (a disc keeps the selected button number when its highlights change mid-cell).
+                var place = Shown(manifest, s).Buttons.FindIndex(b => b.Id == s.Focus);
+                s.ButtonSet = changed.Index;
+                var now = Shown(manifest, s);
+                string? wanted = null;
+                if (s.FocusWanted is { } w && FindButton(now.Buttons, w) is not null)
+                {
+                    wanted = w;
+                    s.FocusWanted = null;
+                }
+
+                s.Focus = wanted
+                    ?? (FindButton(now.Buttons, s.Focus!) is not null ? s.Focus : place >= 0 ? now.Buttons[Math.Min(place, now.Buttons.Count - 1)].Id : null)
+                    ?? ResolveButton(s, now.Buttons, now.DefaultButton)
+                    ?? now.Buttons[0].Id;
+                break;
+            }
         }
 
         return (s.ToState(), effects);
@@ -553,7 +597,7 @@ public static class Navigator
                     break;
                 }
 
-                if (FindButton(MenuOf(manifest, s.Menu!), select.Button) is { } button)
+                if (FindButton(Shown(manifest, s).Buttons, select.Button) is { } button)
                 {
                     FocusButton(manifest, s, button, effects);
                 }
@@ -577,7 +621,7 @@ public static class Navigator
                     break;
                 }
 
-                if (FindButton(MenuOf(manifest, s.Menu!), activate.Button) is not null)
+                if (FindButton(Shown(manifest, s).Buttons, activate.Button) is not null)
                 {
                     s.Focus = activate.Button;
                     Activate(manifest, s, activate.Button, effects);
@@ -591,6 +635,25 @@ public static class Navigator
         manifest.Menus is not null && manifest.Menus.TryGetValue(id, out var menu) ? menu : throw new InvalidOperationException($"No menu \"{id}\"");
 
     private static Button? FindButton(Menu menu, string id) => FindButton(menu.Buttons, id);
+
+    /// <summary>The buttons a menu shows now, with their default button and autoNav.</summary>
+    public sealed record ButtonView(List<Button> Buttons, ButtonRef? DefaultButton, bool? AutoNav);
+
+    /// <summary>
+    /// The buttons the current menu shows now: a button set's while its window runs (Level 2), otherwise
+    /// the menu's own. For renderers to draw.
+    /// </summary>
+    public static ButtonView ButtonsShown(Manifest manifest, NavState state) => Shown(manifest, state.Menu!, state.ButtonSet);
+
+    private static ButtonView Shown(Manifest manifest, Working s) => Shown(manifest, s.Menu!, s.ButtonSet);
+
+    private static ButtonView Shown(Manifest manifest, string menuId, int? set)
+    {
+        var menu = MenuOf(manifest, menuId);
+        return set is { } i && menu.ButtonSets is { } sets && i < sets.Count
+            ? new ButtonView(sets[i].Buttons, sets[i].DefaultButton, sets[i].AutoNav)
+            : new ButtonView(menu.Buttons, menu.DefaultButton, menu.AutoNav);
+    }
 
     private static Button? FindButton(IEnumerable<Button> buttons, string id) => buttons.FirstOrDefault(b => b.Id == id);
 
@@ -676,7 +739,11 @@ public static class Navigator
         s.Mode = NavMode.Menu;
         s.Menu = menuId;
         s.Seq++;
+        s.ButtonSet = null;
         s.Focus = ResolveButton(s, menu, buttonId) ?? ResolveButton(s, menu, menu.DefaultButton) ?? menu.Buttons[0].Id;
+        // Level 2: a button only a button set has is focused when its set shows (the player reports it).
+        var asked = buttonId is null ? null : buttonId.Var is { } v ? s.Read(v).ToString() : buttonId.Id;
+        s.FocusWanted = asked is not null && asked != s.Focus && menu.ButtonSets?.Any(set => FindButton(set.Buttons, asked) is not null) == true ? asked : null;
         s.Intro = intro;
         s.ButtonsReady = !(intro && (menu.ButtonsAt ?? 0) > 0);
         s.TransitionTo = null;
@@ -705,12 +772,12 @@ public static class Navigator
 
     private static void Move(Manifest manifest, Working s, Direction dir, List<Effect> effects)
     {
-        var menu = MenuOf(manifest, s.Menu!);
-        var current = FindButton(menu, s.Focus!)!;
+        var shown = Shown(manifest, s);
+        var current = FindButton(shown.Buttons, s.Focus!)!;
         var targetId = current.Nav?[dir];
-        if (string.IsNullOrEmpty(targetId) && menu.AutoNav == true)
+        if (string.IsNullOrEmpty(targetId) && shown.AutoNav == true)
         {
-            targetId = NearestButton(menu, current, dir)?.Id;
+            targetId = NearestButton(shown.Buttons, current, dir)?.Id;
         }
 
         if (string.IsNullOrEmpty(targetId) || targetId == current.Id)
@@ -718,12 +785,12 @@ public static class Navigator
             return;
         }
 
-        FocusButton(manifest, s, FindButton(menu, targetId)!, effects);
+        FocusButton(manifest, s, FindButton(shown.Buttons, targetId)!, effects);
     }
 
     private static void Activate(Manifest manifest, Working s, string buttonId, List<Effect> effects)
     {
-        var button = FindButton(MenuOf(manifest, s.Menu!), buttonId)!;
+        var button = FindButton(Shown(manifest, s).Buttons, buttonId)!;
         effects.Add(new Effect.Activated(s.Menu!, button.Id));
         Run(manifest, s, button.Action, effects, pushHistory: true);
     }
@@ -927,7 +994,7 @@ public static class Navigator
                         if (set.Var == "@focus")
                         {
                             // Highlight a button of the current menu (a DVD's SetHL_BTN).
-                            if (s.Menu is not null && FindButton(MenuOf(manifest, s.Menu), value.ToString()) is not null)
+                            if (s.Menu is not null && FindButton(Shown(manifest, s).Buttons, value.ToString()) is not null)
                             {
                                 s.Focus = value.ToString();
                             }
@@ -974,7 +1041,7 @@ public static class Navigator
                 case ActivateAction a:
                 {
                     // Press a button of the current menu, as if the viewer had: focus, activated state, action.
-                    var button = s.Menu is not null ? FindButton(MenuOf(manifest, s.Menu), a.Button) : null;
+                    var button = s.Menu is not null ? FindButton(Shown(manifest, s).Buttons, a.Button) : null;
                     if (button is null)
                     {
                         break;
@@ -1201,6 +1268,10 @@ public static class Navigator
 
         public OverlayFocus? Overlay { get; set; } = from.Overlay;
 
+        public int? ButtonSet { get; set; } = from.ButtonSet;
+
+        public string? FocusWanted { get; set; } = from.FocusWanted;
+
         public LastStop? LastStop { get; set; } = from.LastStop;
 
         public IReadOnlyDictionary<string, Scalar> Vars { get; set; } = from.Vars;
@@ -1230,6 +1301,8 @@ public static class Navigator
             History = History,
             Playing = Playing,
             Overlay = Overlay,
+            ButtonSet = ButtonSet,
+            FocusWanted = FocusWanted,
             LastStop = LastStop,
             Vars = Vars,
             Player = Player,

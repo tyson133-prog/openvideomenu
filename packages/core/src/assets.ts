@@ -56,6 +56,7 @@ export function menuAssets(manifest: Manifest): string[] {
     walkAction(menu.timeout?.action);
     walkKeys(menu.keys);
     walkButtons(menu.buttons);
+    for (const set of menu.buttonSets ?? []) walkButtons(set.buttons);
   }
   walkAction(manifest.firstPlay);
   for (const action of Object.values(manifest.actions ?? {})) walkAction(action);

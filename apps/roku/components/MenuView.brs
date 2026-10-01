@@ -187,6 +187,11 @@ sub render(fresh as boolean)
     if mode = "menu"
         menu = m.manifest["menus"][m.nav.menu]
         if fresh or m.shownMenu <> m.nav.menu then showMenu(menu)
+        ' Level 2: a button set's buttons while its window runs (spec 5.3).
+        if setKey(m.nav.buttonSet) <> m.builtSet
+            buildButtons(msNavShown(m.manifest, m.nav))
+            m.builtSet = setKey(m.nav.buttonSet)
+        end if
         drawButtons()
     else if mode = "transition"
         hideCursor()
@@ -222,6 +227,7 @@ sub showMenu(menu as object)
     m.still.visible = bg["image"] <> invalid
     if bg["image"] <> invalid then showImage(m.still, bg["image"])
     buildButtons(menu)
+    m.builtSet = ""
     prefetchMenu(menu)
 
     m.motion.translation = [0, 0]
@@ -598,10 +604,26 @@ sub onMotionPosition()
         duration = m.motion.duration
         if duration > 0 and m.motion.position >= duration - 0.3 then m.motion.seek = m.loopFrom
     end if
-    if m.videoRole <> "background" or m.nav.mode <> "menu" or m.nav.buttonsReady then return
+    if m.videoRole <> "background" or m.nav.mode <> "menu" then return
     menu = m.manifest["menus"][m.nav.menu]
-    if m.motion.position >= msOr(menu["buttonsAt"], 0) then stepWith({ type: "buttonsReady" })
+    ' Level 2: which button set's window the menu's clock is in (spec 5.3).
+    if menu["buttonSets"] <> invalid
+        index = invalid
+        i = 0
+        for each set in menu["buttonSets"]
+            if m.motion.position >= set["from"] and (set["to"] = invalid or m.motion.position < msOr(set["to"], 0)) then index = i
+            i = i + 1
+        end for
+        if setKey(index) <> setKey(m.nav.buttonSet) then stepWith({ type: "buttonSet", index: index })
+    end if
+    if not m.nav.buttonsReady and m.motion.position >= msOr(menu["buttonsAt"], 0) then stepWith({ type: "buttonsReady" })
 end sub
+
+' A button set index as text, "" for the menu's own buttons (invalid can't be compared with a number).
+function setKey(index as dynamic) as string
+    if index = invalid then return ""
+    return index.ToStr()
+end function
 
 sub onButtonsTimer()
     stepWith({ type: "buttonsReady" })
@@ -701,7 +723,12 @@ end sub
 
 ' Fetch every image a menu uses up front, so moving the cursor never waits for the network.
 sub prefetchMenu(menu as object)
-    for each button in menu["buttons"]
+    buttons = []
+    buttons.Append(menu["buttons"])
+    for each set in msOr(menu["buttonSets"], [])
+        buttons.Append(set["buttons"])
+    end for
+    for each button in buttons
         if button["states"] <> invalid
             for each state in ["selected", "activated", "normal"]
                 s = button["states"][state]

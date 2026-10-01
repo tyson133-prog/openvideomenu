@@ -516,6 +516,13 @@
         },
         "prohibits": {
           "$ref": "#/$defs/prohibits"
+        },
+        "buttonSets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/buttonSet"
+          }
         }
       }
     },
@@ -1292,6 +1299,37 @@
               }
             ]
           }
+        }
+      }
+    },
+    "buttonSet": {
+      "description": "Level 2: the buttons a menu shows from `from` to `to` seconds on its clock (spec 5.3).",
+      "type": "object",
+      "required": [
+        "from",
+        "buttons"
+      ],
+      "properties": {
+        "from": {
+          "type": "number",
+          "minimum": 0
+        },
+        "to": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "buttons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/button"
+          }
+        },
+        "defaultButton": {
+          "$ref": "#/$defs/buttonRef"
+        },
+        "autoNav": {
+          "type": "boolean"
         }
       }
     }

@@ -152,6 +152,7 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
 - **`back`**: what the remote's Back key does on this menu (§6.2).
 - **`timeout`**: what happens when the menu is left alone (§5.2).
+- **`buttonSets`**: buttons that change while the menu plays (§5.3).
 - **`autoNav: true`** means that pressing a direction with no `nav` entry moves to the nearest button that way. The reference algorithm uses button centres: a candidate must lie in the direction of travel, and the score is the distance along the axis plus twice the sideways offset. With `autoNav` false or absent, a missing direction does nothing, which matches DVD behaviour.
 
 ### Buttons
@@ -214,6 +215,35 @@ out: an intro gives way to the main menu, or the film starts after a minute.
   applies (unless the viewer is leaving), the navigator emits `{ "type": "startTimer", "menu", "after" }`.
   The player keeps the clock and reports `{ "type": "timeout", "menu" }` when it runs out. A timeout for a
   menu that isn't showing any more is ignored. A new `startTimer` replaces the previous countdown.
+
+### 5.3 Button sets (Level 2)
+
+A motion menu's buttons can change while it plays: a disc's highlight information can make buttons
+appear, move and go during a menu cell (a "skip" button over the intro, a row of choices that slides in).
+
+```json
+"buttons": [ ... ],
+"buttonSets": [
+  { "from": 0, "to": 6, "buttons": [{ "id": "skip", "rect": [560, 400, 120, 40], "action": { "type": "goto", "menu": "main" } }] },
+  { "from": 12, "defaultButton": "s2", "buttons": [ ... ] }
+]
+```
+
+- Each set shows its `buttons` from `from` to `to` seconds (to the end of the loop without `to`) on the
+  menu's clock: the background video's, as for `buttonsAt` (§5.1), so the windows come round with each
+  loop; without a background video, the time since the menu appeared. Windows MUST NOT overlap.
+- **Outside every window, the menu's own `buttons` show.** Players without Level 2 show only those, so
+  importers SHOULD give the menu the buttons it shows longest.
+- A set's buttons have everything a menu's have; their `nav` stays within the set. `defaultButton` and
+  `autoNav` may be given per set. Button ids are unique within a set, and the same id in two sets (or in
+  a set and the menu) is the same button for focus.
+- **When the buttons change, the highlight stays:** on the same id when the new buttons have it,
+  otherwise on the button in the same place in the list (a disc keeps the selected button *number*),
+  otherwise on the set's `defaultButton`.
+- A `goto` MAY name a button that only a set has: it is highlighted when that set shows. A menu's
+  `back`, `timeout` and `keys` MAY `activate` any of its buttons; only buttons showing can be pressed.
+- **Navigation model:** players report `{ "type": "buttonSet", "index": i }` when the menu's clock enters
+  set `i`'s window, and `{ "type": "buttonSet", "index": null }` when it leaves them all.
 
 ## 6. Actions
 
@@ -553,6 +583,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6), button sets (§5.3). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

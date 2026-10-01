@@ -125,6 +125,9 @@ function msNavStep(manifest as object, state as object, event as object) as obje
 
     else if t = "cueEnd"
         if s.overlay <> invalid and s.overlay.cue = event["id"] then s.overlay = invalid
+
+    else if t = "buttonSet"
+        msNavButtonSet(manifest, s, event["index"])
     end if
 
     s.Delete("stepsLeft")
@@ -171,7 +174,7 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
             return
         end if
         if s.mode <> "menu" or event["button"] = s.focus then return
-        button = msNavFindButton(msNavMenu(manifest, s.menu), event["button"])
+        button = msNavFindButton(msNavShown(manifest, s), event["button"])
         if button <> invalid then msNavFocusButton(manifest, s, button, effects)
     else if t = "activate"
         if s.mode = "playing" and s.overlay <> invalid
@@ -180,7 +183,7 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
             return
         end if
         if s.mode <> "menu" then return
-        if msNavFindButton(msNavMenu(manifest, s.menu), event["button"]) <> invalid
+        if msNavFindButton(msNavShown(manifest, s), event["button"]) <> invalid
             s.focus = event["button"]
             msNavActivate(manifest, s, event["button"], effects)
         end if
@@ -343,12 +346,74 @@ sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId a
     s.focus = msNavButtonRef(s, menu, buttonId)
     if s.focus = invalid then s.focus = msNavButtonRef(s, menu, menu["defaultButton"])
     if s.focus = invalid then s.focus = menu["buttons"][0]["id"]
+    ' Level 2: a button only a button set has is focused when its set shows (the player reports it).
+    s.buttonSet = invalid
+    s.focusWanted = invalid
+    if menu["buttonSets"] <> invalid and buttonId <> invalid
+        asked = buttonId
+        if GetInterface(buttonId, "ifAssociativeArray") <> invalid then asked = msNavText(msNavRead(s, buttonId["var"]))
+        if asked <> s.focus
+            for each set in menu["buttonSets"]
+                if msNavFindButton(set, asked) <> invalid then s.focusWanted = asked
+            end for
+        end if
+    end if
     s.intro = fresh
     buttonsAt = msOr(menu["buttonsAt"], 0)
     s.buttonsReady = not (fresh and buttonsAt > 0)
     s.transitionTo = invalid
     ' Every time the menu appears (fresh or returned to), its countdown starts over (Level 2).
     if menu["timeout"] <> invalid then effects.push({ type: "startTimer", menu: menuId, after: menu["timeout"]["after"] })
+end sub
+
+' The buttons the current menu shows now (with defaultButton and autoNav): a button set's while its
+' window runs (Level 2, spec 5.3), otherwise the menu's own. For drawing too.
+function msNavShown(manifest as object, s as object) as object
+    menu = msNavMenu(manifest, s.menu)
+    if s.buttonSet <> invalid and menu["buttonSets"] <> invalid
+        set = menu["buttonSets"][s.buttonSet]
+        if set <> invalid then return set
+    end if
+    return menu
+end function
+
+' Level 2: the menu's clock entered a button set's window (its index), or left them all (invalid). The
+' highlighted button stays by id when the new buttons have it, otherwise by its place (a disc keeps the
+' selected button number when its highlights change mid-cell).
+sub msNavButtonSet(manifest as object, s as object, index as dynamic)
+    if s.mode <> "menu" or s.menu = invalid then return
+    menu = msNavMenu(manifest, s.menu)
+    if index <> invalid
+        if menu["buttonSets"] = invalid then return
+        if menu["buttonSets"][index] = invalid then return
+    end if
+    if index = invalid and s.buttonSet = invalid then return
+    if index <> invalid and s.buttonSet <> invalid
+        if index = s.buttonSet then return
+    end if
+    before = msNavShown(manifest, s)["buttons"]
+    place = -1
+    for i = 0 to before.Count() - 1
+        if before[i]["id"] = s.focus then place = i
+    end for
+    s.buttonSet = index
+    now = msNavShown(manifest, s)
+    buttons = now["buttons"]
+    focus = invalid
+    if s.focusWanted <> invalid
+        if msNavFindButton(now, s.focusWanted) <> invalid
+            focus = s.focusWanted
+            s.focusWanted = invalid
+        end if
+    end if
+    if focus = invalid and msNavFindButton(now, s.focus) <> invalid then focus = s.focus
+    if focus = invalid and place >= 0
+        if place > buttons.Count() - 1 then place = buttons.Count() - 1
+        focus = buttons[place]["id"]
+    end if
+    if focus = invalid then focus = msNavButtonRef(s, now, now["defaultButton"])
+    if focus = invalid then focus = buttons[0]["id"]
+    s.focus = focus
 end sub
 
 sub msNavEndTransition(manifest as object, s as object, effects as object)
@@ -362,7 +427,7 @@ sub msNavFocusButton(manifest as object, s as object, button as object, effects 
 end sub
 
 sub msNavMove(manifest as object, s as object, dir as string, effects as object)
-    menu = msNavMenu(manifest, s.menu)
+    menu = msNavShown(manifest, s)
     current = msNavFindButton(menu, s.focus)
     targetId = invalid
     if current["nav"] <> invalid then targetId = current["nav"][dir]
@@ -375,7 +440,7 @@ sub msNavMove(manifest as object, s as object, dir as string, effects as object)
 end sub
 
 sub msNavActivate(manifest as object, s as object, buttonId as string, effects as object)
-    button = msNavFindButton(msNavMenu(manifest, s.menu), buttonId)
+    button = msNavFindButton(msNavShown(manifest, s), buttonId)
     effects.push({ type: "activated", menu: s.menu, button: button["id"] })
     msNavRun(manifest, s, button["action"], effects, true)
 end sub
@@ -510,7 +575,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             if name = "@focus"
                 ' Highlight a button of the current menu (a DVD's SetHL_BTN).
                 id = msNavText(nextValue)
-                if s.menu <> invalid and msNavFindButton(msNavMenu(manifest, s.menu), id) <> invalid then s.focus = id
+                if s.menu <> invalid and msNavFindButton(msNavShown(manifest, s), id) <> invalid then s.focus = id
             else if Left(name, 1) = "@"
                 player = msNavCopyVars(s.player)
                 player[name] = nextValue
@@ -545,7 +610,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "activate"
         ' Press a button of the current menu, as if the viewer had: focus, activated state, action.
         if s.menu = invalid then return invalid
-        button = msNavFindButton(msNavMenu(manifest, s.menu), action["button"])
+        button = msNavFindButton(msNavShown(manifest, s), action["button"])
         if button = invalid then return invalid
         s.focus = button["id"]
         effects.push({ type: "activated", menu: s.menu, button: button["id"] })
