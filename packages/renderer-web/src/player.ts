@@ -1,6 +1,7 @@
 import {
   canvasAspect,
   initialState,
+  MENU_KEYS,
   overlayOf,
   resolveMedia,
   resolvePath,
@@ -147,7 +148,7 @@ export class MenuPlayer {
     this.root.appendChild(this.overlayStage);
 
     this.input = options.input ?? new KeyboardInput();
-    this.input.attach((key) => this.onKey(key));
+    this.input.attach((key, position) => this.onKey(key, position));
 
     // Pause menu music/motion while the page is hidden (browser tab switched, TV app sent to the
     // background with Home) and pick up where it was when it comes back.
@@ -220,8 +221,15 @@ export class MenuPlayer {
 
   // --- input & playback -----------------------------------------------------------------------
 
-  private onKey(key: Key): boolean {
+  private onKey(key: Key, position?: number): boolean {
     this.unlockSound();
+    // Level 2: the menu keys belong to the menus, also during playback, where they say where it was.
+    if ((MENU_KEYS as readonly string[]).includes(key)) {
+      if (this.fallbackQueue || this.fallbackEl || (this.state.mode !== "menu" && this.state.mode !== "playing")) return false;
+      const at = this.state.mode === "playing" ? (position ?? this.playback.currentPosition?.()) : undefined;
+      this.dispatch({ type: "press", key, ...(at !== undefined ? { position: at } : {}) });
+      return true;
+    }
     // While an overlay's buttons show, the arrows and Enter are theirs (Back still stops playback).
     if (this.state.mode === "playing" && this.state.overlay && key !== "back") {
       this.dispatch({ type: "press", key });

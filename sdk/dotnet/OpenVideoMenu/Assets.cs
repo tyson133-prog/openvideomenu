@@ -34,12 +34,14 @@ public sealed partial class Manifest
                 case PlayAction p:
                     Walk(p.After);
                     WalkCues(p.Cues);
+                    WalkKeys(p.Keys);
                     break;
                 case PlayAllAction pa:
                     Walk(pa.After);
                     foreach (var item in pa.Items)
                     {
                         WalkCues(item.Cues);
+                        WalkKeys(item.Keys);
                     }
 
                     break;
@@ -79,6 +81,14 @@ public sealed partial class Manifest
             }
         }
 
+        void WalkKeys(MenuKeys? keys)
+        {
+            foreach (var action in keys?.All() ?? [])
+            {
+                Walk(action);
+            }
+        }
+
         void WalkCues(IEnumerable<Cue>? cues)
         {
             foreach (var cue in cues ?? [])
@@ -102,6 +112,7 @@ public sealed partial class Manifest
             Add(menu.Background?.Audio?.Src);
             Walk(menu.Back);
             Walk(menu.Timeout?.Action);
+            WalkKeys(menu.Keys);
             WalkButtons(menu.Buttons);
         }
 
@@ -110,6 +121,8 @@ public sealed partial class Manifest
         {
             Walk(action);
         }
+
+        WalkKeys(Keys);
         foreach (var group in Fallback)
         {
             foreach (var item in group.Items)
@@ -126,6 +139,7 @@ public sealed partial class Manifest
             }
 
             WalkCues(media.Cues);
+            WalkKeys(media.Keys);
         }
 
         return [.. found];

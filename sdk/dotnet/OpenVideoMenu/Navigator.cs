@@ -14,6 +14,24 @@ public enum Key
     Right,
     Enter,
     Back,
+
+    /// <summary>Level 2: the remote's Menu key (a disc's root menu), spec §6.6.</summary>
+    Menu,
+
+    /// <summary>Level 2: the remote's Title key (a disc's title menu).</summary>
+    Title,
+
+    /// <summary>Level 2: a call to the audio menu.</summary>
+    AudioMenu,
+
+    /// <summary>Level 2: a call to the subtitle menu.</summary>
+    SubtitleMenu,
+
+    /// <summary>Level 2: a call to the angle menu.</summary>
+    AngleMenu,
+
+    /// <summary>Level 2: a call to the chapter menu.</summary>
+    ChapterMenu,
 }
 
 /// <summary>Something that happened: input, or playback reaching a point.</summary>
@@ -28,8 +46,11 @@ public abstract record NavEvent
     /// <summary>Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack).</summary>
     public sealed record PlayerChanged(IReadOnlyDictionary<string, Scalar> Values) : NavEvent;
 
-    /// <summary>Remote or keyboard input. While playing, only Back is handled (it stops playback).</summary>
-    public sealed record Press(Key Key) : NavEvent;
+    /// <summary>
+    /// Remote or keyboard input. While playing, only Back and the menu keys are handled. With a menu key
+    /// during playback, players pass the <paramref name="Position"/> (seconds) it was pressed at, for resume.
+    /// </summary>
+    public sealed record Press(Key Key, double? Position = null) : NavEvent;
 
     /// <summary>A pointer or touch moved onto a button.</summary>
     public sealed record Select(string Button) : NavEvent;
@@ -78,16 +99,18 @@ public abstract record Effect
         int? Subtitle = null,
         int? Angle = null,
         double? End = null,
-        IReadOnlyList<CueWatch>? Cues = null) : Effect
+        IReadOnlyList<CueWatch>? Cues = null,
+        IReadOnlyList<string>? Prohibits = null) : Effect
     {
         public bool Equals(Play? other) =>
             other is not null && Media == other.Media && Start == other.Start && Audio == other.Audio && Subtitle == other.Subtitle &&
-            Angle == other.Angle && End == other.End && (Cues ?? []).SequenceEqual(other.Cues ?? []);
+            Angle == other.Angle && End == other.End && (Cues ?? []).SequenceEqual(other.Cues ?? []) &&
+            (Prohibits ?? []).SequenceEqual(other.Prohibits ?? []);
 
         public override int GetHashCode() => HashCode.Combine(Media, Start, Audio, Subtitle, Angle, End, Cues?.Count ?? 0);
 
         public override string ToString() =>
-            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}] }}";
+            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}], Prohibits = [{string.Join(", ", Prohibits ?? [])}] }}";
     }
 
     /// <summary>Briefly show the button's activated state.</summary>
@@ -415,11 +438,46 @@ public static class Navigator
         return best;
     }
 
+    /// <summary>
+    /// Level 2: a menu key (spec §6.6). During playback it runs like a cue's action at the position it
+    /// was pressed: a menu it opens leaves playback, remembered for resume; playback it starts returns
+    /// there. The item's keys win over the media's, the media's over the manifest's. On a menu, the
+    /// menu's keys win over the manifest's, run as a step up. Without an action, Menu and Title open the
+    /// root menu.
+    /// </summary>
+    private static void MenuKey(Manifest manifest, Working s, Key key, double? position, List<Effect> effects)
+    {
+        MenuAction? fallback = key is Key.Menu or Key.Title && manifest.RootMenu is { } root ? new GotoAction { Menu = root } : null;
+        if (s.Mode == NavMode.Playing && s.Playing is { } playing)
+        {
+            var item = playing.Item;
+            var action = item.Keys?.For(key) ?? manifest.Media.GetValueOrDefault(item.Media)?.Keys?.For(key) ?? manifest.Keys?.For(key) ?? fallback;
+            if (action is not null)
+            {
+                Run(manifest, s, action, effects, pushHistory: false, cueAt: position ?? StartTime(manifest, item));
+            }
+        }
+        else if (s.Mode == NavMode.Menu && s.Menu is not null)
+        {
+            var action = MenuOf(manifest, s.Menu).Keys?.For(key) ?? manifest.Keys?.For(key) ?? fallback;
+            if (action is not null)
+            {
+                Run(manifest, s, action, effects, pushHistory: false, up: true);
+            }
+        }
+    }
+
     private static void HandleInput(Manifest manifest, Working s, NavEvent navEvent, List<Effect> effects)
     {
         switch (navEvent)
         {
             case NavEvent.Press press:
+                if (press.Key >= Key.Menu)
+                {
+                    MenuKey(manifest, s, press.Key, press.Position, effects);
+                    break;
+                }
+
                 if (s.Mode == NavMode.Playing)
                 {
                     // Players report the position with Stopped; a bare Back stops at an unknown position.
@@ -1060,7 +1118,8 @@ public static class Navigator
         var cues = CuesOf(manifest, item)
             .Select(c => c.Cue is PointCue point ? new CueWatch(c.Id, At: point.At) : new CueWatch(c.Id, From: ((Overlay)c.Cue).From, To: ((Overlay)c.Cue).To))
             .ToList();
-        return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null);
+        var prohibits = (manifest.Media.GetValueOrDefault(item.Media)?.Prohibits ?? []).Concat(item.Prohibits ?? []).Distinct().ToList();
+        return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null, prohibits.Count > 0 ? prohibits : null);
     }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>

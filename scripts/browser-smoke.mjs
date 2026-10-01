@@ -75,6 +75,7 @@ const evaluate = async (expression) =>
 
 const KEYS = {
   ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Enter: 13, Escape: 27, Backspace: 8, " ": 32,
+  m: 77, t: 84, // the Menu and Title keys (Level 2)
 };
 async function press(key) {
   const code = KEYS[key];

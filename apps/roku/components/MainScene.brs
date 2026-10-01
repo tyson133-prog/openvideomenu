@@ -1214,6 +1214,11 @@ function onKeyEvent(key as string, press as boolean) as boolean
         stopTitle()
         return true
     end if
+    ' Level 2: * is the remote's Menu key; the menus decide what it does during their titles.
+    if key = "options" and m.player <> invalid and m.menu <> invalid
+        m.menu.menuKey = titlePosition()
+        return true
+    end if
     if key = "back" and m.top.findNode("code").visible
         m.pollTimer.control = "stop"
         m.pin = invalid

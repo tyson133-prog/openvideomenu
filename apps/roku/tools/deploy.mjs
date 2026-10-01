@@ -42,7 +42,9 @@ const ecp = (path) => fetch(`http://${host}:8060${path}`, { method: "POST" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Collect debug-console lines until `done` matches one, or `timeoutMs` passes. */
-function readConsole(done, timeoutMs) {
+// The console replays recent output to a new connection; lines that arrive before gate.open are that
+// history (perhaps an earlier run's results), not this run's, and are skipped.
+function readConsole(done, timeoutMs, gate = { open: true }) {
   return new Promise((resolveLines, reject) => {
     const lines = [];
     let buffer = "";
@@ -57,6 +59,7 @@ function readConsole(done, timeoutMs) {
       const parts = buffer.split(/\r?\n/);
       buffer = parts.pop() ?? "";
       for (const line of parts) {
+        if (!gate.open) continue;
         lines.push(line);
         if (done(line)) {
           clearTimeout(timer);
@@ -102,8 +105,10 @@ if (conformance) {
   await sleep(2000);
   // A runtime error stops the app in the debugger; show it instead of waiting for a result.
   const failure = /runtime error|BRIGHTSCRIPT: ERROR|Brightscript Debugger>/i;
-  const reading = readConsole((l) => l.includes("MSCONF DONE") || /Brightscript Debugger>/i.test(l), 60_000);
-  await sleep(500);
+  const gate = { open: false };
+  const reading = readConsole((l) => l.includes("MSCONF DONE") || /Brightscript Debugger>/i.test(l), 60_000, gate);
+  await sleep(1000);
+  gate.open = true;
   await ecp("/launch/dev?conformance=1");
   const lines = await reading;
   const results = lines.filter((l) => l.includes("MSCONF") || failure.test(l) || /^\s*file\/line:/.test(l));

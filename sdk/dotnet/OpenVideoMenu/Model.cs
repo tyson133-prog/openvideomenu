@@ -57,6 +57,9 @@ public sealed partial class Manifest
     /// </summary>
     public string? ResumePoint { get; set; }
 
+    /// <summary>Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6).</summary>
+    public MenuKeys? Keys { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }
@@ -120,6 +123,12 @@ public sealed class MediaEntry
 
     /// <summary>Level 2: cues whenever this media plays (spec §6.3).</summary>
     public List<Cue>? Cues { get; set; }
+
+    /// <summary>Level 2: what the menu keys do while this media plays, over the manifest's (spec §6.6).</summary>
+    public MenuKeys? Keys { get; set; }
+
+    /// <summary>Level 2: what the source forbids while this media plays, as information (spec §6.6).</summary>
+    public List<string>? Prohibits { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
@@ -205,8 +214,52 @@ public sealed class Menu
     /// <summary>Level 2: what happens when the menu is left alone (spec §5.2).</summary>
     public MenuTimeout? Timeout { get; set; }
 
+    /// <summary>Level 2: what the menu keys do on this menu, over the manifest's (spec §6.6).</summary>
+    public MenuKeys? Keys { get; set; }
+
+    /// <summary>Level 2: what the source forbids on this menu, as information (spec §6.6).</summary>
+    public List<string>? Prohibits { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
+}
+
+/// <summary>
+/// Level 2: what the remote's menu keys do (spec §6.6): Menu (a disc's root menu), Title (its title
+/// menu), and the calls a disc can make to its audio, subtitle, angle and chapter menus. A key without
+/// an action does the player's default.
+/// </summary>
+public sealed class MenuKeys
+{
+    public MenuAction? Menu { get; set; }
+
+    public MenuAction? Title { get; set; }
+
+    public MenuAction? AudioMenu { get; set; }
+
+    public MenuAction? SubtitleMenu { get; set; }
+
+    public MenuAction? AngleMenu { get; set; }
+
+    public MenuAction? ChapterMenu { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+
+    /// <summary>The action for a menu key, if this table has one.</summary>
+    public MenuAction? For(Key key) => key switch
+    {
+        Key.Menu => Menu,
+        Key.Title => Title,
+        Key.AudioMenu => AudioMenu,
+        Key.SubtitleMenu => SubtitleMenu,
+        Key.AngleMenu => AngleMenu,
+        Key.ChapterMenu => ChapterMenu,
+        _ => null,
+    };
+
+    /// <summary>Every action in the table.</summary>
+    public IEnumerable<MenuAction> All() => new[] { Menu, Title, AudioMenu, SubtitleMenu, AngleMenu, ChapterMenu }.OfType<MenuAction>();
 }
 
 /// <summary>A menu that moves on by itself, like a DVD menu whose video or still time runs out.</summary>
@@ -472,6 +525,12 @@ public sealed class PlayItem
 
     /// <summary>Level 2: cues for this way of playing the media, beside the media's own (spec §6.3).</summary>
     public List<Cue>? Cues { get; set; }
+
+    /// <summary>Level 2: what the menu keys do while this item plays, over the media's and the manifest's (spec §6.6).</summary>
+    public MenuKeys? Keys { get; set; }
+
+    /// <summary>Level 2: what the source forbids while this item plays, beside the media's (spec §6.6).</summary>
+    public List<string>? Prohibits { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

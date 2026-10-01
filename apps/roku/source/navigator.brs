@@ -136,6 +136,10 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
     t = event["type"]
     if t = "press"
         key = event["key"]
+        if msNavIsMenuKey(key)
+            msNavMenuKey(manifest, s, key, event["position"], effects)
+            return
+        end if
         if s.mode = "playing"
             ' Players report the position with "stopped"; a bare "back" stops at an unknown position.
             if key = "back"
@@ -186,6 +190,44 @@ end sub
 ' --- helpers ---------------------------------------------------------------------------------
 
 ' Level 2: the cues that apply while an item plays, with their ids: the media's, then the item's.
+' Level 2: the remote's menu keys (spec 6.6).
+function msNavIsMenuKey(key as dynamic) as boolean
+    for each k in ["menu", "title", "audioMenu", "subtitleMenu", "angleMenu", "chapterMenu"]
+        if key = k then return true
+    end for
+    return false
+end function
+
+' The action a keys table (or invalid) has for a key.
+function msNavKeyAction(keys as dynamic, key as string) as dynamic
+    if keys = invalid then return invalid
+    return keys[key]
+end function
+
+' Level 2: a menu key (spec 6.6). During playback it runs like a cue's action at the position it was
+' pressed: a menu it opens leaves playback, remembered for resume; playback it starts returns there.
+' The item's keys win over the media's, the media's over the manifest's. On a menu, the menu's keys
+' win over the manifest's, run as a step up. Without an action, Menu and Title open the root menu.
+sub msNavMenuKey(manifest as object, s as object, key as string, position as dynamic, effects as object)
+    fallback = invalid
+    if (key = "menu" or key = "title") and manifest["rootMenu"] <> invalid then fallback = { type: "goto", menu: manifest["rootMenu"] }
+    if s.mode = "playing" and s.playing <> invalid
+        item = s.playing.item
+        action = msNavKeyAction(item["keys"], key)
+        media = manifest["media"][item["media"]]
+        if action = invalid and media <> invalid then action = msNavKeyAction(media["keys"], key)
+        if action = invalid then action = msNavKeyAction(manifest["keys"], key)
+        if action = invalid then action = fallback
+        if position = invalid then position = msNavStartTime(manifest, item)
+        if action <> invalid then msNavRunCue(manifest, s, action, effects, position)
+    else if s.mode = "menu" and s.menu <> invalid
+        action = msNavKeyAction(msNavMenu(manifest, s.menu)["keys"], key)
+        if action = invalid then action = msNavKeyAction(manifest["keys"], key)
+        if action = invalid then action = fallback
+        if action <> invalid then msNavRunOpts(manifest, s, action, effects, false, true)
+    end if
+end sub
+
 function msNavCuesOf(manifest as object, item as object) as object
     list = []
     media = manifest["media"][item["media"]]
@@ -650,6 +692,19 @@ function msNavPlayEffect(manifest as object, item as object, s as object) as obj
         end if
     end for
     if cues.Count() > 0 then effect.cues = cues
+    ' What the source forbids (the media's, then the item's), for players that honour it (spec 6.6).
+    prohibits = []
+    media = manifest["media"][item["media"]]
+    for each list in [msOr(media["prohibits"], []), msOr(item["prohibits"], [])]
+        for each name in list
+            seen = false
+            for each have in prohibits
+                if have = name then seen = true
+            end for
+            if not seen then prohibits.push(name)
+        end for
+    end for
+    if prohibits.Count() > 0 then effect.prohibits = prohibits
     return effect
 end function
 

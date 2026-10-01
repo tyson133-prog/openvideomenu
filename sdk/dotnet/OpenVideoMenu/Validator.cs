@@ -13,13 +13,13 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits"],
         ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
-        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
+        ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
         ["timeout"] = ["after", "action", "restartOnInput"],
         ["cue"] = ["at", "action"],
         ["overlay"] = ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
@@ -35,7 +35,7 @@ internal sealed class Validator
     // Insertion order matters: it's the order "Expected …" lists the types in.
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
-        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues"]),
+        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits"]),
         ("playAll", ["type", "items", "after"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
@@ -123,16 +123,36 @@ internal sealed class Validator
         var mediaIds = Media(m["media"]);
         var menus = Menus(m["menus"], mediaIds);
 
-        // Media cues run actions, so they're checked once every menu is known.
+        // Media cues and keys run actions, so they're checked once every menu is known.
         if (Obj.TryFrom(m["media"], out var allMedia))
         {
             foreach (var (id, entry) in allMedia.Entries)
             {
-                if (Obj.TryFrom(entry, out var me) && me["cues"] is { } mediaCues)
+                if (!Obj.TryFrom(entry, out var me))
+                {
+                    continue;
+                }
+
+                if (me["cues"] is { } mediaCues)
                 {
                     Cues(mediaCues, $"/media/{id}/cues", mediaIds, menus);
                 }
+
+                if (me["keys"] is { } mediaKeys)
+                {
+                    Keys(mediaKeys, $"/media/{id}/keys", mediaIds, menus, duringPlayback: true);
+                }
+
+                if (me["prohibits"] is { } mediaProhibits)
+                {
+                    Prohibits(mediaProhibits, $"/media/{id}/prohibits");
+                }
             }
+        }
+
+        if (m["keys"] is { } keys)
+        {
+            Keys(keys, "/keys", mediaIds, menus, duringPlayback: true);
         }
 
         if (m["rootMenu"] is { } root)
@@ -862,6 +882,17 @@ internal sealed class Validator
             Action(back, $"{path}/back", mediaIds, menus, own);
         }
 
+        // Like back, a menu's keys may press one of its own buttons.
+        if (menu["keys"] is { } menuKeys)
+        {
+            Keys(menuKeys, $"{path}/keys", mediaIds, menus, duringPlayback: false, own);
+        }
+
+        if (menu["prohibits"] is { } menuProhibits)
+        {
+            Prohibits(menuProhibits, $"{path}/prohibits");
+        }
+
         if (menu["timeout"] is { } timeoutValue)
         {
             var tp = $"{path}/timeout";
@@ -1244,6 +1275,76 @@ internal sealed class Validator
         {
             Cues(cues, $"{path}/cues", mediaIds, menus);
         }
+
+        if (value["keys"] is { } keys)
+        {
+            Keys(keys, $"{path}/keys", mediaIds, menus, duringPlayback: true);
+        }
+
+        if (value["prohibits"] is { } prohibits)
+        {
+            Prohibits(prohibits, $"{path}/prohibits");
+        }
+    }
+
+    /// <summary>
+    /// Level 2: a table of menu key → action (spec 6.6). <paramref name="duringPlayback"/>: the keys may
+    /// run while a title plays, where they act like a cue's action.
+    /// </summary>
+    private void Keys(JsonElement value, string path, Dictionary<string, int> mediaIds, Dictionary<string, HashSet<string>> menus, bool duringPlayback, HashSet<string>? ownButtons = null)
+    {
+        if (!Obj.TryFrom(value, out var keys))
+        {
+            Error(path, $"Must be an object of key → action ({string.Join(", ", PlayerState.MenuKeys)}).");
+            return;
+        }
+
+        if (duringPlayback)
+        {
+            _cueDepth++;
+        }
+
+        foreach (var (key, action) in keys.Entries)
+        {
+            if (!PlayerState.MenuKeys.Contains(key))
+            {
+                if (!key.StartsWith("x-", StringComparison.Ordinal))
+                {
+                    Warn($"{path}/{key}", $"Unknown key \"{key}\" (ignored). Known: {string.Join(", ", PlayerState.MenuKeys)}.");
+                }
+            }
+            else
+            {
+                Action(action, $"{path}/{key}", mediaIds, menus, ownButtons);
+            }
+        }
+
+        if (duringPlayback)
+        {
+            _cueDepth--;
+        }
+    }
+
+    /// <summary>Level 2: what a source forbids, as information (spec 6.6); unknown values are allowed but warned about.</summary>
+    private void Prohibits(JsonElement value, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Array || !value.EnumerateArray().All(p => IsNonEmptyString(p)))
+        {
+            Error(path, "Must be a list of prohibitions, e.g. [\"fastForward\", \"menuKey\"].");
+            return;
+        }
+
+        var i = 0;
+        foreach (var p in value.EnumerateArray())
+        {
+            var name = p.GetString()!;
+            if (!PlayerState.Prohibitions.Contains(name) && !name.StartsWith("x-", StringComparison.Ordinal))
+            {
+                Warn($"{path}/{i}", $"Unknown prohibition \"{name}\" (players ignore it). Known: {string.Join(", ", PlayerState.Prohibitions)}.");
+            }
+
+            i++;
+        }
     }
 
     private void MediaRef(JsonElement? reference, string path)
@@ -1439,7 +1540,7 @@ internal sealed class Validator
             case "activate":
                 if (ownButtons is null)
                 {
-                    Error($"{path}/type", "\"activate\" is only allowed in a menu's back or timeout.");
+                    Error($"{path}/type", "\"activate\" is only allowed in a menu's back, timeout or keys.");
                 }
                 else if (!IsNonEmptyString(action["button"]) || !ownButtons.Contains(action["button"]!.Value.GetString()!))
                 {

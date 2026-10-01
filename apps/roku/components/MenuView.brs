@@ -137,7 +137,8 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
-    map = { up: "up", down: "down", left: "left", right: "right", OK: "enter", back: "back" }
+    ' The * key is the remote's Menu key (Level 2): Roku remotes have no other.
+    map = { up: "up", down: "down", left: "left", right: "right", OK: "enter", back: "back", options: "menu" }
     k = map[key]
     if k = invalid then return false
     ' The scene owns playback keys, except the arrows and OK while an overlay's buttons show (Back
@@ -150,6 +151,11 @@ function onKeyEvent(key as string, press as boolean) as boolean
     stepWith({ type: "press", key: k })
     return true
 end function
+
+' Level 2: the scene passes the Menu key (*) pressed during playback, with the title's position.
+sub onMenuKey()
+    stepWith({ type: "press", key: "menu", position: m.top.menuKey })
+end sub
 
 sub onPlaybackEnded()
     stepWith({ type: "ended" })

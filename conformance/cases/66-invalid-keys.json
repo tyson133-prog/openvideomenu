@@ -1,0 +1,25 @@
+{
+  "description": "Menu keys and prohibitions: a keys table maps known keys to valid actions (unknown keys are warned about and ignored); keys that can run during playback (the manifest's, a media's, an item's) follow a cue's rules, so they can't start playback with after or press a menu's buttons; a menu's keys may press its own buttons. Prohibitions are a list of strings; unknown ones are warned about.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/keys/menu/menu", "/media/feature/keys/title/after", "/menus/main/keys/menu/button", "/media/feature/keys/chapterMenu/type", "/menus/main/prohibits"],
+  "warnings": ["/keys/x", "/media/feature/prohibits/1"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Keys" },
+    "keys": { "menu": { "type": "goto", "menu": "nowhere" }, "x": { "type": "back" } },
+    "media": { "feature": { "ref": "a.mp4", "prohibits": ["fastForward", "teleport"],
+      "keys": { "title": { "type": "play", "media": "feature", "after": { "type": "back" } }, "chapterMenu": { "type": "activate", "button": "a" } } } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "keys": { "menu": { "type": "activate", "button": "zz" }, "title": { "type": "activate", "button": "a" } },
+        "prohibits": "fastForward",
+        "buttons": [{ "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "feature" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

@@ -32,8 +32,25 @@ export interface Manifest {
    * completes. "untilUsed": like a disc's, until a resume uses it or it's replaced or cleared.
    */
   resumePoint?: "untilEnd" | "untilUsed";
+  /** Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6). */
+  keys?: MenuKeys;
   [extension: `x-${string}`]: unknown;
 }
+
+/**
+ * Level 2: the remote's menu keys (spec §6.6): Menu (a disc's root menu), Title (its title menu), and
+ * the calls a disc can make to its audio, subtitle, angle and chapter menus.
+ */
+export type MenuKey = "menu" | "title" | "audioMenu" | "subtitleMenu" | "angleMenu" | "chapterMenu";
+
+/** Level 2: an action per menu key; a key without one does the player's default (spec §6.6). */
+export type MenuKeys = Partial<Record<MenuKey, Action>>;
+
+/**
+ * Level 2: what a source forbids the viewer, as information (spec §6.6): players decide whether to
+ * honour it. Known values are listed in PROHIBITIONS; others are allowed.
+ */
+export type Prohibitions = string[];
 
 export interface Title {
   name: string;
@@ -87,6 +104,10 @@ export interface Media {
   angleTracks?: number;
   /** Level 2: what happens during playback whenever this media plays (spec §6.3). */
   cues?: Cue[];
+  /** Level 2: what the menu keys do while this media plays, over the manifest's (spec §6.6). */
+  keys?: MenuKeys;
+  /** Level 2: what the source forbids while this media plays, as information (spec §6.6). */
+  prohibits?: Prohibitions;
 }
 
 export interface Chapter {
@@ -181,6 +202,10 @@ export interface Menu {
    * out. Counted from when the menu appears (its intro included).
    */
   timeout?: MenuTimeout;
+  /** Level 2: what the menu keys do on this menu, over the manifest's (spec §6.6). */
+  keys?: MenuKeys;
+  /** Level 2: what the source forbids on this menu, as information (spec §6.6). */
+  prohibits?: Prohibitions;
   [extension: `x-${string}`]: unknown;
 }
 
@@ -253,6 +278,10 @@ export interface PlayItem {
   end?: number;
   /** Level 2: cues for this way of playing the media, beside the media's own (spec §6.3). */
   cues?: Cue[];
+  /** Level 2: what the menu keys do while this item plays, over the media's and the manifest's (spec §6.6). */
+  keys?: MenuKeys;
+  /** Level 2: what the source forbids while this item plays, beside the media's, as information (spec §6.6). */
+  prohibits?: Prohibitions;
 }
 
 export type Action =

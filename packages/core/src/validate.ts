@@ -1,5 +1,5 @@
 import { FORMAT_ID, FORMAT_VERSION, isFormatId } from "./constants.js";
-import { PLAYER_VARS, SET_OPS, TEST_OPS } from "./logic.js";
+import { MENU_KEYS, PLAYER_VARS, PROHIBITIONS, SET_OPS, TEST_OPS } from "./logic.js";
 import type { Action, Manifest, Menu, PlayItem } from "./types.js";
 
 export interface Issue {
@@ -18,13 +18,13 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
+  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits"],
   segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
-  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout"],
+  menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
   timeout: ["after", "action", "restartOnInput"],
   cue: ["at", "action"],
   overlay: ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
@@ -38,7 +38,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues"],
+  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits"],
   playAll: ["type", "items", "after"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
@@ -116,10 +116,15 @@ class Validator {
     this.collectActions(data.actions);
     const mediaIds = this.media(data.media);
     const menus = this.menus(data.menus, mediaIds);
-    // Media cues run actions, so they're checked once every menu is known.
+    // Media cues and keys run actions, so they're checked once every menu is known.
     if (isObject(data.media))
       for (const [id, m] of Object.entries(data.media))
-        if (isObject(m) && m.cues !== undefined) this.cues(m.cues, `/media/${id}/cues`, mediaIds, menus);
+        if (isObject(m)) {
+          if (m.cues !== undefined) this.cues(m.cues, `/media/${id}/cues`, mediaIds, menus);
+          if (m.keys !== undefined) this.keys(m.keys, `/media/${id}/keys`, mediaIds, menus, true);
+          if (m.prohibits !== undefined) this.prohibits(m.prohibits, `/media/${id}/prohibits`);
+        }
+    if (data.keys !== undefined) this.keys(data.keys, "/keys", mediaIds, menus, true);
 
     if (data.rootMenu !== undefined) {
       if (!isNonEmptyString(data.rootMenu)) this.error("/rootMenu", "Must be a menu id.");
@@ -486,6 +491,9 @@ class Validator {
     if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
     // What the remote's Back does here; may press one of this menu's own buttons.
     if (value.back !== undefined) this.action(value.back, `${path}/back`, mediaIds, menus, own);
+    // Like back, a menu's keys may press one of its own buttons.
+    if (value.keys !== undefined) this.keys(value.keys, `${path}/keys`, mediaIds, menus, false, own);
+    if (value.prohibits !== undefined) this.prohibits(value.prohibits, `${path}/prohibits`);
     if (value.timeout !== undefined) {
       const t = value.timeout;
       const tp = `${path}/timeout`;
@@ -676,6 +684,38 @@ class Validator {
         this.error(`${path}/angle`, `Media "${value.media}" has ${count} angle(s).`);
     }
     if (value.cues !== undefined) this.cues(value.cues, `${path}/cues`, mediaIds, menus);
+    if (value.keys !== undefined) this.keys(value.keys, `${path}/keys`, mediaIds, menus, true);
+    if (value.prohibits !== undefined) this.prohibits(value.prohibits, `${path}/prohibits`);
+  }
+
+  /**
+   * Level 2: a table of menu key → action (spec 6.6). `duringPlayback`: the keys may run while a title
+   * plays, where they act like a cue's action.
+   */
+  private keys(value: unknown, path: string, mediaIds: Map<string, number>, menus: Map<string, Set<string>>, duringPlayback: boolean, ownButtons?: Set<string>) {
+    if (!isObject(value)) {
+      this.error(path, `Must be an object of key → action (${MENU_KEYS.join(", ")}).`);
+      return;
+    }
+    if (duringPlayback) this.cueDepth++;
+    for (const [key, action] of Object.entries(value)) {
+      if (!(MENU_KEYS as readonly string[]).includes(key)) {
+        if (!key.startsWith("x-")) this.warn(`${path}/${key}`, `Unknown key "${key}" (ignored). Known: ${MENU_KEYS.join(", ")}.`);
+      } else this.action(action, `${path}/${key}`, mediaIds, menus, ownButtons);
+    }
+    if (duringPlayback) this.cueDepth--;
+  }
+
+  /** Level 2: what a source forbids, as information (spec 6.6); unknown values are allowed but warned about. */
+  private prohibits(value: unknown, path: string) {
+    if (!Array.isArray(value) || !value.every(isNonEmptyString)) {
+      this.error(path, "Must be a list of prohibitions, e.g. [\"fastForward\", \"menuKey\"].");
+      return;
+    }
+    value.forEach((p, i) => {
+      if (!(PROHIBITIONS as readonly string[]).includes(p) && !p.startsWith("x-"))
+        this.warn(`${path}/${i}`, `Unknown prohibition "${p}" (players ignore it). Known: ${PROHIBITIONS.join(", ")}.`);
+    });
   }
 
   /** `ownButtons`: set when checking a menu's `back`, the only place `activate` may appear. */
@@ -752,7 +792,7 @@ class Validator {
         if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
         break;
       case "activate":
-        if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back or timeout.`);
+        if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back, timeout or keys.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
           this.error(`${path}/button`, `No button "${String(value.button)}" in this menu.`);
         break;

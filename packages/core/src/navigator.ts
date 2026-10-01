@@ -5,10 +5,11 @@
  * describes expected behaviour in exactly these terms, so every implementation (TS, C#, native)
  * can be checked against the same cases.
  */
-import type { Action, Button, Cue, Direction, Manifest, Menu, Overlay, PlayItem, Scalar } from "./types.js";
-import { applyOp, evalTest, readVar, valueOf } from "./logic.js";
+import type { Action, Button, Cue, Direction, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
+import { applyOp, evalTest, MENU_KEYS, readVar, valueOf } from "./logic.js";
 
-export type Key = Direction | "enter" | "back";
+/** A remote key: the arrows, Enter and Back, and (Level 2) the menu keys (spec §6.6). */
+export type Key = Direction | "enter" | "back" | MenuKey;
 
 export type NavEvent =
   /**
@@ -18,8 +19,11 @@ export type NavEvent =
   | { type: "start"; player?: Record<string, Scalar>; seed?: number }
   /** Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack). */
   | { type: "player"; values: Record<string, Scalar> }
-  /** Remote/keyboard input. While playing, only "back" is handled (it stops playback). */
-  | { type: "press"; key: Key }
+  /**
+   * Remote/keyboard input. While playing, only "back" and the menu keys are handled. With a menu key
+   * during playback, players pass the position (seconds) it was pressed at, for the resume point.
+   */
+  | { type: "press"; key: Key; position?: number }
   /** Pointer or touch moved onto a button. */
   | { type: "select"; button: string }
   /** Pointer or touch clicked a button. */
@@ -60,6 +64,8 @@ export type Effect =
       end?: number;
       /** Level 2: the cues to report with "cue"/"cueEnd" while this plays (§6.3). */
       cues?: CueWatch[];
+      /** Level 2: what the source forbids while this plays (the media's and the item's), for players that honour it (§6.6). */
+      prohibits?: string[];
     }
   /** Briefly show the button's activated state (of a menu, or of the overlay showing during playback). */
   | { type: "activated"; menu: string; button: string }
@@ -267,6 +273,10 @@ function handleInput(
 ) {
   switch (event.type) {
     case "press":
+      if (isMenuKey(event.key)) {
+        menuKey(manifest, s, event.key, event.position, effects);
+        break;
+      }
       if (s.mode === "playing") {
         // Players report the position with "stopped"; a bare "back" stops at an unknown position.
         if (event.key === "back") finishPlayback(manifest, s, effects, { stoppedAt: undefined });
@@ -312,6 +322,28 @@ function handleInput(
 }
 
 // --- helpers -------------------------------------------------------------------------------
+
+function isMenuKey(key: Key): key is MenuKey {
+  return (MENU_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * Level 2: a menu key (spec §6.6). During playback it runs like a cue's action at the position it was
+ * pressed: a menu it opens leaves playback, remembered for resume; playback it starts returns there.
+ * The item's keys win over the media's, the media's over the manifest's. On a menu, the menu's keys
+ * win over the manifest's, run as a step up. Without an action, Menu and Title open the root menu.
+ */
+function menuKey(manifest: Manifest, s: NavState, key: MenuKey, position: number | undefined, effects: Effect[]) {
+  const fallback: Action | undefined = (key === "menu" || key === "title") && manifest.rootMenu ? { type: "goto", menu: manifest.rootMenu } : undefined;
+  if (s.mode === "playing" && s.playing) {
+    const item = s.playing.item;
+    const action = item.keys?.[key] ?? manifest.media[item.media]?.keys?.[key] ?? manifest.keys?.[key] ?? fallback;
+    if (action) run(manifest, s, action, effects, { pushHistory: false, cueAt: position ?? startTime(manifest, item) });
+  } else if (s.mode === "menu" && s.menu) {
+    const action = menuOf(manifest, s.menu).keys?.[key] ?? manifest.keys?.[key] ?? fallback;
+    if (action) run(manifest, s, action, effects, { pushHistory: false, up: true });
+  }
+}
 
 function menuOf(manifest: Manifest, id: string): Menu {
   const menu = manifest.menus?.[id];
@@ -681,6 +713,7 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: numb
   // like a DVD's SetSTN, or as the player reported them).
   const audio = value(item.audio) ?? (typeof s.player["@audio"] === "number" && s.player["@audio"] > 0 ? s.player["@audio"] : undefined);
   const subtitle = value(item.subtitle) ?? (typeof s.player["@subtitle"] === "number" ? s.player["@subtitle"] : undefined);
+  const prohibits = [...new Set([...(manifest.media[item.media]?.prohibits ?? []), ...(item.prohibits ?? [])])];
   const cues: CueWatch[] = cuesOf(manifest, item).map(({ id, cue }) => ("at" in cue ? { id, at: cue.at } : { id, from: cue.from, to: cue.to }));
   // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
   const angles = angleCount(manifest, item.media);
@@ -699,6 +732,7 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: numb
     ...(angle !== undefined ? { angle } : {}),
     ...(item.end !== undefined ? { end: item.end } : {}),
     ...(cues.length ? { cues } : {}),
+    ...(prohibits.length ? { prohibits } : {}),
   };
 }
 

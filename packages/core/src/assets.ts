@@ -1,4 +1,4 @@
-import type { Action, Button, Cue, Manifest } from "./types.js";
+import type { Action, Button, Cue, Manifest, MenuKeys } from "./types.js";
 
 /**
  * Every menu asset a manifest names (backgrounds, highlight overlays, menu music, transitions,
@@ -15,8 +15,15 @@ export function menuAssets(manifest: Manifest): string[] {
     if (!action) return;
     if (action.type === "goto") add(action.transition);
     if ((action.type === "play" || action.type === "playAll") && action.after) walkAction(action.after);
-    if (action.type === "play") walkCues(action.cues);
-    if (action.type === "playAll") for (const item of action.items) walkCues(item.cues);
+    if (action.type === "play") {
+      walkCues(action.cues);
+      walkKeys(action.keys);
+    }
+    if (action.type === "playAll")
+      for (const item of action.items) {
+        walkCues(item.cues);
+        walkKeys(item.keys);
+      }
     if (action.type === "set") walkAction(action.then);
     if (action.type === "resume") walkAction(action.otherwise);
     if (action.type === "if") {
@@ -31,6 +38,9 @@ export function menuAssets(manifest: Manifest): string[] {
       walkAction(button.action);
     }
   };
+  const walkKeys = (keys: MenuKeys | undefined) => {
+    for (const action of Object.values(keys ?? {})) walkAction(action);
+  };
   const walkCues = (cues: Cue[] | undefined) => {
     for (const cue of cues ?? []) {
       if ("at" in cue) walkAction(cue.action);
@@ -44,14 +54,17 @@ export function menuAssets(manifest: Manifest): string[] {
     add(menu.background?.audio?.src);
     walkAction(menu.back);
     walkAction(menu.timeout?.action);
+    walkKeys(menu.keys);
     walkButtons(menu.buttons);
   }
   walkAction(manifest.firstPlay);
   for (const action of Object.values(manifest.actions ?? {})) walkAction(action);
+  walkKeys(manifest.keys);
   for (const group of manifest.fallback ?? []) for (const item of group.items ?? []) walkAction(item.action);
   for (const media of Object.values(manifest.media)) {
     for (const chapter of media.chapters ?? []) add(chapter.thumbnail);
     walkCues(media.cues);
+    walkKeys(media.keys);
   }
   return [...found].sort();
 }

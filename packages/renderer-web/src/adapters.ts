@@ -60,6 +60,8 @@ export interface PlaybackAdapter {
   play(request: PlayRequest): void;
   /** Stop early; returns the position in seconds that was reached. */
   stop(): number;
+  /** Level 2: where playback is now (seconds on the title's timeline), when the adapter knows. */
+  currentPosition?(): number;
   /** Called by the adapter when the item finishes on its own. */
   onEnded?: () => void;
   /** Called by the adapter when the viewer stops playback (e.g. with the player's own back button). */
@@ -136,7 +138,8 @@ export class CueClock {
  * most TV remotes in browsers (arrow keys, Enter/OK, Back/Escape/Backspace).
  */
 export interface InputAdapter {
-  attach(onKey: (key: Key) => boolean): void;
+  /** `position`: for a menu key a native player forwards during playback, where it was pressed (seconds). */
+  attach(onKey: (key: Key, position?: number) => boolean): void;
   detach(): void;
 }
 
@@ -151,6 +154,12 @@ const KEY_MAP: Record<string, Key> = {
   Backspace: "back",
   GoBack: "back", // Android TV / some TV browsers
   BrowserBack: "back",
+  // Level 2: the remote's Menu and Title keys (spec 6.6); M and T stand in for them on a keyboard.
+  ContextMenu: "menu",
+  m: "menu",
+  M: "menu",
+  t: "title",
+  T: "title",
 };
 
 export class KeyboardInput implements InputAdapter {
@@ -244,6 +253,10 @@ export class Html5Playback implements PlaybackAdapter {
   }
 
   /** Where playback is on the title's timeline. */
+  currentPosition(): number {
+    return this.position();
+  }
+
   private position(): number {
     const p = this.pieces[this.piece];
     return p ? p.offset + Math.max(0, (this.video.currentTime || 0) - p.start) : 0;

@@ -152,7 +152,12 @@ class MenuWebView(
     fun stopped(position: Double) = send(buildJsonObject { put("type", "stopped"); put("position", position) })
     fun playError(message: String) = send(buildJsonObject { put("type", "playError"); put("message", message) })
     fun back() = send(buildJsonObject { put("type", "key"); put("key", "back") })
-    fun key(name: String) = send(buildJsonObject { put("type", "key"); put("key", name) })
+    /** [position]: for a menu key during playback (Level 2), where the title was (seconds). */
+    fun key(name: String, position: Double? = null) = send(buildJsonObject {
+        put("type", "key")
+        put("key", name)
+        if (position != null) put("position", position)
+    })
     fun cue(id: String) = send(buildJsonObject { put("type", "cue"); put("id", id) })
     fun cueEnd(id: String) = send(buildJsonObject { put("type", "cueEnd"); put("id", id) })
 

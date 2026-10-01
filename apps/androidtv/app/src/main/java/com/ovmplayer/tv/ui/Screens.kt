@@ -397,10 +397,21 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
         web.visibility = if (hidden) android.view.View.INVISIBLE else android.view.View.VISIBLE
         web.setBehindPlayer(playing != null)
     }
-    // The overlay's keys are claimed ahead of the player, which keeps focus (and Back) meanwhile.
+    // The overlay's keys are claimed ahead of the player, which keeps focus (and Back) meanwhile. So
+    // are the remote's Menu and Guide keys during playback (Level 2): the menus decide what they do.
     DisposableEffect(playing, overlay) {
-        if (playing != null && overlay) {
-            com.ovmplayer.tv.KeyClaim.handler = { e ->
+        if (playing != null) {
+            com.ovmplayer.tv.KeyClaim.handler = handler@{ e ->
+                val menuKey = when (e.keyCode) {
+                    android.view.KeyEvent.KEYCODE_MENU -> "menu"
+                    android.view.KeyEvent.KEYCODE_GUIDE -> "title"
+                    else -> null
+                }
+                if (menuKey != null) {
+                    if (e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) web.key(menuKey, handle?.positionSeconds())
+                    return@handler true
+                }
+                if (!overlay) return@handler false
                 val key = when (e.keyCode) {
                     android.view.KeyEvent.KEYCODE_DPAD_UP -> "up"
                     android.view.KeyEvent.KEYCODE_DPAD_DOWN -> "down"

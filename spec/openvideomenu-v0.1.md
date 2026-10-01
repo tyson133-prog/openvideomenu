@@ -57,6 +57,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `vars` | no | *(Level 2)* Named integer variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
 | `actions` | no | *(Level 2)* [Named actions](#64-named-actions-level-2), run from anywhere with `run`. |
 | `resumePoint` | no | *(Level 2)* How long the [resume point](#65-the-resume-point-level-2) lasts: `"untilEnd"` (default) or `"untilUsed"`. |
+| `keys` | no | *(Level 2)* What the remote's [menu keys](#66-remote-keys-and-prohibitions-level-2) do. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
 
@@ -238,7 +239,7 @@ Every action is an object with a `type`:
 2. **`goto` from a button** pushes the current menu and focused button onto the history (unless it says `history: "replace"`). `back` pops it.
 3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the playback for `resume`: the media, the position, and what was to follow. That is the *resume point* (§6.5). Completing that media's playback forgets it.
-5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic, except while an overlay's buttons show (§6.3).
+5. **During playback**, direction keys and Enter belong to the video player. Only Back (and, at Level 2, the menu keys of §6.6) is handled by the menu logic, except while an overlay's buttons show (§6.3).
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
 
@@ -447,12 +448,50 @@ names the cell to come back to, and the point survives other titles until a Resu
 - Hosts MAY restore a point from their own records (the viewer's last position from the media server) as
   just media and position.
 
+### 6.6 Remote keys and prohibitions (Level 2)
+
+A DVD remote has more than Back: **Menu** opens the disc's root menu, even in the middle of the film,
+and **Title** its title menu. A disc can also call its audio, subtitle, angle and chapter menus. And a
+disc says what it forbids: skipping the warning, fast-forwarding the logos, the Menu key during the
+film.
+
+```json
+"keys": { "title": { "type": "goto", "menu": "titles" } },
+"media": {
+  "film": { "ref": "Film.mkv",
+    "keys": { "menu": { "type": "goto", "menu": "film-root" } },
+    "prohibits": ["fastForward", "menuKey"] }
+}
+```
+
+- **`keys`** `{ menu?, title?, audioMenu?, subtitleMenu?, angleMenu?, chapterMenu? }` maps the menu keys
+  to actions. It may be on the manifest, a menu, a media entry and a play item.
+- **During playback**, a menu key runs like a cue's action (§6.3) at the position it was pressed, which
+  players report with the key (`{ "type": "press", "key": "menu", "position": 1234 }`): a menu it opens
+  leaves playback, remembered for `resume`; playback it starts interrupts and returns. The play item's
+  keys win over its media's, and the media's over the manifest's.
+- **On a menu**, the menu's keys win over the manifest's. They run as a step up, like `back` (§6.2), and
+  MAY `activate` one of the menu's own buttons.
+- **Without an action**, Menu and Title open `rootMenu` (from playback, remembered for `resume`); the
+  other keys do nothing.
+- Players SHOULD give the Menu key to the remote's Menu key, or another key a TV remote has (Roku's `*`).
+  Title and the menu calls are optional: players MAY offer them however suits their remotes.
+- **`prohibits`** lists what the source forbids, on a menu, a media entry or a play item: `seek`,
+  `chapterJump`, `titleJump`, `stop`, `back`, `previous`, `next`, `fastForward`, `rewind`, `pause`,
+  `menuKey`, `titleKey`, `audioMenuKey`, `subtitleMenuKey`, `angleMenuKey`, `chapterMenuKey`, `resume`,
+  `buttons`, `endHold`, `audioChange`, `subtitleChange`, `angleChange`, `karaokeChange`,
+  `displayModeChange` (a DVD's user operations). Other values are allowed.
+- **Prohibitions are information, never a requirement.** The viewer can skip anything, any time, unless
+  the player chooses otherwise: a player MAY honour any of them and MUST NOT be required to. Recording a
+  prohibition never obliges a player to enforce it. The play effect lists the prohibitions of what plays
+  (the media's and the item's) for players that do honour them.
+
 ## 7. Cross-reference rules
 
 Validators MUST reject a manifest when:
 - a `media`, `menu`, `rootMenu`, `defaultButton`, `goto.button`, `activate.button`, `nav` or `run.action` target doesn't exist, or
 - a named action contains `activate`, or only runs named actions in a circle (it would never do anything), or
-- `activate` is used anywhere but a menu's `back` or `timeout`, or
+- `activate` is used anywhere but a menu's `back`, `timeout` or `keys`, or
 - a `resume`'s `otherwise` is another `resume`, or
 - button ids are duplicated within a menu, or
 - a chapter number is out of range, or
@@ -484,6 +523,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4), the resume point (§6.5). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

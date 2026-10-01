@@ -144,7 +144,7 @@ public sealed class ConformanceTests
             e.TryGetProperty("player", out var player) ? player.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? new Scalar(p.Value.GetString()!) : new Scalar(p.Value.GetInt32())) : null,
             e.TryGetProperty("seed", out var seed) ? seed.GetInt64() : null),
         "player" => new NavEvent.PlayerChanged(e.GetProperty("values").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? new Scalar(p.Value.GetString()!) : new Scalar(p.Value.GetInt32()))),
-        "press" => new NavEvent.Press(Enum.Parse<Key>(e.GetProperty("key").GetString()!, ignoreCase: true)),
+        "press" => new NavEvent.Press(Enum.Parse<Key>(e.GetProperty("key").GetString()!, ignoreCase: true), e.TryGetProperty("position", out var position) ? position.GetDouble() : null),
         "select" => new NavEvent.Select(e.GetProperty("button").GetString()!),
         "activate" => new NavEvent.Activate(e.GetProperty("button").GetString()!),
         "ended" => new NavEvent.Ended(),
@@ -166,7 +166,8 @@ public sealed class ConformanceTests
             : null;
         return e.GetProperty("type").GetString() switch
         {
-            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle"), Num(e, "end"), Cues()),
+            "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle"), Num(e, "end"), Cues(),
+                e.TryGetProperty("prohibits", out var prohibits) ? [.. prohibits.EnumerateArray().Select(p => p.GetString()!)] : null),
             "activated" when e.TryGetProperty("cue", out var cue) => new Effect.OverlayActivated(cue.GetString()!, e.GetProperty("button").GetString()!),
             "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),
             "exit" => new Effect.Exit(),

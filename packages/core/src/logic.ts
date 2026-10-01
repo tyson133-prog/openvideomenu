@@ -25,6 +25,19 @@ export const PLAYER_VARS: Record<string, { type: "number" | "string"; writable: 
   "@resumeMedia": { type: "string", writable: false, default: "" }, // media id of the resume point ("" = none)
 };
 
+/** Level 2: the menu keys a `keys` table may map (spec §6.6). */
+export const MENU_KEYS = ["menu", "title", "audioMenu", "subtitleMenu", "angleMenu", "chapterMenu"] as const;
+
+/**
+ * Level 2: the prohibitions players may honour (spec §6.6), after a DVD's user operations. Information
+ * only: players decide.
+ */
+export const PROHIBITIONS = [
+  "seek", "chapterJump", "titleJump", "stop", "back", "previous", "next", "fastForward", "rewind", "pause",
+  "menuKey", "titleKey", "audioMenuKey", "subtitleMenuKey", "angleMenuKey", "chapterMenuKey",
+  "resume", "buttons", "endHold", "audioChange", "subtitleChange", "angleChange", "karaokeChange", "displayModeChange",
+] as const;
+
 export const TEST_OPS = ["eq", "ne", "lt", "le", "gt", "ge", "has"] as const;
 export const SET_OPS: readonly SetOp[] = ["set", "add", "sub", "mul", "div", "mod", "and", "or", "xor", "random"];
 

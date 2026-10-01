@@ -24,7 +24,8 @@
  *   {type:"ended"}                                       the item played to the end
  *   {type:"stopped", position}                           the viewer stopped early (seconds)
  *   {type:"playError", message}                          the item couldn't be played
- *   {type:"key", key}                                    a remote key the page didn't receive itself (e.g. Back)
+ *   {type:"key", key, position?}                         a remote key the page didn't receive itself (e.g. Back);
+ *                                                        Level 2: Menu/Title during playback, with the position
  *   {type:"cue", id} / {type:"cueEnd", id}               playback passed a cue the play message listed (Level 2)
  */
 import type { Key } from "@openvideomenu/core";
@@ -42,7 +43,7 @@ type HostMessage =
   | { type: "ended" }
   | { type: "stopped"; position: number }
   | { type: "playError"; message: string }
-  | { type: "key"; key: Key }
+  | { type: "key"; key: Key; position?: number }
   | { type: "cue"; id: string }
   | { type: "cueEnd"; id: string };
 
@@ -73,9 +74,9 @@ export class BridgePlayback implements PlaybackAdapter {
 /** Keyboard/remote keys delivered to the page, plus keys the native side forwards. */
 export class HostInput implements InputAdapter {
   private readonly keyboard = new KeyboardInput();
-  private onKey?: (key: Key) => boolean;
+  private onKey?: (key: Key, position?: number) => boolean;
 
-  attach(onKey: (key: Key) => boolean) {
+  attach(onKey: (key: Key, position?: number) => boolean) {
     this.onKey = onKey;
     this.keyboard.attach(onKey);
   }
@@ -85,8 +86,8 @@ export class HostInput implements InputAdapter {
     this.onKey = undefined;
   }
 
-  deliver(key: Key) {
-    this.onKey?.(key);
+  deliver(key: Key, position?: number) {
+    this.onKey?.(key, position);
   }
 }
 
@@ -136,7 +137,7 @@ export function runInHost(port: HostPort, container: HTMLElement = document.body
         playback.onError?.(msg.message);
         break;
       case "key":
-        input.deliver(msg.key);
+        input.deliver(msg.key, msg.position);
         break;
     }
   };

@@ -24,6 +24,8 @@
     <!-- Level 2, in: playback passed a cue of the play request (an overlay's from / a point cue), or an overlay's to -->
     <field id="cue" type="string" alwaysNotify="true" onChange="onCue" />
     <field id="cueEnd" type="string" alwaysNotify="true" onChange="onCueEnd" />
+    <!-- Level 2, in: the remote's Menu key (*) was pressed during playback, at this title position (seconds) -->
+    <field id="menuKey" type="float" alwaysNotify="true" onChange="onMenuKey" />
     <!-- Level 2, out: the menus left playback by themselves (a cue opened a menu): stop the title -->
     <field id="stopRequest" type="boolean" alwaysNotify="true" />
     <!-- Level 2, out: an overlay's buttons show over the title; the scene gives this view the keys -->

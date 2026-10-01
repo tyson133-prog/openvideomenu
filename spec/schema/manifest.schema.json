@@ -83,6 +83,9 @@
           "string"
         ]
       }
+    },
+    "keys": {
+      "$ref": "#/$defs/menuKeys"
     }
   },
   "dependentRequired": {
@@ -241,6 +244,12 @@
           "items": {
             "$ref": "#/$defs/segment"
           }
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
         }
       },
       "not": {
@@ -498,6 +507,12 @@
               "default": true
             }
           }
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
         }
       }
     },
@@ -590,6 +605,12 @@
             "$ref": "#/$defs/cue"
           },
           "description": "Level 2: cues for this way of playing the media (spec 6.3)."
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
         }
       }
     },
@@ -1171,6 +1192,38 @@
         "end": {
           "$ref": "#/$defs/seconds"
         }
+      }
+    },
+    "menuKeys": {
+      "description": "Level 2: what the remote's menu keys do (spec 6.6): Menu, Title, and calls to the audio, subtitle, angle and chapter menus. A key without an action does the player's default.",
+      "type": "object",
+      "properties": {
+        "menu": {
+          "$ref": "#/$defs/action"
+        },
+        "title": {
+          "$ref": "#/$defs/action"
+        },
+        "audioMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "subtitleMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "angleMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "chapterMenu": {
+          "$ref": "#/$defs/action"
+        }
+      }
+    },
+    "prohibits": {
+      "description": "Level 2: what the source forbids, as information; players decide whether to honour it (spec 6.6). Known values: seek, chapterJump, titleJump, stop, back, previous, next, fastForward, rewind, pause, menuKey, titleKey, audioMenuKey, subtitleMenuKey, angleMenuKey, chapterMenuKey, resume, buttons, endHold, audioChange, subtitleChange, angleChange, karaokeChange, displayModeChange.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     }
   }

@@ -102,6 +102,17 @@ public static class PlayerState
         ["@resumeMedia"] = new(true, false, ""),
     };
 
+    /// <summary>Level 2: the menu keys a keys table may map (spec §6.6).</summary>
+    public static readonly string[] MenuKeys = ["menu", "title", "audioMenu", "subtitleMenu", "angleMenu", "chapterMenu"];
+
+    /// <summary>Level 2: the prohibitions players may honour (spec §6.6), after a DVD's user operations. Information only.</summary>
+    public static readonly string[] Prohibitions =
+    [
+        "seek", "chapterJump", "titleJump", "stop", "back", "previous", "next", "fastForward", "rewind", "pause",
+        "menuKey", "titleKey", "audioMenuKey", "subtitleMenuKey", "angleMenuKey", "chapterMenuKey",
+        "resume", "buttons", "endHold", "audioChange", "subtitleChange", "angleChange", "karaokeChange", "displayModeChange",
+    ];
+
     public static readonly string[] TestOps = ["eq", "ne", "lt", "le", "gt", "ge", "has"];
 
     public static readonly string[] SetOps = ["set", "add", "sub", "mul", "div", "mod", "and", "or", "xor", "random"];

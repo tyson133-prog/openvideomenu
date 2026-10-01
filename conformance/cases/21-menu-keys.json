@@ -1,0 +1,48 @@
+{
+  "description": "The remote's menu keys. During playback a key runs like a cue's action at the position it was pressed: a menu it opens leaves playback, remembered for resume; playback it starts returns there. An item's keys win over its media's, the media's over the manifest's. On a menu, its own keys win over the manifest's. Without an action, Menu and Title open the root menu and the other keys do nothing. Prohibitions are information: the play effect lists them for players that honour them, and nothing is enforced.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Remote Keys" },
+    "keys": { "title": { "type": "goto", "menu": "titles" } },
+    "media": {
+      "film": { "ref": "Film.mkv", "kind": "feature", "keys": { "menu": { "type": "goto", "menu": "film-menu" } }, "prohibits": ["fastForward", "menuKey"] },
+      "bonus": { "ref": "Bonus.mkv", "kind": "featurette" },
+      "trailer": { "ref": "Trailer.mkv", "kind": "trailer" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "keys": { "chapterMenu": { "type": "goto", "menu": "scenes" } },
+        "prohibits": ["titleKey"],
+        "buttons": [
+          { "id": "film", "rect": [100, 100, 200, 40], "nav": { "down": "bonus" }, "action": { "type": "play", "media": "film" } },
+          { "id": "bonus", "rect": [100, 160, 200, 40], "nav": { "up": "film" }, "action": { "type": "play", "media": "bonus", "keys": { "title": { "type": "play", "media": "trailer" } } } }
+        ]
+      },
+      "film-menu": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "resume", "rect": [100, 100, 200, 40], "action": { "type": "resume" } }] },
+      "titles": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 100, 200, 40], "action": { "type": "back" } }] },
+      "scenes": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "s1", "rect": [100, 100, 200, 40], "action": { "type": "play", "media": "film" } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "film" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "film" }, { "type": "play", "media": "film", "start": 0, "prohibits": ["fastForward", "menuKey"] }] } },
+    { "event": { "type": "press", "key": "menu", "position": 300 }, "expect": { "mode": "menu", "menu": "film-menu", "focus": "resume", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "film-menu", "button": "resume" }, { "type": "play", "media": "film", "start": 300, "prohibits": ["fastForward", "menuKey"] }] } },
+    { "event": { "type": "press", "key": "title", "position": 400 }, "expect": { "mode": "menu", "menu": "titles", "focus": "ok" } },
+    { "event": { "type": "press", "key": "menu" }, "expect": { "mode": "menu", "menu": "main", "focus": "film" } },
+    { "event": { "type": "press", "key": "chapterMenu" }, "expect": { "mode": "menu", "menu": "scenes", "focus": "s1" } },
+    { "event": { "type": "press", "key": "menu" }, "expect": { "mode": "menu", "menu": "main", "focus": "film" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "bonus" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "bonus" }, { "type": "play", "media": "bonus", "start": 0 }] } },
+    { "event": { "type": "press", "key": "title", "position": 7 }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "trailer", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "bonus", "start": 7 }] } },
+    { "event": { "type": "press", "key": "audioMenu", "position": 8 }, "expect": { "mode": "playing", "effects": [] } },
+    { "event": { "type": "press", "key": "menu", "position": 9 }, "expect": { "mode": "menu", "menu": "main", "focus": "film", "effects": [] } }
+  ]
+}
