@@ -1,0 +1,26 @@
+{
+  "description": "The resume point: resumePoint is untilEnd or untilUsed; saveResume names media that exists, a chapter it has, at or chapter but not both; @resumeMedia is read-only; fallback items can't save or clear it.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/resumePoint", "/menus/main/buttons/0/action/media", "/menus/main/buttons/1/action/chapter", "/menus/main/buttons/2/action/at", "/menus/main/buttons/3/action/var", "/fallback/0/items/1/action/type"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Resume Point" },
+    "resumePoint": "forever",
+    "media": { "feature": { "ref": "a.mp4", "chapters": [{ "time": 0 }, { "time": 60 }] } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "saveResume", "media": "nowhere" } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "saveResume", "media": "feature", "chapter": 3 } },
+          { "id": "c", "rect": [0, 40, 10, 10], "action": { "type": "saveResume", "media": "feature", "chapter": 2, "at": 30 } },
+          { "id": "d", "rect": [0, 60, 10, 10], "action": { "type": "set", "var": "@resumeMedia", "value": "feature" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }, { "label": "Forget", "action": { "type": "clearResume" } }] }]
+  }
+}

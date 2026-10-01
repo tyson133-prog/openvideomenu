@@ -99,6 +99,7 @@ public static class PlayerState
         ["@parentalLevel"] = new(false, false, 8),
         ["@country"] = new(true, false, ""),
         ["@aspect"] = new(true, false, "16:9"),
+        ["@resumeMedia"] = new(true, false, ""),
     };
 
     public static readonly string[] TestOps = ["eq", "ne", "lt", "le", "gt", "ge", "has"];

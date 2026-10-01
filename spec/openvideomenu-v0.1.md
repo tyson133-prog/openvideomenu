@@ -56,6 +56,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `firstPlay` | no | [Action](#6-actions) run at start instead of opening `rootMenu`, e.g. an intro. |
 | `vars` | no | *(Level 2)* Named integer variables with starting values, e.g. `{"audio": 1, "subs": 0}` (§6.1). |
 | `actions` | no | *(Level 2)* [Named actions](#64-named-actions-level-2), run from anywhere with `run`. |
+| `resumePoint` | no | *(Level 2)* How long the [resume point](#65-the-resume-point-level-2) lasts: `"untilEnd"` (default) or `"untilUsed"`. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
 
@@ -228,13 +229,15 @@ Every action is an object with a `type`:
 | `if` | `test`, `then`, `else?` | *(Level 2)* Run `then` or `else` depending on a condition (§6.1). |
 | `do` | `steps` | *(Level 2)* Run actions in order until one navigates (§6.1). |
 | `run` | `action` | *(Level 2)* Run a named action from `actions`, as if it were written here (§6.4). |
-| `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped. When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
+| `saveResume` | `media?`, `at?`, `chapter?` | *(Level 2)* Save the resume point (§6.5). |
+| `clearResume` | — | *(Level 2)* Forget the resume point (§6.5). |
+| `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a `playAll`, its `after`). When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
 1. **Start:** if `firstPlay` exists, run it. Otherwise open `rootMenu`. A manifest without menus shows the fallback list.
 2. **`goto` from a button** pushes the current menu and focused button onto the history (unless it says `history: "replace"`). `back` pops it.
 3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
-4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the media and position for `resume`.
+4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the playback for `resume`: the media, the position, and what was to follow. That is the *resume point* (§6.5). Completing that media's playback forgets it.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back is handled by the menu logic, except while an overlay's buttons show (§6.3).
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
 7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
@@ -277,6 +280,7 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 | `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. |
 | `@country` | text | `""` | ISO 3166-1 alpha-2. |
 | `@aspect` | text | `"16:9"` | The TV's shape: `"16:9"` or `"4:3"`. |
+| `@resumeMedia` | text | `""` | Media id of the resume point (§6.5); `""` when there is none. |
 
 **Values** are an integer, text, or `{"var": name}` (the current value of a variable or player state).
 
@@ -295,7 +299,7 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 - **`if`** `{ test, then, else? }` runs `then` when the test holds, otherwise `else` (or nothing).
 - **`do`** `{ steps }` runs actions in order and stops after the first one that navigates: opens a menu,
   starts playback or a transition, or leaves. Like a DVD program, which ends at its link.
-- `if`, `do`, `set` and `run` MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
+- `if`, `do`, `set`, `run`, `saveResume` and `clearResume` MUST NOT be used in the fallback list. `after` MAY be an `if` or `do` that plays
   (a disc's conditional play-all), but not a bare `play`/`playAll`.
 
 **Focus from a variable.** A menu's `defaultButton` and a `goto`'s `button` MAY be `{"var": name}`
@@ -372,7 +376,8 @@ icon some discs show in certain scenes that branches to a featurette and back.
   - Starting playback (`play`, `playAll`, `resume`) **interrupts** the current one. When the new
     playback ends or the viewer stops it, the interrupted one continues from the cue's time. `after`
     is not allowed there.
-  - `goto` leaves playback; it is remembered for `resume` at the cue's time.
+  - `goto` leaves playback; it is remembered for `resume` at the cue's time, unless the cue saved or
+    cleared the resume point itself (§6.5).
   - `back` stops playback, like the remote's Back.
   - `set`, `if` and `do` work as anywhere; `activate` is not allowed.
 - **Players** watch for the cues listed in the play effect and report `cue` (a point cue's `at`,
@@ -408,6 +413,39 @@ resume points until a manifest is megabytes long. Named actions write it once:
   one menu). Where a named action may run is checked through it: run from a cue, it must not start
   playback with `after` (§6.3), and a play's `after` must not come to another playback through it.
 - Players without Level 2 ignore `run`, as they do `set`, `if` and `do`.
+
+### 6.5 The resume point (Level 2)
+
+There is one resume point: the playback `resume` continues. Stopping playback early saves it, and so
+does a cue that leaves playback for a menu. It holds the whole playback (the item, what was queued after
+it, its `after`), so resuming carries on a play-all and runs its after-action, as a disc does. The
+resumed item plays with the tracks as they are now (`@audio`, `@subtitle`, `@angle`), since the viewer
+may have changed them while watching.
+
+A disc keeps its resume point longer, and its programs set it: a call from a title to a menu (CallSS)
+names the cell to come back to, and the point survives other titles until a Resume uses it.
+
+```json
+"resumePoint": "untilUsed",
+...
+{ "at": 1320, "action": { "type": "do", "steps": [
+  { "type": "saveResume", "chapter": 7 },
+  { "type": "goto", "menu": "scenes" } ] } }
+```
+
+- **`resumePoint`**: `"untilEnd"` (default): completing that media's playback forgets the point.
+  `"untilUsed"`: the point lasts through other playback and menus until a `resume` uses it, or a stop,
+  a cue or `saveResume` replaces it, or `clearResume` forgets it.
+- **`saveResume`** `{ media?, at?, chapter? }` saves a point: `media` from `chapter` (its start) or `at`
+  seconds (default 0). Without `media`, it saves the playback in progress "here", at `chapter` or `at`, or
+  by default the cue's time; outside playback it does nothing. `at` and `chapter` are not both given.
+- **`clearResume`** forgets the point.
+- A cue that saves or clears the point and then leaves for a menu keeps what it said: leaving saves
+  "here" only when the cue's action didn't save or clear the point itself.
+- **`@resumeMedia`** reads the point's media id, `""` when there is none, so logic can choose (a disc's
+  "if a title was stopped, show Resume").
+- Hosts MAY restore a point from their own records (the viewer's last position from the media server) as
+  just media and position.
 
 ## 7. Cross-reference rules
 
@@ -446,6 +484,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4), the resume point (§6.5). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

@@ -22,6 +22,7 @@ export const PLAYER_VARS: Record<string, { type: "number" | "string"; writable: 
   "@parentalLevel": { type: "number", writable: false, default: 8 }, // 1-8; 8 = unrestricted
   "@country": { type: "string", writable: false, default: "" }, // ISO 3166-1 alpha-2
   "@aspect": { type: "string", writable: false, default: "16:9" }, // the TV's shape: "16:9" or "4:3"
+  "@resumeMedia": { type: "string", writable: false, default: "" }, // media id of the resume point ("" = none)
 };
 
 export const TEST_OPS = ["eq", "ne", "lt", "le", "gt", "ge", "has"] as const;
@@ -33,10 +34,13 @@ export interface LogicState {
   player: Record<string, Scalar>;
   focus?: string;
   seed: number;
+  /** The resume point, read as @resumeMedia. */
+  lastStop?: { media: string };
 }
 
 export function readVar(s: LogicState, name: string): Scalar {
   if (name === "@focus") return s.focus ?? "";
+  if (name === "@resumeMedia") return s.lastStop?.media ?? "";
   if (name.startsWith("@")) return s.player[name] ?? PLAYER_VARS[name]?.default ?? 0;
   return s.vars[name] ?? 0;
 }

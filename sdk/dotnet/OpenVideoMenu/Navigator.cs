@@ -143,8 +143,12 @@ public sealed record Interrupted(Playback Playing, double At);
 /// <summary>Level 2: the overlay showing during playback (its cue id) and its focused button.</summary>
 public sealed record OverlayFocus(string Cue, string Focus);
 
-/// <summary>Where the viewer stopped, for resume.</summary>
-public sealed record LastStop(string Media, double Position);
+/// <summary>
+/// The resume point: where the viewer stopped (or a saveResume put it). Hosts may seed it with just
+/// media and position. Set by the navigator, it also holds the rest of that playback (the item, what
+/// was queued after it, its after-action), so resuming continues a play-all as a disc does.
+/// </summary>
+public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null);
 
 /// <summary>Navigation state. Treat as a value: <see cref="Navigator.Step"/> returns a new one.</summary>
 public sealed record NavState
@@ -791,7 +795,16 @@ public static class Navigator
                 case ResumeAction resume:
                     if (s.LastStop is { } stop)
                     {
-                        StartPlayback(manifest, s, [new PlayItem { Media = stop.Media, Start = stop.Position }], null, effects, cueAt);
+                        // The stopped playback continues: the item from where it stopped (with the tracks as
+                        // they are now, which the viewer may have changed while watching), then what was
+                        // queued after it, then its after-action. A disc's resume point is used up by resuming.
+                        var item = new PlayItem { Media = stop.Media, Start = stop.Position, End = stop.Item?.End, Cues = stop.Item?.Cues, Extensions = stop.Item?.Extensions };
+                        if (manifest.ResumePoint == "untilUsed")
+                        {
+                            s.LastStop = null;
+                        }
+
+                        StartPlayback(manifest, s, [item, .. stop.Queue ?? []], stop.After, effects, cueAt);
                     }
                     else
                     {
@@ -799,6 +812,24 @@ public static class Navigator
                         next = resume.Otherwise;
                     }
 
+                    break;
+                case SaveResumeAction save:
+                    if (save.Media is { } savedMedia)
+                    {
+                        s.LastStop = new LastStop(savedMedia, save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = savedMedia, Chapter = c }) : save.At ?? 0);
+                    }
+                    else if (s.Mode == NavMode.Playing && s.Playing is { } here)
+                    {
+                        // "Here": the playback in progress (a disc's CallSS names the cell to resume at).
+                        var at = save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = here.Item.Media, Chapter = c }) : save.At ?? cueAt ?? 0;
+                        s.LastStop = ResumePointOf(here, at);
+                    }
+
+                    s.ResumeSet = true;
+                    break;
+                case ClearResumeAction:
+                    s.LastStop = null;
+                    s.ResumeSet = true;
                     break;
                 case SetAction set:
                 {
@@ -887,15 +918,30 @@ public static class Navigator
         effects.Add(StartItem(manifest, s, items[0]));
     }
 
-    /// <summary>A cue opened a menu: playback ends, remembered for resume at the cue's time.</summary>
+    /// <summary>
+    /// A cue opened a menu: playback ends, remembered for resume at the cue's time, unless the cue saved
+    /// or cleared the resume point itself (a disc's CallSS names its resume cell; a JumpSS saves none).
+    /// </summary>
     private static void LeavePlayback(Manifest manifest, Working s, double at)
     {
         var media = s.Playing!.Item.Media;
-        s.LastStop = new LastStop(media, at);
+        if (!s.ResumeSet)
+        {
+            s.LastStop = ResumePointOf(s.Playing, at);
+        }
+
         s.Player["@lastChapter"] = ChapterAt(manifest, media, at);
         s.Playing = null;
         s.Overlay = null;
     }
+
+    /// <summary>The resume point for <paramref name="playing"/> stopped (or left) at <paramref name="at"/>.</summary>
+    private static LastStop ResumePointOf(Playback playing, double at) =>
+        new(playing.Item.Media, at, playing.Item, playing.Queue.Count > 0 ? playing.Queue : null, playing.After);
+
+    /// <summary>Playback of the resume point's media completed: forget it, unless it lasts until used (a disc's).</summary>
+    private static bool ForgetsOnEnd(Manifest manifest, Working s, Playback playing) =>
+        manifest.ResumePoint != "untilUsed" && s.LastStop?.Media == playing.Item.Media;
 
     /// <summary>
     /// The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter).
@@ -953,7 +999,7 @@ public static class Navigator
         // Playback a cue started: the interrupted one continues where the cue was (Level 2).
         if (playing.ResumeTo is { } resumeTo)
         {
-            if (completed && s.LastStop?.Media == playing.Item.Media)
+            if (completed && ForgetsOnEnd(manifest, s, playing))
             {
                 s.LastStop = null;
             }
@@ -967,14 +1013,14 @@ public static class Navigator
 
         if (completed)
         {
-            if (s.LastStop?.Media == playing.Item.Media)
+            if (ForgetsOnEnd(manifest, s, playing))
             {
                 s.LastStop = null;
             }
         }
         else if (stoppedAt is { } position)
         {
-            s.LastStop = new LastStop(playing.Item.Media, position);
+            s.LastStop = ResumePointOf(playing, position);
             s.Player["@lastChapter"] = ChapterAt(manifest, playing.Item.Media, position);
         }
 
@@ -1051,7 +1097,10 @@ public static class Navigator
         /// <summary>Actions the current event may still run (not part of the state).</summary>
         public int StepsLeft { get; set; } = StepBudget;
 
-        public Scalar Read(string name) => Logic.Read(Vars, Player, Focus, name);
+        /// <summary>The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 2).</summary>
+        public bool ResumeSet { get; set; }
+
+        public Scalar Read(string name) => name == "@resumeMedia" ? LastStop?.Media ?? "" : Logic.Read(Vars, Player, Focus, name);
 
         public NavState ToState() => new()
         {

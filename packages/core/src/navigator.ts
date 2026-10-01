@@ -108,8 +108,13 @@ export interface NavState {
   playing?: Playing;
   /** Level 2: the overlay showing during playback (its cue id) and its focused button. */
   overlay?: { cue: string; focus: string };
-  /** Where the viewer stopped last, for "resume". */
-  lastStop?: { media: string; position: number };
+  /**
+   * The resume point, for "resume": where the viewer stopped last (or a saveResume put it). Hosts may
+   * seed it from their own records with just media and position. Set by the navigator, it also holds
+   * the rest of that playback (the item, what was queued after it, its after-action), so resuming
+   * continues a play-all as a disc does.
+   */
+  lastStop?: ResumePoint;
   /** Level 2: variable values for this session (from manifest.vars, changed by "set"). */
   vars: Record<string, Scalar>;
   /** Level 2: player state ("@audio", "@audioLanguage", …) as reported by the player or changed by set. */
@@ -118,6 +123,14 @@ export interface NavState {
   seed: number;
   /** Counts menu entries and playback starts, so "do" knows when a step navigated. */
   seq: number;
+}
+
+export interface ResumePoint {
+  media: string;
+  position: number;
+  item?: PlayItem;
+  queue?: PlayItem[];
+  after?: Action;
 }
 
 export interface Playing {
@@ -141,9 +154,13 @@ export const STEP_BUDGET = 10_000;
 /** Actions the current event may still run; step() is synchronous, so one counter serves. */
 let stepsLeft = STEP_BUDGET;
 
+/** The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 2). */
+let resumeSet = false;
+
 export function step(manifest: Manifest, state: NavState, event: NavEvent): StepResult {
   const effects: Effect[] = [];
   stepsLeft = STEP_BUDGET;
+  resumeSet = false;
   const s: NavState = { ...state, history: [...state.history] };
 
   switch (event.type) {
@@ -489,10 +506,33 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         startPlayback(manifest, s, action.items, action.after, effects, opts.cueAt);
         break;
       case "resume":
-        if (s.lastStop) startPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], undefined, effects, opts.cueAt);
+        if (s.lastStop) {
+          // The stopped playback continues: the item from where it stopped (with the tracks as they are
+          // now, which the viewer may have changed while watching), then what was queued after it, then
+          // its after-action. A disc's resume point is used up by resuming (Level 2).
+          const point = s.lastStop;
+          const { chapter: _c, start: _s, audio: _a, subtitle: _t, angle: _g, ...item } = point.item ?? { media: point.media };
+          if (manifest.resumePoint === "untilUsed") s.lastStop = undefined;
+          startPlayback(manifest, s, [{ ...item, start: point.position }, ...(point.queue ?? [])], point.after, effects, opts.cueAt);
+        }
         // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
         // LinkRSM, else go to the picker").
         else next = action.otherwise;
+        break;
+      case "saveResume":
+        if (action.media !== undefined) {
+          s.lastStop = { media: action.media, position: action.chapter !== undefined ? startTime(manifest, { media: action.media, chapter: action.chapter }) : (action.at ?? 0) };
+        } else if (s.mode === "playing" && s.playing) {
+          // "Here": the playback in progress (a disc's CallSS names the cell to resume at).
+          const media = s.playing.item.media;
+          const at = action.chapter !== undefined ? startTime(manifest, { media, chapter: action.chapter }) : (action.at ?? opts.cueAt ?? 0);
+          s.lastStop = resumePointOf(s.playing, at);
+        }
+        resumeSet = true;
+        break;
+      case "clearResume":
+        s.lastStop = undefined;
+        resumeSet = true;
         break;
       case "set": {
         const value = applyOp(s, readVar(s, action.var), action.op ?? "set", valueOf(s, action.value));
@@ -552,13 +592,27 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   effects.push(startItem(manifest, s, first));
 }
 
-/** A cue opened a menu: playback ends, remembered for resume at the cue's time. */
+/**
+ * A cue opened a menu: playback ends, remembered for resume at the cue's time, unless the cue saved
+ * or cleared the resume point itself (a disc's CallSS names its resume cell; a JumpSS saves none).
+ */
 function leavePlayback(manifest: Manifest, s: NavState, at: number) {
   const media = s.playing!.item.media;
-  s.lastStop = { media, position: at };
+  if (!resumeSet) s.lastStop = resumePointOf(s.playing!, at);
   s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, at) };
   s.playing = undefined;
   s.overlay = undefined;
+}
+
+/** The resume point for [playing] stopped (or left) at [at]: the item, what's queued after it, its after-action. */
+function resumePointOf(playing: Playing, at: number): ResumePoint {
+  return {
+    media: playing.item.media,
+    position: at,
+    item: playing.item,
+    ...(playing.queue.length ? { queue: playing.queue } : {}),
+    ...(playing.after ? { after: playing.after } : {}),
+  };
 }
 
 /** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). `from`: start elsewhere than the item's own start. */
@@ -589,7 +643,7 @@ function finishPlayback(
   s.overlay = undefined;
   // Playback a cue started: the interrupted one continues where the cue was (Level 2).
   if (playing.resumeTo) {
-    if ("completed" in how && s.lastStop?.media === playing.item.media) s.lastStop = undefined;
+    if ("completed" in how && forgetsOnEnd(manifest, s, playing)) s.lastStop = undefined;
     s.playing = playing.resumeTo.playing;
     s.mode = "playing";
     s.seq += 1;
@@ -597,9 +651,9 @@ function finishPlayback(
     return;
   }
   if ("completed" in how) {
-    if (s.lastStop?.media === playing.item.media) s.lastStop = undefined;
+    if (forgetsOnEnd(manifest, s, playing)) s.lastStop = undefined;
   } else if (how.stoppedAt !== undefined) {
-    s.lastStop = { media: playing.item.media, position: how.stoppedAt };
+    s.lastStop = resumePointOf(playing, how.stoppedAt);
     s.player = { ...s.player, "@lastChapter": chapterAt(manifest, playing.item.media, how.stoppedAt) };
   }
 
@@ -610,6 +664,11 @@ function finishPlayback(
     openRoot(manifest, s, effects);
   }
   if ("completed" in how && playing.after) run(manifest, s, playing.after, effects, { pushHistory: true });
+}
+
+/** Playback of the resume point's media completed: forget it, unless it lasts until used (a disc's). */
+function forgetsOnEnd(manifest: Manifest, s: NavState, playing: Playing): boolean {
+  return manifest.resumePoint !== "untilUsed" && s.lastStop?.media === playing.item.media;
 }
 
 function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: number): Effect {

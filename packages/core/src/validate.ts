@@ -18,7 +18,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
@@ -48,6 +48,8 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   resume: ["type", "otherwise"],
   activate: ["type", "button"],
   run: ["type", "action"],
+  saveResume: ["type", "media", "at", "chapter"],
+  clearResume: ["type"],
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -109,6 +111,8 @@ class Validator {
     if (data.source !== undefined) this.source(data.source);
 
     this.vars(data.vars);
+    if (data.resumePoint !== undefined && data.resumePoint !== "untilEnd" && data.resumePoint !== "untilUsed")
+      this.error("/resumePoint", 'Must be "untilEnd" or "untilUsed".');
     this.collectActions(data.actions);
     const mediaIds = this.media(data.media);
     const menus = this.menus(data.menus, mediaIds);
@@ -734,6 +738,19 @@ class Validator {
         else if (this.cueDepth > 0 && this.playsWithAfter.has(value.action))
           this.error(`${path}/action`, `Action "${value.action}" starts playback with after; playback started during playback returns to it, so after is not allowed here.`);
         break;
+      case "saveResume":
+        if (value.media !== undefined) {
+          if (!isNonEmptyString(value.media) || !mediaIds.has(value.media)) this.error(`${path}/media`, `No media "${String(value.media)}".`);
+          else if (value.chapter !== undefined) {
+            const count = mediaIds.get(value.media)!;
+            if (!Number.isInteger(value.chapter) || (value.chapter as number) < 1 || (value.chapter as number) > count)
+              this.error(`${path}/chapter`, `Media "${value.media}" has ${count} chapter(s); chapter numbers start at 1.`);
+          }
+        } else if (value.chapter !== undefined && !(Number.isInteger(value.chapter) && (value.chapter as number) >= 1))
+          this.error(`${path}/chapter`, "Must be a chapter number (from 1).");
+        if (value.at !== undefined && !(isFiniteNumber(value.at) && value.at >= 0)) this.error(`${path}/at`, "Must be a non-negative number of seconds.");
+        if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
+        break;
       case "activate":
         if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back or timeout.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
@@ -794,7 +811,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

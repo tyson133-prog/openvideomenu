@@ -27,6 +27,11 @@ export interface Manifest {
    * share (a disc's PGC entry, a dispatcher, an episode's end) is written once (spec §6.4).
    */
   actions?: Record<string, Action>;
+  /**
+   * Level 2: how long the resume point lasts (spec §6.5). "untilEnd" (default): until that playback
+   * completes. "untilUsed": like a disc's, until a resume uses it or it's replaced or cleared.
+   */
+  resumePoint?: "untilEnd" | "untilUsed";
   [extension: `x-${string}`]: unknown;
 }
 
@@ -278,7 +283,14 @@ export type Action =
   /** Level 2: run actions in order, stopping after the first that navigates (opens a menu, plays, leaves). */
   | { type: "do"; steps: Action[] }
   /** Level 2: run a named action from the manifest's `actions`, as if it were written here. */
-  | { type: "run"; action: string };
+  | { type: "run"; action: string }
+  /**
+   * Level 2: save the resume point (spec §6.5): `media` from `chapter` or `at` seconds; without
+   * `media`, the playback in progress, at `at` (default: the cue's time).
+   */
+  | { type: "saveResume"; media?: string; at?: number; chapter?: number }
+  /** Level 2: forget the resume point. */
+  | { type: "clearResume" };
 
 export type ActionType = Action["type"];
 

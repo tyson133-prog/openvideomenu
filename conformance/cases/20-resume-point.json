@@ -1,0 +1,57 @@
+{
+  "description": "A disc-style resume point (resumePoint: untilUsed). Stopping saves the whole playback: resuming continues the item, then what was queued after it, then its after-action. A cue that calls a menu saves the point it names (saveResume, like a DVD's CallSS with a resume cell) instead of where the cue is. The point survives other playback completing, and resuming uses it up; @resumeMedia tells whether there is one.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Resume Like a Disc" },
+    "resumePoint": "untilUsed",
+    "media": {
+      "intro": { "ref": "Intro.mkv" },
+      "film": { "ref": "Film.mkv", "kind": "feature", "chapters": [{ "time": 0 }, { "time": 600 }, { "time": 1200 }],
+        "cues": [{ "at": 600, "action": { "type": "do", "steps": [{ "type": "saveResume", "chapter": 3 }, { "type": "goto", "menu": "extras" }] } }] },
+      "bonus": { "ref": "Bonus.mkv", "kind": "featurette" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "play", "rect": [100, 100, 200, 40], "nav": { "down": "resume" }, "action": { "type": "playAll", "items": [{ "media": "intro" }, { "media": "film" }], "after": { "type": "goto", "menu": "end" } } },
+          { "id": "resume", "rect": [100, 160, 200, 40], "nav": { "up": "play" }, "action": { "type": "resume", "otherwise": { "type": "goto", "menu": "extras" } } }
+        ]
+      },
+      "extras": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "bonus", "rect": [100, 100, 200, 40], "nav": { "down": "resume" }, "action": { "type": "play", "media": "bonus" } },
+          { "id": "resume", "rect": [100, 160, 200, 40], "nav": { "up": "bonus" }, "action": { "type": "resume" } }
+        ]
+      },
+      "end": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "again", "rect": [100, 100, 200, 40], "action": { "type": "if", "test": { "var": "@resumeMedia", "ne": "" }, "then": { "type": "resume" }, "else": { "type": "goto", "menu": "main", "button": "resume" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "intro", "start": 0 }] } },
+    { "event": { "type": "stopped", "position": 5 }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "resume" }, { "type": "play", "media": "intro", "start": 5 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "film", "start": 0, "cues": [{ "id": "media/0", "at": 600 }] }] } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "mode": "menu", "menu": "extras", "focus": "bonus", "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "extras", "button": "bonus" }, { "type": "play", "media": "bonus", "start": 0 }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "extras", "focus": "bonus" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "extras", "button": "resume" }, { "type": "play", "media": "film", "start": 1200, "cues": [{ "id": "media/0", "at": 600 }] }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "end", "focus": "again" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "extras", "focus": "bonus" } }
+  ]
+}

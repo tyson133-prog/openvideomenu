@@ -27,6 +27,7 @@ importer's choice.
 | Button command resolving to title/chapter | `play { media, chapter }`, where `media` points to the file that holds that title |
 | Button command resolving to a menu | `goto { menu, button? }` |
 | Resume (`LinkRSM`), including a conditional one such as `if (gN != 0) LinkRSM` else a link elsewhere | `resume`; the path taken when there's nothing to resume becomes its `otherwise` (e.g. `goto` a widescreen/fullscreen picker), so the button works the first time too. |
+| The disc's resume information (RSM) | `resumePoint: "untilUsed"`, so it lasts until a Resume uses it, as on the disc. A title's call to a menu (`CallSS` with a resume cell) is `saveResume` with that cell's time (no `media`: the playback in progress) before the `goto`. A jump out of a title that saves nothing (`JumpSS`, `JumpTT`) is `clearResume` before the `goto`, or nothing if the disc keeps an earlier point. |
 | Title that plays other titles first (e.g. intro + episode) | `playAll { items }` |
 | "Play all" titles (one PGC chaining episodes) | `playAll`, or `play` of the combined file if one was written |
 | Button text (e.g. from OCR) | `label`, and `a11yLabel` if the text is unhelpful |

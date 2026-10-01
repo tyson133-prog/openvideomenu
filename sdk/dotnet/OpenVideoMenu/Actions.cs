@@ -149,6 +149,28 @@ public sealed class RunAction : MenuAction
     public string Action { get; set; } = "";
 }
 
+/// <summary>
+/// Level 2: save the resume point (spec §6.5): <see cref="Media"/> from <see cref="Chapter"/> or
+/// <see cref="At"/> seconds; without a media, the playback in progress at <see cref="At"/> (default:
+/// the cue's time), like a disc's CallSS naming its resume cell.
+/// </summary>
+public sealed class SaveResumeAction : MenuAction
+{
+    public override string Type => "saveResume";
+
+    public string? Media { get; set; }
+
+    public double? At { get; set; }
+
+    public int? Chapter { get; set; }
+}
+
+/// <summary>Level 2: forget the resume point.</summary>
+public sealed class ClearResumeAction : MenuAction
+{
+    public override string Type => "clearResume";
+}
+
 /// <summary>Level 2: run actions in order, stopping after the first that navigates.</summary>
 public sealed class DoAction : MenuAction
 {

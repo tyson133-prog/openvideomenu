@@ -13,7 +13,7 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues"],
@@ -45,6 +45,8 @@ internal sealed class Validator
         ("resume", ["type", "otherwise"]),
         ("activate", ["type", "button"]),
         ("run", ["type", "action"]),
+        ("saveResume", ["type", "media", "at", "chapter"]),
+        ("clearResume", ["type"]),
     ];
 
     private static readonly string[] Directions = ["up", "down", "left", "right"];
@@ -112,6 +114,11 @@ internal sealed class Validator
         }
 
         Vars(m["vars"]);
+        if (m["resumePoint"] is { } resumePoint && !(resumePoint.ValueKind == JsonValueKind.String && resumePoint.GetString() is "untilEnd" or "untilUsed"))
+        {
+            Error("/resumePoint", "Must be \"untilEnd\" or \"untilUsed\".");
+        }
+
         CollectActions(m["actions"]);
         var mediaIds = Media(m["media"]);
         var menus = Menus(m["menus"], mediaIds);
@@ -1397,6 +1404,38 @@ internal sealed class Validator
                 break;
             }
 
+            case "saveResume":
+            {
+                var chapter = action["chapter"];
+                if (action["media"] is { } savedMedia)
+                {
+                    if (!IsNonEmptyString(savedMedia) || !mediaIds.TryGetValue(savedMedia.GetString()!, out var count))
+                    {
+                        Error($"{path}/media", $"No media \"{JsString(savedMedia)}\".");
+                    }
+                    else if (chapter is { } ch && !(IsInteger(ch) && ch.GetDouble() >= 1 && ch.GetDouble() <= count))
+                    {
+                        Error($"{path}/chapter", $"Media \"{savedMedia.GetString()}\" has {count} chapter(s); chapter numbers start at 1.");
+                    }
+                }
+                else if (chapter is { } ch && !(IsInteger(ch) && ch.GetDouble() >= 1))
+                {
+                    Error($"{path}/chapter", "Must be a chapter number (from 1).");
+                }
+
+                if (action["at"] is { } at && !(IsFiniteNumber(at) && at.GetDouble() >= 0))
+                {
+                    Error($"{path}/at", "Must be a non-negative number of seconds.");
+                }
+
+                if (action["at"] is not null && chapter is not null)
+                {
+                    Error($"{path}/at", "Give at or chapter, not both.");
+                }
+
+                break;
+            }
+
             case "activate":
                 if (ownButtons is null)
                 {
@@ -1514,7 +1553,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

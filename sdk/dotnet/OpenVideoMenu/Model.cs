@@ -51,6 +51,12 @@ public sealed partial class Manifest
     /// </summary>
     public Dictionary<string, MenuAction>? Actions { get; set; }
 
+    /// <summary>
+    /// Level 2: how long the resume point lasts (spec §6.5): "untilEnd" (default), until that playback
+    /// completes; "untilUsed", like a disc's, until a resume uses it or it's replaced or cleared.
+    /// </summary>
+    public string? ResumePoint { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

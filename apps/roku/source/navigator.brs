@@ -22,6 +22,8 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     s.history = msCopyArray(state.history)
     ' Actions this event may still run; not part of the state, so it goes before returning.
     s.stepsLeft = msNavStepBudget()
+    ' Whether this event saved or cleared the resume point itself (Level 2); not part of the state either.
+    s.resumeSet = false
     t = event["type"]
 
     if t = "start"
@@ -126,6 +128,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     end if
 
     s.Delete("stepsLeft")
+    s.Delete("resumeSet")
     return { state: s, effects: effects }
 end function
 
@@ -250,7 +253,8 @@ end sub
 ' A cue opened a menu: playback ends, remembered for resume at the cue's time.
 sub msNavLeavePlayback(manifest as object, s as object, at as dynamic)
     media = s.playing.item["media"]
-    s.lastStop = { media: media, position: at }
+    ' Unless the cue saved or cleared the resume point itself (a disc's CallSS names its resume cell).
+    if not s.resumeSet then s.lastStop = msNavResumePointOf(s.playing, at)
     player = msNavCopyVars(s.player)
     player["@lastChapter"] = msNavChapterAt(manifest, media, at)
     s.player = player
@@ -438,7 +442,20 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         msNavStartPlayback(manifest, s, action["items"], action["after"], effects)
     else if t = "resume"
         if s.lastStop <> invalid
-            msNavStartPlayback(manifest, s, [{ media: s.lastStop.media, start: s.lastStop.position }], invalid, effects)
+            ' The stopped playback continues: the item from where it stopped (with the tracks as they
+            ' are now, which the viewer may have changed while watching), then what was queued after
+            ' it, then its after-action. A disc's resume point is used up by resuming (Level 2).
+            point = s.lastStop
+            item = { media: point.media, start: point.position }
+            if point.item <> invalid
+                for each key in ["end", "cues"]
+                    if point.item[key] <> invalid then item[key] = point.item[key]
+                end for
+            end if
+            items = [item]
+            if point.queue <> invalid then items.Append(point.queue)
+            if manifest["resumePoint"] = "untilUsed" then s.lastStop = invalid
+            msNavStartPlayback(manifest, s, items, point.after, effects)
         else
             ' Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if
             ' stopped, LinkRSM, else go to the picker").
@@ -490,6 +507,22 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         s.focus = button["id"]
         effects.push({ type: "activated", menu: s.menu, button: button["id"] })
         return button["action"]
+    else if t = "saveResume"
+        ' Level 2: media from chapter or at; without media, the playback in progress ("here"), like a
+        ' disc's CallSS naming its resume cell.
+        if action["media"] <> invalid
+            at = msOr(action["at"], 0)
+            if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: action["media"], chapter: action["chapter"] })
+            s.lastStop = { media: action["media"], position: at }
+        else if s.mode = "playing" and s.playing <> invalid
+            at = msOr(action["at"], msOr(s.cueAt, 0))
+            if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: s.playing.item["media"], chapter: action["chapter"] })
+            s.lastStop = msNavResumePointOf(s.playing, at)
+        end if
+        s.resumeSet = true
+    else if t = "clearResume"
+        s.lastStop = invalid
+        s.resumeSet = true
     else if t = "run"
         ' Level 2: as if the named action were written here: same history rules, same cue time.
         named = manifest["actions"]
@@ -544,7 +577,7 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
     s.overlay = invalid
     ' Playback a cue started: the interrupted one continues where the cue was (Level 2).
     if playing.resumeTo <> invalid
-        if completed and s.lastStop <> invalid and s.lastStop.media = playing.item["media"] then s.lastStop = invalid
+        if completed and msNavForgetsOnEnd(manifest, s, playing) then s.lastStop = invalid
         s.playing = playing.resumeTo.playing
         s.mode = "playing"
         s.seq = s.seq + 1
@@ -552,9 +585,9 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
         return
     end if
     if completed
-        if s.lastStop <> invalid and s.lastStop.media = playing.item["media"] then s.lastStop = invalid
+        if msNavForgetsOnEnd(manifest, s, playing) then s.lastStop = invalid
     else if stoppedAt <> invalid
-        s.lastStop = { media: playing.item["media"], position: stoppedAt }
+        s.lastStop = msNavResumePointOf(playing, stoppedAt)
         player = msNavCopyVars(s.player)
         player["@lastChapter"] = msNavChapterAt(manifest, playing.item["media"], stoppedAt)
         s.player = player
@@ -568,6 +601,20 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
     end if
     if completed and playing.after <> invalid then msNavRun(manifest, s, playing.after, effects, true)
 end sub
+
+' The resume point for playback stopped (or left) at a time: the item, what's queued after it, its after-action.
+function msNavResumePointOf(playing as object, at as dynamic) as object
+    point = { media: playing.item["media"], position: at, item: playing.item }
+    if playing.queue <> invalid and playing.queue.Count() > 0 then point.queue = playing.queue
+    if playing.after <> invalid then point.after = playing.after
+    return point
+end function
+
+' Playback of the resume point's media completed: forget it, unless it lasts until used (a disc's).
+function msNavForgetsOnEnd(manifest as object, s as object, playing as object) as boolean
+    if manifest["resumePoint"] = "untilUsed" or s.lastStop = invalid then return false
+    return s.lastStop.media = playing.item["media"]
+end function
 
 ' Without tracks of its own, playback uses the current ones (after a set on @audio/@subtitle, like a
 ' DVD's SetSTN, or as the player reported them).
@@ -690,13 +737,17 @@ end function
 
 ' What an unset player-state variable reads as.
 function msNavPlayerDefault(name as string) as dynamic
-    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9" }
+    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "" }
     if defaults.DoesExist(name) then return defaults[name]
     return 0
 end function
 
 function msNavRead(s as object, name as string) as dynamic
     if name = "@focus" then return msOr(s.focus, "")
+    if name = "@resumeMedia"
+        if s.lastStop = invalid then return ""
+        return s.lastStop.media
+    end if
     if Left(name, 1) = "@"
         if s.player.DoesExist(name) then return s.player[name]
         return msNavPlayerDefault(name)
