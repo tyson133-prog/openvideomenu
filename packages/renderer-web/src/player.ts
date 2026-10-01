@@ -264,7 +264,14 @@ export class MenuPlayer {
   private perform(effect: Effect) {
     switch (effect.type) {
       case "play":
+        this.lastPlay = effect;
         this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle, effect.end, effect.cues);
+        break;
+      case "seek":
+        this.playback.seek?.(effect.position);
+        break;
+      case "tracks":
+        this.changeTracks(effect);
         break;
       case "exit":
         if (this.options.onExit) this.options.onExit();
@@ -286,6 +293,28 @@ export class MenuPlayer {
         console.warn("Open Video Menu: an action loop reached the step budget and was stopped.");
         break;
     }
+  }
+
+  /** The play effect of what plays now, for changing its tracks (Level 2). */
+  private lastPlay?: Extract<Effect, { type: "play" }>;
+
+  /**
+   * Level 2: the menus changed a track during playback. A soundtrack switches in place where the
+   * playback adapter can; otherwise the title starts again where it is, with the new tracks.
+   */
+  private changeTracks(change: Extract<Effect, { type: "tracks" }>) {
+    const last = this.lastPlay;
+    if (!last || this.state.mode !== "playing") return;
+    const next = {
+      ...last,
+      ...(change.audio !== undefined ? { audio: change.audio } : {}),
+      ...(change.subtitle !== undefined ? { subtitle: change.subtitle } : {}),
+      ...(change.angle !== undefined ? { angle: change.angle } : {}),
+    };
+    this.lastPlay = next;
+    if (change.audio !== undefined && change.subtitle === undefined && change.angle === undefined && this.playback.switchAudio?.(change.audio)) return;
+    const at = this.playback.currentPosition?.() ?? change.at;
+    this.playMedia(next.media, at, next.audio, next.subtitle, next.angle, next.end, next.cues);
   }
 
   /** (Re)start a menu's countdown; when it runs out, tell the navigator (which ignores stale ones). */

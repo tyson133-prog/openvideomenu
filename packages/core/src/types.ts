@@ -319,7 +319,12 @@ export type Action =
    */
   | { type: "saveResume"; media?: string; at?: number; chapter?: number }
   /** Level 2: forget the resume point. */
-  | { type: "clearResume" };
+  | { type: "clearResume" }
+  /**
+   * Level 2: continue the playback in progress elsewhere on its timeline (spec §6.3): at `at` seconds or
+   * at the start of `chapter`. A disc's link to a cell, program or chapter of the title playing.
+   */
+  | { type: "seek"; at?: number; chapter?: number };
 
 export type ActionType = Action["type"];
 

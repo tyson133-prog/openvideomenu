@@ -696,6 +696,8 @@ sub startMenu()
     m.menu.manifestUrl = m.menuBase + m.opening.entry["url"]
     m.menu.authHeaders = assetHeaders()
     m.menu.observeField("playRequest", "onPlayRequest")
+    m.menu.observeField("seekRequest", "onSeekRequest")
+    m.menu.observeField("tracksRequest", "onTracksRequest")
     m.menu.observeField("exit", "onMenuExit")
     m.menu.observeField("stopRequest", "onMenuStop")
     m.menu.observeField("overlayShowing", "onOverlayShowing")
@@ -800,7 +802,46 @@ end function
 ' transcode it prepares. The menu's soundtrack choice travels as AudioStreamIndex, so it survives
 ' transcoding; subtitles off (0) is SubtitleStreamIndex -1.
 sub onPlayRequest()
-    req = m.menu.playRequest
+    playMenuRequest(m.menu.playRequest)
+end sub
+
+' Level 2: a seek from the menus (spec 6.3). A file seeks in place; a title made of segments starts
+' over at that point, which finds the segment that holds it.
+sub onSeekRequest()
+    if m.player = invalid or m.menuReq = invalid then return
+    position = m.menu.seekRequest
+    if m.segPlay = invalid
+        if m.cueClock <> invalid then m.cueClock.last = position
+        m.player.seek = position
+        return
+    end if
+    req = msCopyAA(m.menuReq)
+    req.start = position
+    playMenuRequest(req)
+end sub
+
+' Level 2: a track changed during playback (spec 6.3). A directly played file switches its soundtrack
+' in place; anything else (subtitles, another angle, a transcode) starts over where the title is.
+sub onTracksRequest()
+    if m.player = invalid or m.menuReq = invalid then return
+    change = m.menu.tracksRequest
+    if change.audio <> invalid and change.subtitle = invalid and change.angle = invalid and m.playing <> invalid and m.playing.method = "DirectPlay" and m.segPlay = invalid
+        m.menuReq.audio = change.audio
+        m.playing.req.audio = change.audio
+        onAudioTracks()
+        return
+    end if
+    req = msCopyAA(m.menuReq)
+    for each key in ["audio", "subtitle", "angle"]
+        if change[key] <> invalid then req[key] = change[key]
+    end for
+    req.start = titlePosition()
+    playMenuRequest(req)
+end sub
+
+' Play what the menus asked for: { media, start, audio?, subtitle?, angle?, end?, cues? }.
+sub playMenuRequest(req as object)
+    m.menuReq = req
     ' A cue started this while a title plays (it returns there afterwards): that one stops first.
     if m.player <> invalid
         if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)

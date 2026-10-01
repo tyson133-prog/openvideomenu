@@ -108,6 +108,12 @@ sub apply(effect as object)
         at = msOr(menu["buttonsAt"], 0)
         if m.videoRole = "background" then m.motion.seek = at
         drawButtons()
+    else if t = "seek"
+        ' Level 2: the scene moves the title (spec 6.3).
+        m.top.seekRequest = effect.position
+    else if t = "tracks"
+        ' Level 2: the scene changes a track of the title now.
+        m.top.tracksRequest = effect
     else if t = "budgetExceeded"
         ' A named action ran itself without end; the navigator dropped the rest. The menus carry on.
         print "Open Video Menu: an action loop reached the step budget and was stopped."

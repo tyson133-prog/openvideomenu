@@ -103,6 +103,12 @@ fun selectTracks(
 class PlayerHandle(val player: ExoPlayer, private val offsets: List<Double> = listOf(0.0)) {
     /** Current position in seconds on the title's timeline, for "stopped", resume and cues. */
     fun positionSeconds(): Double = (offsets.getOrNull(player.currentMediaItemIndex) ?: 0.0) + player.currentPosition / 1000.0
+
+    /** Level 2: move to [seconds] on the title's timeline, in whichever clip holds it (a seek action). */
+    fun seekTo(seconds: Double) {
+        val clip = offsets.indexOfLast { it <= seconds }.coerceAtLeast(0)
+        player.seekTo(clip, ((seconds - offsets[clip]) * 1000).toLong())
+    }
 }
 
 @OptIn(UnstableApi::class)

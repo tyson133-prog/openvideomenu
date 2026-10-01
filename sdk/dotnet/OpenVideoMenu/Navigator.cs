@@ -136,6 +136,19 @@ public abstract record Effect
     public sealed record StartTimer(string Menu, double After) : Effect;
 
     /// <summary>
+    /// Level 2: move the playback in progress to <paramref name="Position"/> seconds on its timeline (a
+    /// seek action, spec §6.3). Cues behave as when the viewer seeks.
+    /// </summary>
+    public sealed record Seek(double Position) : Effect;
+
+    /// <summary>
+    /// Level 2: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
+    /// @angle during playback, a disc's SetSTN in a cell command): apply it now, from where playback is
+    /// (<paramref name="At"/>, the cue's time, when the player doesn't know better).
+    /// </summary>
+    public sealed record Tracks(double At, int? Audio = null, int? Subtitle = null, int? Angle = null) : Effect;
+
+    /// <summary>
     /// Level 2: one event ran <see cref="Navigator.StepBudget"/> actions (a named action running itself
     /// without end); the rest were dropped. For diagnostics: players carry on with the state as it is.
     /// </summary>
@@ -889,6 +902,19 @@ public static class Navigator
                     s.LastStop = null;
                     s.ResumeSet = true;
                     break;
+                case SeekAction seek:
+                    // Only during playback: the title continues elsewhere, as a link ends a disc's program.
+                    if (duringPlayback)
+                    {
+                        var media = s.Playing!.Item.Media;
+                        var position = seek.Chapter is { } chapter ? StartTime(manifest, new PlayItem { Media = media, Chapter = chapter }) : seek.At ?? 0;
+                        s.Overlay = null;
+                        s.Seq++;
+                        s.Player["@lastChapter"] = ChapterAt(manifest, media, position);
+                        effects.Add(new Effect.Seek(position));
+                    }
+
+                    break;
                 case SetAction set:
                 {
                     var operand = set.Value.Var is { } v ? s.Read(v) : set.Value.Literal!.Value;
@@ -908,6 +934,10 @@ public static class Navigator
                         else if (set.Var.StartsWith('@'))
                         {
                             s.Player[set.Var] = value;
+                            if (duringPlayback)
+                            {
+                                LiveTrack(manifest, s, set.Var, value, cueAt!.Value, effects);
+                            }
                         }
                         else
                         {
@@ -991,6 +1021,31 @@ public static class Navigator
         s.Player["@lastChapter"] = ChapterAt(manifest, media, at);
         s.Playing = null;
         s.Overlay = null;
+    }
+
+    /// <summary>
+    /// Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a
+    /// cell command or a button over the film), not only to the next playback.
+    /// </summary>
+    private static void LiveTrack(Manifest manifest, Working s, string name, Scalar value, double at, List<Effect> effects)
+    {
+        if (value.Number is not { } n)
+        {
+            return;
+        }
+
+        if (name == "@audio" && n > 0)
+        {
+            effects.Add(new Effect.Tracks(at, Audio: n));
+        }
+        else if (name == "@subtitle")
+        {
+            effects.Add(new Effect.Tracks(at, Subtitle: n));
+        }
+        else if (name == "@angle" && AngleCount(manifest, s.Playing!.Item.Media) is var angles and > 1)
+        {
+            effects.Add(new Effect.Tracks(at, Angle: n >= 1 && n <= angles ? n : 1));
+        }
     }
 
     /// <summary>The resume point for <paramref name="playing"/> stopped (or left) at <paramref name="at"/>.</summary>

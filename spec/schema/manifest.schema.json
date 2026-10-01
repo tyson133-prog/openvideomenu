@@ -658,7 +658,8 @@
             "do",
             "run",
             "saveResume",
-            "clearResume"
+            "clearResume",
+            "seek"
           ]
         }
       },
@@ -933,6 +934,40 @@
                 }
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "seek"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: continue the playback in progress elsewhere: at seconds, or the start of chapter (spec 6.3). Only during playback.",
+            "properties": {
+              "at": {
+                "type": "number",
+                "minimum": 0
+              },
+              "chapter": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "at"
+                ]
+              },
+              {
+                "required": [
+                  "chapter"
+                ]
+              }
+            ]
           }
         }
       ]

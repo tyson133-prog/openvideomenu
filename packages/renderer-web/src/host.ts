@@ -15,6 +15,8 @@
  *                                                        angle file, ref/url already that file's;
  *                                                        videoTrack: 1-based, for angles as video tracks)
  *   {type:"stop"}                                        stop playback, without reporting it (a cue opened a menu)
+ *   {type:"seek", position}                              Level 2: move the playback in progress there (seconds
+ *                                                        on the title's timeline); cues as for a viewer's seek
  *   {type:"overlay", showing}                            an overlay's buttons show over the video (Level 2):
  *                                                        show the page over it and send it the arrows and Enter
  *   {type:"exit"}                                        Back pressed at the top menu
@@ -60,6 +62,11 @@ export class BridgePlayback implements PlaybackAdapter {
 
   play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments }: PlayRequest) {
     this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments });
+  }
+
+  /** Level 2: a seek action moved the title; the native player moves there. */
+  seek(position: number) {
+    this.send({ type: "seek", position });
   }
 
   /** The navigator left playback by itself (a cue opened a menu); the native player owns the position. */

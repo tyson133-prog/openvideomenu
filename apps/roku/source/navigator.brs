@@ -515,6 +515,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
                 player = msNavCopyVars(s.player)
                 player[name] = nextValue
                 s.player = player
+                if duringPlayback then msNavLiveTrack(manifest, s, name, nextValue, s.cueAt, effects)
             else
                 vars = msNavCopyVars(s.vars)
                 vars[name] = nextValue
@@ -565,6 +566,19 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "clearResume"
         s.lastStop = invalid
         s.resumeSet = true
+    else if t = "seek"
+        ' Level 2, only during playback: the title continues elsewhere, as a link ends a disc's program.
+        if duringPlayback
+            media = s.playing.item["media"]
+            position = msOr(action["at"], 0)
+            if action["chapter"] <> invalid then position = msNavStartTime(manifest, { media: media, chapter: action["chapter"] })
+            s.overlay = invalid
+            s.seq = s.seq + 1
+            player = msNavCopyVars(s.player)
+            player["@lastChapter"] = msNavChapterAt(manifest, media, position)
+            s.player = player
+            effects.push({ type: "seek", position: position })
+        end if
     else if t = "run"
         ' Level 2: as if the named action were written here: same history rules, same cue time.
         named = manifest["actions"]
@@ -642,6 +656,24 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
         msNavOpenRoot(manifest, s, effects)
     end if
     if completed and playing.after <> invalid then msNavRun(manifest, s, playing.after, effects, true)
+end sub
+
+' Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
+' command or a button over the film), not only to the next playback.
+sub msNavLiveTrack(manifest as object, s as object, name as string, value as dynamic, at as dynamic, effects as object)
+    if not msNavIsNumber(value) then return
+    if name = "@audio" and value > 0
+        effects.push({ type: "tracks", audio: value, at: at })
+    else if name = "@subtitle"
+        effects.push({ type: "tracks", subtitle: value, at: at })
+    else if name = "@angle"
+        angles = msNavAngleCount(manifest, s.playing.item["media"])
+        if angles > 1
+            angle = value
+            if angle < 1 or angle > angles then angle = 1
+            effects.push({ type: "tracks", angle: angle, at: at })
+        end if
+    end if
 end sub
 
 ' The resume point for playback stopped (or left) at a time: the item, what's queued after it, its after-action.

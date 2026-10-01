@@ -46,6 +46,7 @@ internal sealed class Validator
         ("activate", ["type", "button"]),
         ("run", ["type", "action"]),
         ("saveResume", ["type", "media", "at", "chapter"]),
+        ("seek", ["type", "at", "chapter"]),
         ("clearResume", ["type"]),
     ];
 
@@ -62,6 +63,9 @@ internal sealed class Validator
 
     /// <summary>Media id → how many angles it has (1 without angles).</summary>
     private readonly Dictionary<string, int> _angleCounts = new(StringComparer.Ordinal);
+
+    /// <summary>Above 0 while checking named actions, which may run during playback wherever they're run from.</summary>
+    private int _namedDepth;
 
     /// <summary>Level 2: the manifest's named actions, by name, in document order.</summary>
     private readonly Dictionary<string, JsonElement> _named = new(StringComparer.Ordinal);
@@ -253,7 +257,9 @@ internal sealed class Validator
             a = _named.TryGetValue(target, out var next) ? next : null;
         }
 
+        _namedDepth++;
         Action(body, path, mediaIds, menus);
+        _namedDepth--;
     }
 
     /// <summary>The named action a run names, or null when the value isn't a run.</summary>
@@ -1537,6 +1543,35 @@ internal sealed class Validator
                 break;
             }
 
+            case "seek":
+            {
+                if (_cueDepth == 0 && _namedDepth == 0)
+                {
+                    Error($"{path}/type", "\"seek\" moves the playback in progress; it only works in cues, overlays and keys that run during playback.");
+                }
+
+                var at = action["at"];
+                var chapter = action["chapter"];
+                if (at is not null && chapter is not null)
+                {
+                    Error($"{path}/at", "Give at or chapter, not both.");
+                }
+                else if (at is null && chapter is null)
+                {
+                    Error(path, "Needs at (seconds) or chapter.");
+                }
+                else if (at is { } a && !(IsFiniteNumber(a) && a.GetDouble() >= 0))
+                {
+                    Error($"{path}/at", "Must be a non-negative number of seconds.");
+                }
+                else if (chapter is { } c && !(IsInteger(c) && c.GetDouble() >= 1))
+                {
+                    Error($"{path}/chapter", "Must be a chapter number (from 1).");
+                }
+
+                break;
+            }
+
             case "activate":
                 if (ownButtons is null)
                 {
@@ -1654,7 +1689,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

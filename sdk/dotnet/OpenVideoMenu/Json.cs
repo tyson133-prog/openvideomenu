@@ -143,6 +143,7 @@ internal sealed class MenuActionConverter : JsonConverter<MenuAction>
             "run" => typeof(RunAction),
             "saveResume" => typeof(SaveResumeAction),
             "clearResume" => typeof(ClearResumeAction),
+            "seek" => typeof(SeekAction),
             var other => throw new JsonException($"Unknown action type \"{other}\"."),
         };
         var action = (MenuAction)el.Deserialize(target, options)!;

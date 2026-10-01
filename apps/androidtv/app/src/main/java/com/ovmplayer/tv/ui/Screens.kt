@@ -380,6 +380,8 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                     playing = null
                     overlay = false
                 }
+                // Level 2: a seek action moves the title; the cue clock sees the jump as a seek.
+                is PageMessage.Seek -> handle?.seekTo(msg.position)
                 is PageMessage.Overlay -> {
                     if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "page: overlay ${msg.showing}")
                     overlay = msg.showing

@@ -171,6 +171,20 @@ public sealed class SaveResumeAction : MenuAction
     public int? Chapter { get; set; }
 }
 
+/// <summary>
+/// Level 2: continue the playback in progress elsewhere on its timeline (spec §6.3): at <see cref="At"/>
+/// seconds or the start of <see cref="Chapter"/>. A disc's link to a cell, program or chapter of the
+/// title playing. Only during playback.
+/// </summary>
+public sealed class SeekAction : MenuAction
+{
+    public override string Type => "seek";
+
+    public double? At { get; set; }
+
+    public int? Chapter { get; set; }
+}
+
 /// <summary>Level 2: forget the resume point.</summary>
 public sealed class ClearResumeAction : MenuAction
 {

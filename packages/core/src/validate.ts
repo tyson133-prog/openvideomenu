@@ -49,6 +49,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   activate: ["type", "button"],
   run: ["type", "action"],
   saveResume: ["type", "media", "at", "chapter"],
+  seek: ["type", "at", "chapter"],
   clearResume: ["type"],
 };
 
@@ -148,6 +149,9 @@ class Validator {
   /** Media id → how many angles it has (1 without angles). */
   private angleCounts = new Map<string, number>();
 
+  /** Above 0 while checking named actions, which may run during playback wherever they're run from. */
+  private namedDepth = 0;
+
   /** Level 2: the manifest's named actions, by name. */
   private named = new Map<string, unknown>();
 
@@ -195,7 +199,9 @@ class Validator {
       }
       seen.add(a.action);
     }
+    this.namedDepth++;
     this.action(body, path, mediaIds, menus);
+    this.namedDepth--;
   }
 
   /** The action a run (or a chain of them) comes to, or the action itself. */
@@ -791,6 +797,15 @@ class Validator {
         if (value.at !== undefined && !(isFiniteNumber(value.at) && value.at >= 0)) this.error(`${path}/at`, "Must be a non-negative number of seconds.");
         if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
         break;
+      case "seek":
+        if (this.cueDepth === 0 && this.namedDepth === 0)
+          this.error(`${path}/type`, '"seek" moves the playback in progress; it only works in cues, overlays and keys that run during playback.');
+        if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
+        else if (value.at === undefined && value.chapter === undefined) this.error(path, "Needs at (seconds) or chapter.");
+        else if (value.at !== undefined && !(isFiniteNumber(value.at) && value.at >= 0)) this.error(`${path}/at`, "Must be a non-negative number of seconds.");
+        else if (value.chapter !== undefined && !(Number.isInteger(value.chapter) && (value.chapter as number) >= 1))
+          this.error(`${path}/chapter`, "Must be a chapter number (from 1).");
+        break;
       case "activate":
         if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back, timeout or keys.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
@@ -851,7 +866,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

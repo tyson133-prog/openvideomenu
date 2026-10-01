@@ -232,6 +232,7 @@ Every action is an object with a `type`:
 | `run` | `action` | *(Level 2)* Run a named action from `actions`, as if it were written here (§6.4). |
 | `saveResume` | `media?`, `at?`, `chapter?` | *(Level 2)* Save the resume point (§6.5). |
 | `clearResume` | — | *(Level 2)* Forget the resume point (§6.5). |
+| `seek` | `at` or `chapter` | *(Level 2)* During playback, continue the title elsewhere on its timeline (§6.3). |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a `playAll`, its `after`). When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -296,7 +297,8 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
   `add`, `sub`, `mul`, `div` (towards zero), `mod`, `and`, `or`, `xor`, or `random` (a whole number from
   1 to `value`). Division or modulo by zero leaves the variable unchanged. Only `set` works on text.
   Writable player state: setting `@audio`/`@subtitle`/`@angle` chooses the track for the next playback
-  (a DVD's SetSTN); setting `@focus` highlights a button (SetHL_BTN).
+  (a DVD's SetSTN), and during playback (in a cue, an overlay's button or a key) also changes it now
+  (§6.3); setting `@focus` highlights a button (SetHL_BTN).
 - **`if`** `{ test, then, else? }` runs `then` when the test holds, otherwise `else` (or nothing).
 - **`do`** `{ steps }` runs actions in order and stops after the first one that navigates: opens a menu,
   starts playback or a transition, or leaves. Like a DVD program, which ends at its link.
@@ -380,8 +382,19 @@ icon some discs show in certain scenes that branches to a featurette and back.
   - `goto` leaves playback; it is remembered for `resume` at the cue's time, unless the cue saved or
     cleared the resume point itself (§6.5).
   - `back` stops playback, like the remote's Back.
+  - **`seek`** `{ at }` or `{ chapter }` continues the playback in progress elsewhere on its timeline,
+    without interrupting it: a disc's link to a cell, program or chapter of the title playing (LinkCN,
+    LinkPGN, LinkPTTN), or a cell that loops by linking to its own start. Cues behave as when the viewer
+    seeks: point cues on the way don't run, overlays follow the position. Like a link, it ends a `do`.
+    `seek` only works during playback: validators reject it in menus' buttons, `back`, `timeout`,
+    `firstPlay` and `after`.
+  - **Setting `@audio`, `@subtitle` or `@angle`** changes that track of the playback in progress now, as
+    well as for the next playback (a disc's SetSTN in a cell command, or a commentary button over the
+    film). The navigator emits `{ "type": "tracks", audio?, subtitle?, angle?, at }`; players SHOULD
+    switch in place and MAY restart the title where it is with the new tracks.
   - `set`, `if` and `do` work as anywhere; `activate` is not allowed.
-- **Players** watch for the cues listed in the play effect and report `cue` (a point cue's `at`,
+- **Players** carry out a `seek` effect `{ "type": "seek", position }` by moving playback there, and
+  watch for the cues listed in the play effect and report `cue` (a point cue's `at`,
   an overlay's `from`) and `cueEnd` (an overlay's `to`, or leaving its window by seeking). A player
   that can't draw over its video SHOULD still run point cues; without Level 2, cues are ignored and
   `end` plays to the end of the media.

@@ -1,0 +1,45 @@
+{
+  "description": "During playback a cue, an overlay's button or a key can move the title elsewhere on its timeline (seek: a disc's LinkCN/LinkPGN/LinkPTT, or a cell that loops by linking to itself) and change its tracks now (set on @audio, @subtitle or @angle: a disc's SetSTN in a cell command or a button over the film). A seek ends a do, as a link ends a disc's program. Tracks set during playback also stay for the next playback.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Moving Within a Title" },
+    "media": {
+      "film": {
+        "ref": "Film.mkv", "kind": "feature", "angles": ["Film (angle 2).mkv"],
+        "chapters": [{ "time": 0 }, { "time": 100 }, { "time": 200 }],
+        "cues": [
+          { "at": 90, "action": { "type": "do", "steps": [{ "type": "seek", "chapter": 1 }, { "type": "goto", "menu": "main" }] } },
+          { "from": 150, "to": 160, "canvas": { "width": 1280, "height": 720 },
+            "buttons": [
+              { "id": "ch3", "rect": [100, 600, 100, 50], "nav": { "down": "commentary" }, "action": { "type": "seek", "chapter": 3 } },
+              { "id": "commentary", "rect": [250, 600, 100, 50], "nav": { "up": "ch3", "down": "angle" }, "action": { "type": "set", "var": "@audio", "value": 2 } },
+              { "id": "angle", "rect": [400, 600, 100, 50], "nav": { "up": "commentary" }, "action": { "type": "set", "var": "@angle", "value": 2 } }
+            ] }
+        ]
+      }
+    },
+    "menus": {
+      "main": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "play", "rect": [100, 100, 200, 40], "action": { "type": "play", "media": "film" } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "film", "start": 0, "angle": 1, "cues": [{ "id": "media/0", "at": 90 }, { "id": "media/1", "from": 150, "to": 160 }] }] } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "mode": "playing", "effects": [{ "type": "seek", "position": 0 }] } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "mode": "playing", "overlay": { "cue": "media/1", "focus": "ch3" }, "effects": [] } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": null, "effects": [{ "type": "activated", "cue": "media/1", "button": "ch3" }, { "type": "seek", "position": 200 }] } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "overlay": { "cue": "media/1", "focus": "ch3" } } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "overlay": { "cue": "media/1", "focus": "commentary" } } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "overlay": { "cue": "media/1", "focus": "commentary" }, "effects": [{ "type": "activated", "cue": "media/1", "button": "commentary" }, { "type": "tracks", "audio": 2, "at": 160 }] } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "overlay": { "cue": "media/1", "focus": "angle" } } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "effects": [{ "type": "activated", "cue": "media/1", "button": "angle" }, { "type": "tracks", "angle": 2, "at": 160 }] } },
+    { "event": { "type": "cueEnd", "id": "media/1" }, "expect": { "overlay": null } },
+    { "event": { "type": "stopped", "position": 170 }, "expect": { "mode": "menu", "menu": "main", "focus": "play" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "play" }, { "type": "play", "media": "film", "start": 0, "audio": 2, "angle": 2, "cues": [{ "id": "media/0", "at": 90 }, { "id": "media/1", "from": 150, "to": 160 }] }] } }
+  ]
+}

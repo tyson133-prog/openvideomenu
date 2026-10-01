@@ -1,0 +1,22 @@
+{
+  "description": "seek moves the playback in progress, so it belongs in cues, overlays and keys that run during playback (and named actions, which may run there); it needs at or chapter, not both.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/buttons/0/action/type", "/media/feature/cues/0/action/at", "/media/feature/cues/1/action", "/media/feature/cues/2/action/chapter"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Seek" },
+    "media": { "feature": { "ref": "a.mp4", "cues": [
+      { "at": 10, "action": { "type": "seek", "at": 5, "chapter": 1 } },
+      { "at": 20, "action": { "type": "seek" } },
+      { "at": 30, "action": { "type": "seek", "chapter": 0 } }
+    ] } },
+    "actions": { "loop": { "type": "seek", "at": 0 } },
+    "menus": {
+      "main": { "canvas": { "width": 1280, "height": 720 }, "buttons": [{ "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "seek", "at": 0 } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]
+  }
+}

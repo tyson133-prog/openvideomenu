@@ -82,6 +82,17 @@ export type Effect =
    */
   | { type: "startTimer"; menu: string; after: number }
   /**
+   * Level 2: move the playback in progress to [position] seconds on its timeline (a seek action, §6.3).
+   * Cues behave as when the viewer seeks: point cues on the way are skipped, overlays follow the position.
+   */
+  | { type: "seek"; position: number }
+  /**
+   * Level 2: the menus changed a track of the playback in progress (a set on @audio, @subtitle or
+   * @angle during playback, a disc's SetSTN in a cell command): apply it now, from where playback is
+   * (`at`, the cue's time, when the player doesn't know better).
+   */
+  | { type: "tracks"; audio?: number; subtitle?: number; angle?: number; at: number }
+  /**
    * Level 2: one event ran STEP_BUDGET actions (a named action running itself without end); the
    * rest were dropped. For diagnostics: players carry on with the state as it is.
    */
@@ -572,12 +583,25 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
           if (action.var === "@focus") {
             // Highlight a button of the current menu (a DVD's SetHL_BTN).
             if (s.menu && findButton(menuOf(manifest, s.menu), String(value))) s.focus = String(value);
-          } else if (action.var.startsWith("@")) s.player = { ...s.player, [action.var]: value };
-          else s.vars = { ...s.vars, [action.var]: value };
+          } else if (action.var.startsWith("@")) {
+            s.player = { ...s.player, [action.var]: value };
+            if (duringPlayback) liveTrack(manifest, s, action.var, value, opts.cueAt!, effects);
+          } else s.vars = { ...s.vars, [action.var]: value };
         }
         next = action.then;
         break;
       }
+      case "seek":
+        // Only during playback: the title continues elsewhere, as a link ends a disc's program.
+        if (duringPlayback) {
+          const item = s.playing!.item;
+          const position = action.chapter !== undefined ? startTime(manifest, { media: item.media, chapter: action.chapter }) : (action.at ?? 0);
+          s.overlay = undefined;
+          s.seq += 1;
+          s.player = { ...s.player, "@lastChapter": chapterAt(manifest, item.media, position) };
+          effects.push({ type: "seek", position });
+        }
+        break;
       case "if":
         next = evalTest(s, action.test) ? action.then : action.else;
         break;
@@ -634,6 +658,20 @@ function leavePlayback(manifest: Manifest, s: NavState, at: number) {
   s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, at) };
   s.playing = undefined;
   s.overlay = undefined;
+}
+
+/**
+ * Level 2: a set on @audio, @subtitle or @angle during playback applies now (a disc's SetSTN in a cell
+ * command or a button over the film), not only to the next playback.
+ */
+function liveTrack(manifest: Manifest, s: NavState, name: string, value: Scalar, at: number, effects: Effect[]) {
+  if (typeof value !== "number") return;
+  if (name === "@audio" && value > 0) effects.push({ type: "tracks", audio: value, at });
+  else if (name === "@subtitle") effects.push({ type: "tracks", subtitle: value, at });
+  else if (name === "@angle") {
+    const angles = angleCount(manifest, s.playing!.item.media);
+    if (angles > 1) effects.push({ type: "tracks", angle: value >= 1 && value <= angles ? value : 1, at });
+  }
 }
 
 /** The resume point for [playing] stopped (or left) at [at]: the item, what's queued after it, its after-action. */

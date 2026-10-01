@@ -62,6 +62,10 @@ export interface PlaybackAdapter {
   stop(): number;
   /** Level 2: where playback is now (seconds on the title's timeline), when the adapter knows. */
   currentPosition?(): number;
+  /** Level 2: move the playback in progress to a position on the title's timeline (a seek action). */
+  seek?(position: number): void;
+  /** Level 2: switch the soundtrack of the playback in progress without restarting it, if the adapter can. */
+  switchAudio?(audio: number): boolean;
   /** Called by the adapter when the item finishes on its own. */
   onEnded?: () => void;
   /** Called by the adapter when the viewer stops playback (e.g. with the player's own back button). */
@@ -255,6 +259,24 @@ export class Html5Playback implements PlaybackAdapter {
   /** Where playback is on the title's timeline. */
   currentPosition(): number {
     return this.position();
+  }
+
+  seek(position: number) {
+    if (this.video.hidden || this.pieces.length === 0) return;
+    let i = 0;
+    while (i < this.pieces.length - 1 && position >= this.pieces[i + 1]!.offset) i++;
+    const into = position - this.pieces[i]!.offset;
+    // The cue clock sees the jump and treats it as a seek: point cues on the way don't fire.
+    if (i === this.piece) this.video.currentTime = this.pieces[i]!.start + into;
+    else this.load(i, into);
+  }
+
+  switchAudio(audio: number): boolean {
+    const tracks = (this.video as HTMLVideoElement & { audioTracks?: { length: number } }).audioTracks;
+    if (!tracks) return false;
+    this.pendingAudio = audio;
+    this.applyAudioTrack();
+    return true;
   }
 
   private position(): number {

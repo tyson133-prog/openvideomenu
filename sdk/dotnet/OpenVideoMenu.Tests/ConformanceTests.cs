@@ -175,6 +175,8 @@ public sealed class ConformanceTests
             "skipIntro" => new Effect.SkipIntro(e.GetProperty("menu").GetString()!),
             "startTimer" => new Effect.StartTimer(e.GetProperty("menu").GetString()!, e.GetProperty("after").GetDouble()),
             "budgetExceeded" => new Effect.BudgetExceeded(),
+            "seek" => new Effect.Seek(e.GetProperty("position").GetDouble()),
+            "tracks" => new Effect.Tracks(e.GetProperty("at").GetDouble(), Int("audio"), Int("subtitle"), Int("angle")),
             var other => throw new InvalidDataException($"Unknown effect {other}"),
         };
     }

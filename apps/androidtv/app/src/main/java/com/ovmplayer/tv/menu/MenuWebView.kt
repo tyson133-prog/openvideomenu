@@ -46,6 +46,8 @@ sealed interface PageMessage {
     ) : PageMessage
     /** Level 2: stop playback without reporting it (a cue opened a menu). */
     data object Stop : PageMessage
+    /** Level 2: move the playback in progress to [position] seconds on the title's timeline (a seek action). */
+    data class Seek(val position: Double) : PageMessage
     /** Level 2: an overlay's buttons show over the video: show the page over it and give it the keys. */
     data class Overlay(val showing: Boolean) : PageMessage
     data object Exit : PageMessage
@@ -205,6 +207,7 @@ class MenuWebView(
                 ),
             )
             "stop" -> onMessage(PageMessage.Stop)
+            "seek" -> str("position")?.toDoubleOrNull()?.let { onMessage(PageMessage.Seek(it)) }
             "overlay" -> onMessage(PageMessage.Overlay(str("showing") == "true"))
             "exit" -> onMessage(PageMessage.Exit)
             "error" -> onMessage(PageMessage.Error(str("message") ?: "Menu error"))
