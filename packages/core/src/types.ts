@@ -108,6 +108,17 @@ export interface Media {
   keys?: MenuKeys;
   /** Level 2: what the source forbids while this media plays, as information (spec §6.6). */
   prohibits?: Prohibitions;
+  /** Level 2: frames that stay up for a while or until the viewer goes on, whenever this media plays (spec §6.3). */
+  holds?: Hold[];
+}
+
+/**
+ * Level 2 (spec §6.3): playback stops on the frame at `at` (seconds) and stays there for `for` seconds,
+ * or until the viewer goes on ("input"): a disc's still cell, a photo gallery, a menu made of a title cell.
+ */
+export interface Hold {
+  at: number;
+  for: number | "input";
 }
 
 export interface Chapter {
@@ -282,6 +293,8 @@ export interface PlayItem {
   keys?: MenuKeys;
   /** Level 2: what the source forbids while this item plays, beside the media's, as information (spec §6.6). */
   prohibits?: Prohibitions;
+  /** Level 2: holds for this way of playing the media, beside the media's own (spec §6.3). */
+  holds?: Hold[];
 }
 
 export type Action =

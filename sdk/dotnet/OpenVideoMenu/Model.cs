@@ -130,6 +130,9 @@ public sealed class MediaEntry
     /// <summary>Level 2: what the source forbids while this media plays, as information (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
 
+    /// <summary>Level 2: frames held whenever this media plays (spec §6.3).</summary>
+    public List<Hold>? Holds { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }
@@ -483,6 +486,30 @@ public sealed class FallbackItem
 }
 
 /// <summary>A number, or the current value of a variable (Level 2).</summary>
+/// <summary>
+/// Level 2 (spec §6.3): playback stops on the frame at <see cref="At"/> seconds and stays there for
+/// <see cref="For"/>: a number of seconds, or until the viewer goes on. A disc's still cell, a photo
+/// gallery, a menu made of a title cell.
+/// </summary>
+public sealed record Hold
+{
+    public double At { get; set; }
+
+    public HoldTime For { get; set; } = HoldTime.Input;
+}
+
+/// <summary>How long a hold lasts: <see cref="Seconds"/>, or (when null) until the viewer goes on ("input").</summary>
+[JsonConverter(typeof(HoldTimeConverter))]
+public readonly record struct HoldTime(double? Seconds)
+{
+    /// <summary>Until the viewer goes on.</summary>
+    public static HoldTime Input => new(null);
+
+    public bool IsInput => Seconds is null;
+
+    public static implicit operator HoldTime(double seconds) => new(seconds);
+}
+
 [JsonConverter(typeof(IntOrVarConverter))]
 public readonly record struct IntOrVar
 {
@@ -531,6 +558,9 @@ public sealed class PlayItem
 
     /// <summary>Level 2: what the source forbids while this item plays, beside the media's (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
+
+    /// <summary>Level 2: holds for this way of playing the media, beside the media's own (spec §6.3).</summary>
+    public List<Hold>? Holds { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

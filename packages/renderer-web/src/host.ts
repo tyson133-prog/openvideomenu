@@ -15,6 +15,8 @@
  *                                                        angle file, ref/url already that file's;
  *                                                        videoTrack: 1-based, for angles as video tracks)
  *   {type:"stop"}                                        stop playback, without reporting it (a cue opened a menu)
+ *   {type:"endHold"}                                     Level 2: the viewer pressed an overlay button over a held
+ *                                                        frame: end the hold (as Enter does)
  *   {type:"seek", position}                              Level 2: move the playback in progress there (seconds
  *                                                        on the title's timeline); cues as for a viewer's seek
  *   {type:"overlay", showing}                            an overlay's buttons show over the video (Level 2):
@@ -60,8 +62,14 @@ export class BridgePlayback implements PlaybackAdapter {
   onCue?: (id: string) => void;
   onCueEnd?: (id: string) => void;
 
-  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments }: PlayRequest) {
-    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments });
+  play({ mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments, holds }: PlayRequest) {
+    this.send({ type: "play", mediaId, ref, url, start, label, audio, subtitle, angle, videoTrack, end, cues, segments, holds });
+  }
+
+  /** Level 2: an overlay button was pressed over a held frame; the native player goes on. */
+  endHold(): boolean {
+    this.send({ type: "endHold" });
+    return true;
   }
 
   /** Level 2: a seek action moved the title; the native player moves there. */

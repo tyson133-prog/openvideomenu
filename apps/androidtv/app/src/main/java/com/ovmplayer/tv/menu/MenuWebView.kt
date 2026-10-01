@@ -43,11 +43,15 @@ sealed interface PageMessage {
         val cues: List<com.ovmplayer.tv.player.CueWatch> = emptyList(),
         /** Level 2: the title is made of these pieces of other media (spec 4.2); [start], [end], cues are on its timeline. */
         val segments: List<PageSegment> = emptyList(),
+        /** Level 2: frames to hold, on the title's timeline (spec 6.3). */
+        val holds: List<com.ovmplayer.tv.player.HoldWatch> = emptyList(),
     ) : PageMessage
     /** Level 2: stop playback without reporting it (a cue opened a menu). */
     data object Stop : PageMessage
     /** Level 2: move the playback in progress to [position] seconds on the title's timeline (a seek action). */
     data class Seek(val position: Double) : PageMessage
+    /** Level 2: an overlay button was pressed over a held frame: go on from it. */
+    data object EndHold : PageMessage
     /** Level 2: an overlay's buttons show over the video: show the page over it and give it the keys. */
     data class Overlay(val showing: Boolean) : PageMessage
     data object Exit : PageMessage
@@ -204,9 +208,16 @@ class MenuWebView(
                             prim("videoTrack")?.toDoubleOrNull()?.toInt(),
                         )
                     },
+                    (msg["holds"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { h ->
+                        val o = h as? JsonObject ?: return@mapNotNull null
+                        fun prim(key: String) = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                        // "for": seconds, or "input" (until the viewer goes on), which isn't a number.
+                        com.ovmplayer.tv.player.HoldWatch(prim("at")?.toDoubleOrNull() ?: return@mapNotNull null, prim("for")?.toDoubleOrNull())
+                    },
                 ),
             )
             "stop" -> onMessage(PageMessage.Stop)
+            "endHold" -> onMessage(PageMessage.EndHold)
             "seek" -> str("position")?.toDoubleOrNull()?.let { onMessage(PageMessage.Seek(it)) }
             "overlay" -> onMessage(PageMessage.Overlay(str("showing") == "true"))
             "exit" -> onMessage(PageMessage.Exit)

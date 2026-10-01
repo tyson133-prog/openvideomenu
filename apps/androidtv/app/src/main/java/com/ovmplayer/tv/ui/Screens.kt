@@ -356,6 +356,17 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
     var failure by remember { mutableStateOf<String?>(null) }
     /** Level 2: an overlay's buttons show over the playing title (the page is over the video). */
     var overlay by remember { mutableStateOf(false) }
+    /** Level 2: the playing title's cue clock (cues, holds, its end), when it has any. */
+    var clock by remember { mutableStateOf<com.ovmplayer.tv.player.CueClock?>(null) }
+    var holdJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    /** Level 2: go on from a held frame (its time ran out, OK, or an overlay button); false when none. */
+    fun endHold(): Boolean {
+        val c = clock ?: return false
+        if (c.holding == null) return false
+        holdJob?.cancel()
+        if (!c.release()) handle?.player?.play()
+        return true
+    }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     lateinit var web: MenuWebView
     web = remember {
@@ -380,8 +391,16 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                     playing = null
                     overlay = false
                 }
-                // Level 2: a seek action moves the title; the cue clock sees the jump as a seek.
-                is PageMessage.Seek -> handle?.seekTo(msg.position)
+                // Level 2: a seek action moves the title; the cue clock sees the jump as a seek. From a held
+                // frame it moves on without the hold's cues.
+                is PageMessage.Seek -> {
+                    if (clock?.holding != null) {
+                        clock?.cancelHold()
+                        handle?.player?.play()
+                    }
+                    handle?.seekTo(msg.position)
+                }
+                PageMessage.EndHold -> endHold()
                 is PageMessage.Overlay -> {
                     if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "page: overlay ${msg.showing}")
                     overlay = msg.showing
@@ -413,6 +432,13 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
                     if (e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) web.key(menuKey, handle?.positionSeconds())
                     return@handler true
                 }
+                // Level 2: OK goes on from a frame held until the viewer is ready (the overlay's buttons
+                // take it while they show).
+                val ok = e.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                if (ok && !overlay && clock?.holding != null) {
+                    if (e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) endHold()
+                    return@handler true
+                }
                 if (!overlay) return@handler false
                 val key = when (e.keyCode) {
                     android.view.KeyEvent.KEYCODE_DPAD_UP -> "up"
@@ -438,26 +464,41 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
         web.ended()
         web.requestFocus()
     }
-    // Level 2: the page's cues (and an item's end), timed against the player's position.
+    // Level 2: the page's cues, holds (and an item's end), timed against the player's position.
     LaunchedEffect(playing, handle) {
+        clock = null
         val request = playing ?: return@LaunchedEffect
         val msg = playingMsg ?: return@LaunchedEffect
         val h = handle ?: return@LaunchedEffect
-        if (msg.cues.isEmpty() && msg.end == null) return@LaunchedEffect
+        if (msg.cues.isEmpty() && msg.end == null && msg.holds.isEmpty()) return@LaunchedEffect
         fun log(what: String) {
             if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "$what at ${h.positionSeconds()}s")
         }
-        val clock = com.ovmplayer.tv.player.CueClock(
+        val c = com.ovmplayer.tv.player.CueClock(
             msg.cues,
             msg.end,
             onCue = { log("cue $it"); web.cue(it) },
             onCueEnd = { log("cueEnd $it"); web.cueEnd(it) },
             onEnd = { log("end"); titleEnded() },
+            msg.holds,
+            onHold = { hold ->
+                // Stop on the held frame, for its time or until the viewer goes on.
+                log("hold ${hold.at}")
+                h.player.pause()
+                h.seekTo(hold.at)
+                hold.seconds?.let { seconds ->
+                    holdJob = scope.launch {
+                        kotlinx.coroutines.delay((seconds * 1000).toLong())
+                        endHold()
+                    }
+                }
+            },
         )
-        clock.start(msg.start)
+        c.start(msg.start)
+        clock = c
         while (playing === request) {
             kotlinx.coroutines.delay(200)
-            clock.tick(h.positionSeconds())
+            c.tick(h.positionSeconds())
         }
     }
     // Where the viewer is gets saved as they watch: Home leaves the app without a stop.
@@ -513,7 +554,8 @@ fun MenuScreen(vm: AppViewModel, open: OpenMenu, onExit: () -> Unit) {
             VideoPlayer(
                 request = request,
                 onReady = { handle = it },
-                onEnded = { titleEnded() },
+                // A still at the very end (or one not reached yet) holds before the title ends.
+                onEnded = { if (clock?.finish() != false) titleEnded() },
                 onError = { message ->
                     playing = null
                     overlay = false

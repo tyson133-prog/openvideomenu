@@ -16,7 +16,8 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits"],
+        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
+        ["hold"] = ["at", "for"],
         ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
         ["menu"] = ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
@@ -35,7 +36,7 @@ internal sealed class Validator
     // Insertion order matters: it's the order "Expected …" lists the types in.
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
-        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits"]),
+        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"]),
         ("playAll", ["type", "items", "after"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
@@ -150,6 +151,11 @@ internal sealed class Validator
                 if (me["prohibits"] is { } mediaProhibits)
                 {
                     Prohibits(mediaProhibits, $"/media/{id}/prohibits");
+                }
+
+                if (me["holds"] is { } mediaHolds)
+                {
+                    Holds(mediaHolds, $"/media/{id}/holds");
                 }
             }
         }
@@ -1290,6 +1296,45 @@ internal sealed class Validator
         if (value["prohibits"] is { } prohibits)
         {
             Prohibits(prohibits, $"{path}/prohibits");
+        }
+
+        if (value["holds"] is { } holds)
+        {
+            Holds(holds, $"{path}/holds");
+        }
+    }
+
+    /// <summary>Level 2: frames held for a time or until the viewer goes on (spec 6.3).</summary>
+    private void Holds(JsonElement value, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            Error(path, "Must be a list of holds {at, for}, e.g. [{\"at\": 12.5, \"for\": \"input\"}].");
+            return;
+        }
+
+        var i = 0;
+        foreach (var h in value.EnumerateArray())
+        {
+            var hp = $"{path}/{i++}";
+            if (!Obj.TryFrom(h, out var hold))
+            {
+                Error(hp, "Must be a hold {at, for}.");
+                continue;
+            }
+
+            UnknownKeys(hold, KnownKeys["hold"], hp);
+            if (!(hold["at"] is { } at && IsFiniteNumber(at) && at.GetDouble() >= 0))
+            {
+                Error($"{hp}/at", "Must be a non-negative number of seconds.");
+            }
+
+            var time = hold["for"];
+            var okFor = time is { ValueKind: JsonValueKind.String } s ? s.GetString() == "input" : time is { } n && IsFiniteNumber(n) && n.GetDouble() > 0;
+            if (!okFor)
+            {
+                Error($"{hp}/for", "Must be a positive number of seconds, or \"input\".");
+            }
         }
     }
 

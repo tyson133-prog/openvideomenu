@@ -1,0 +1,20 @@
+{
+  "description": "Holds are a list of {at, for}: at in seconds from 0, for a positive number of seconds or \"input\".",
+  "level": 2,
+  "valid": false,
+  "errors": ["/media/a/holds/0/at", "/media/a/holds/1/for", "/media/a/holds/2/for", "/media/b/holds", "/menus/main/buttons/0/action/holds/0"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Holds" },
+    "media": {
+      "a": { "ref": "a.mp4", "holds": [{ "at": -1, "for": 2 }, { "at": 3, "for": 0 }, { "at": 4, "for": "forever" }] },
+      "b": { "ref": "b.mp4", "holds": { "at": 1, "for": 2 } }
+    },
+    "menus": {
+      "main": { "canvas": { "width": 1280, "height": 720 }, "buttons": [{ "id": "x", "rect": [0, 0, 10, 10], "action": { "type": "play", "media": "a", "holds": [5] } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "a" } }] }]
+  }
+}

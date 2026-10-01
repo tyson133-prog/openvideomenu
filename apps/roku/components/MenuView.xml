@@ -28,6 +28,8 @@
     <field id="menuKey" type="float" alwaysNotify="true" onChange="onMenuKey" />
     <!-- Level 2, out: the menus left playback by themselves (a cue opened a menu): stop the title -->
     <field id="stopRequest" type="boolean" alwaysNotify="true" />
+    <!-- Level 2, out: an overlay button was pressed over a held frame: go on from it -->
+    <field id="holdEnd" type="boolean" alwaysNotify="true" />
     <!-- Level 2, out: move the title to this position on its timeline (seconds) -->
     <field id="seekRequest" type="float" alwaysNotify="true" />
     <!-- Level 2, out: change a track of the title now: { at, audio?, subtitle?, angle? } -->

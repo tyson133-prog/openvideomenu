@@ -5,7 +5,7 @@
  * describes expected behaviour in exactly these terms, so every implementation (TS, C#, native)
  * can be checked against the same cases.
  */
-import type { Action, Button, Cue, Direction, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
+import type { Action, Button, Cue, Direction, Hold, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
 import { applyOp, evalTest, MENU_KEYS, readVar, valueOf } from "./logic.js";
 
 /** A remote key: the arrows, Enter and Back, and (Level 2) the menu keys (spec §6.6). */
@@ -66,6 +66,8 @@ export type Effect =
       cues?: CueWatch[];
       /** Level 2: what the source forbids while this plays (the media's and the item's), for players that honour it (§6.6). */
       prohibits?: string[];
+      /** Level 2: frames to hold (the media's and the item's, in time order), which the player carries out (§6.3). */
+      holds?: Hold[];
     }
   /** Briefly show the button's activated state (of a menu, or of the overlay showing during playback). */
   | { type: "activated"; menu: string; button: string }
@@ -751,6 +753,7 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: numb
   // like a DVD's SetSTN, or as the player reported them).
   const audio = value(item.audio) ?? (typeof s.player["@audio"] === "number" && s.player["@audio"] > 0 ? s.player["@audio"] : undefined);
   const subtitle = value(item.subtitle) ?? (typeof s.player["@subtitle"] === "number" ? s.player["@subtitle"] : undefined);
+  const holds = [...(manifest.media[item.media]?.holds ?? []), ...(item.holds ?? [])].sort((a, b) => a.at - b.at);
   const prohibits = [...new Set([...(manifest.media[item.media]?.prohibits ?? []), ...(item.prohibits ?? [])])];
   const cues: CueWatch[] = cuesOf(manifest, item).map(({ id, cue }) => ("at" in cue ? { id, at: cue.at } : { id, from: cue.from, to: cue.to }));
   // Media with angles plays the item's angle, otherwise @angle; one it doesn't have plays angle 1.
@@ -771,6 +774,7 @@ function playEffect(manifest: Manifest, item: PlayItem, s: NavState, from?: numb
     ...(item.end !== undefined ? { end: item.end } : {}),
     ...(cues.length ? { cues } : {}),
     ...(prohibits.length ? { prohibits } : {}),
+    ...(holds.length ? { holds } : {}),
   };
 }
 

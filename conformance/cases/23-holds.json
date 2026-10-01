@@ -1,0 +1,38 @@
+{
+  "description": "Holds: frames that stay up for a time or until the viewer goes on (a disc's still cells: a photo gallery, a menu made of a title cell). The play effect lists the media's and the item's holds in time order; players carry them out. A menu made of a title cell is an overlay over a held frame: its buttons work as during any playback, and pressing one goes on from the hold.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Stills" },
+    "media": {
+      "gallery": { "ref": "Gallery.mkv", "kind": "featurette", "holds": [{ "at": 0.5, "for": 8 }, { "at": 1, "for": 8 }, { "at": 1.5, "for": "input" }] },
+      "picker": { "ref": "Picker.mkv", "kind": "other", "holds": [{ "at": 2, "for": "input" }],
+        "cues": [{ "from": 0, "to": 2, "canvas": { "width": 720, "height": 480 }, "buttons": [
+          { "id": "wide", "rect": [100, 300, 200, 60], "nav": { "right": "full" }, "action": { "type": "play", "media": "gallery" } },
+          { "id": "full", "rect": [400, 300, 200, 60], "nav": { "left": "wide" }, "action": { "type": "back" } }
+        ] }] }
+    },
+    "menus": {
+      "main": { "canvas": { "width": 720, "height": 480 }, "buttons": [
+        { "id": "gallery", "rect": [100, 100, 200, 40], "nav": { "down": "picker" }, "action": { "type": "play", "media": "gallery", "holds": [{ "at": 0.2, "for": 3 }] } },
+        { "id": "picker", "rect": [100, 160, 200, 40], "nav": { "up": "gallery" }, "action": { "type": "play", "media": "picker" } }
+      ] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Extras", "items": [{ "label": "Gallery", "action": { "type": "play", "media": "gallery" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "gallery" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "gallery" },
+      { "type": "play", "media": "gallery", "start": 0, "holds": [{ "at": 0.2, "for": 3 }, { "at": 0.5, "for": 8 }, { "at": 1, "for": 8 }, { "at": 1.5, "for": "input" }] }] } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "main", "focus": "gallery" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "picker" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "picker" },
+      { "type": "play", "media": "picker", "start": 0, "cues": [{ "id": "media/0", "from": 0, "to": 2 }], "holds": [{ "at": 2, "for": "input" }] }] } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "overlay": { "cue": "media/0", "focus": "wide" } } },
+    { "event": { "type": "press", "key": "right" }, "expect": { "overlay": { "cue": "media/0", "focus": "full" } } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "picker", "effects": [{ "type": "activated", "cue": "media/0", "button": "full" }] } }
+  ]
+}

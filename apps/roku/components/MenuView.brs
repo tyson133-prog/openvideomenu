@@ -86,6 +86,8 @@ end sub
 sub apply(effect as object)
     t = effect.type
     if t = "activated"
+        ' An overlay button pressed over a held frame goes on from it (Level 2).
+        if effect.cue <> invalid then m.top.holdEnd = true
         m.activatedId = effect.button
         drawButtons()
         drawOverlay()

@@ -167,7 +167,10 @@ public sealed class ConformanceTests
         return e.GetProperty("type").GetString() switch
         {
             "play" => new Effect.Play(e.GetProperty("media").GetString()!, e.GetProperty("start").GetDouble(), Int("audio"), Int("subtitle"), Int("angle"), Num(e, "end"), Cues(),
-                e.TryGetProperty("prohibits", out var prohibits) ? [.. prohibits.EnumerateArray().Select(p => p.GetString()!)] : null),
+                e.TryGetProperty("prohibits", out var prohibits) ? [.. prohibits.EnumerateArray().Select(p => p.GetString()!)] : null,
+                e.TryGetProperty("holds", out var holds)
+                    ? [.. holds.EnumerateArray().Select(h => new Hold { At = h.GetProperty("at").GetDouble(), For = h.GetProperty("for").ValueKind == JsonValueKind.String ? HoldTime.Input : h.GetProperty("for").GetDouble() })]
+                    : null),
             "activated" when e.TryGetProperty("cue", out var cue) => new Effect.OverlayActivated(cue.GetString()!, e.GetProperty("button").GetString()!),
             "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),
             "exit" => new Effect.Exit(),

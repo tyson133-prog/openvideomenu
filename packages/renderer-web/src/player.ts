@@ -12,6 +12,7 @@ import {
   type CueWatch,
   type Effect,
   type FallbackItem,
+  type Hold,
   type Key,
   type Manifest,
   type MediaResolver,
@@ -236,6 +237,8 @@ export class MenuPlayer {
       return true;
     }
     if (this.fallbackQueue || this.state.mode === "playing") {
+      // Level 2: Enter goes on from a frame held until the viewer is ready (spec 6.3).
+      if (key === "enter" && !this.fallbackQueue && this.playback.endHold?.()) return true;
       if (key !== "back") return false; // leave other keys to the video element
       this.onPlaybackStopped(this.playback.stop());
       return true;
@@ -265,7 +268,7 @@ export class MenuPlayer {
     switch (effect.type) {
       case "play":
         this.lastPlay = effect;
-        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle, effect.end, effect.cues);
+        this.playMedia(effect.media, effect.start, effect.audio, effect.subtitle, effect.angle, effect.end, effect.cues, effect.holds);
         break;
       case "seek":
         this.playback.seek?.(effect.position);
@@ -287,6 +290,8 @@ export class MenuPlayer {
         this.startMenuTimer(effect.menu, effect.after);
         break;
       case "activated":
+        // An overlay button pressed over a held frame goes on from it (Level 2).
+        if ("cue" in effect) this.playback.endHold?.();
         break;
       case "budgetExceeded":
         // A named action ran itself without end; the navigator dropped the rest. The menus carry on.
@@ -314,7 +319,7 @@ export class MenuPlayer {
     this.lastPlay = next;
     if (change.audio !== undefined && change.subtitle === undefined && change.angle === undefined && this.playback.switchAudio?.(change.audio)) return;
     const at = this.playback.currentPosition?.() ?? change.at;
-    this.playMedia(next.media, at, next.audio, next.subtitle, next.angle, next.end, next.cues);
+    this.playMedia(next.media, at, next.audio, next.subtitle, next.angle, next.end, next.cues, next.holds);
   }
 
   /** (Re)start a menu's countdown; when it runs out, tell the navigator (which ignores stale ones). */
@@ -327,7 +332,7 @@ export class MenuPlayer {
     this.menuTimer = setTimeout(fire, after * 1000);
   }
 
-  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number, end?: number, cues?: CueWatch[]) {
+  private playMedia(mediaId: string, start: number, audio?: number, subtitle?: number, angle?: number, end?: number, cues?: CueWatch[], holds?: Hold[]) {
     const { manifest } = this.options;
     const media = manifest.media[mediaId]!;
     const common = {
@@ -337,6 +342,7 @@ export class MenuPlayer {
       ...(subtitle !== undefined ? { subtitle } : {}),
       ...(end !== undefined ? { end } : {}),
       ...(cues?.length ? { cues } : {}),
+      ...(holds?.length ? { holds } : {}),
     };
     // Level 2: made of segments, each a range of a file (with the play's angle where it has angles).
     if (media.segments) {

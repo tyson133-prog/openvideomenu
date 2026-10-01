@@ -23,6 +23,10 @@ sub init()
     m.showRows.observeField("rowItemSelected", "onShowTileChosen")
 
     ' While a title plays, tell the server where we are, as its own apps do (~every 10 s).
+    ' Level 2: how long a frame is held (spec 6.3).
+    m.holdTimer = CreateObject("roSGNode", "Timer")
+    m.holdTimer.repeat = false
+    m.holdTimer.observeField("fire", "onHoldTimer")
     m.progressTimer = CreateObject("roSGNode", "Timer")
     m.progressTimer.duration = 10
     m.progressTimer.repeat = true
@@ -697,6 +701,7 @@ sub startMenu()
     m.menu.authHeaders = assetHeaders()
     m.menu.observeField("playRequest", "onPlayRequest")
     m.menu.observeField("seekRequest", "onSeekRequest")
+    m.menu.observeField("holdEnd", "onHoldEnd")
     m.menu.observeField("tracksRequest", "onTracksRequest")
     m.menu.observeField("exit", "onMenuExit")
     m.menu.observeField("stopRequest", "onMenuStop")
@@ -810,6 +815,13 @@ end sub
 sub onSeekRequest()
     if m.player = invalid or m.menuReq = invalid then return
     position = m.menu.seekRequest
+    ' A seek from a held frame (an overlay button over a still) moves on without the hold's cues.
+    if m.cueClock <> invalid and m.cueClock.holding <> invalid
+        m.cueClock.holding = invalid
+        m.cueClock.endAfterHold = false
+        m.holdTimer.control = "stop"
+        m.player.control = "resume"
+    end if
     if m.segPlay = invalid
         if m.cueClock <> invalid then m.cueClock.last = position
         m.player.seek = position
@@ -955,8 +967,8 @@ sub openPlayer(content as object)
             m.cueClock = m.segClock
             m.player.notificationInterval = 0.25
             m.player.observeField("position", "onPlayerPosition")
-        else if req.cues <> invalid or req["end"] <> invalid
-            m.cueClock = { cues: msOr(req.cues, []), end: req["end"], last: req.start, floor: req.start, inside: {} }
+        else if req.cues <> invalid or req["end"] <> invalid or req.holds <> invalid
+            m.cueClock = newCueClock(req)
             m.player.notificationInterval = 0.25
             m.player.observeField("position", "onPlayerPosition")
         end if
@@ -979,15 +991,35 @@ sub onPlayerPosition()
         end if
     end if
     clock = m.cueClock
-    if clock = invalid then return
+    if clock = invalid or clock.holding <> invalid then return
     position = titlePosition()
     if clock.floor <> invalid
         if position < clock.floor then return
         clock.floor = invalid
     end if
     last = clock.last
-    clock.last = position
     played = position >= last and position - last <= 2
+    ' Ordinary play reached a hold: play up to just before it, then hold there (spec 6.3).
+    if played
+        for each h in clock.holds
+            if last < h["at"] and h["at"] <= position
+                cueClockAdvance(clock, last, h["at"] - 0.000001, true)
+                startHold(h)
+                return
+            end if
+        end for
+    end if
+    cueClockAdvance(clock, last, position, played)
+end sub
+
+' Level 2: a clock for a title's cues, end and holds (see CueClock in packages/renderer-web/src/adapters.ts).
+function newCueClock(req as object) as object
+    return { cues: msOr(req.cues, []), end: req["end"], holds: msOr(req.holds, []), last: req.start, floor: req.start, inside: {}, holding: invalid, endAfterHold: false }
+end function
+
+' Move the clock from last to position: cues passed in ordinary play, overlay windows, the item's end.
+sub cueClockAdvance(clock as object, last as dynamic, position as dynamic, played as boolean)
+    clock.last = position
     for each c in clock.cues
         if c["at"] <> invalid
             if played and last < c["at"] and c["at"] <= position then m.menu.cue = c["id"]
@@ -1011,6 +1043,80 @@ sub onPlayerPosition()
         closePlayer()
         titleEnded()
     end if
+end sub
+
+' Level 2: stop on the hold's frame, for its time or until the viewer goes on (OK, or an overlay button).
+sub startHold(hold as object)
+    m.cueClock.holding = hold
+    m.player.control = "pause"
+    if m.segPlay = invalid then m.player.seek = hold["at"]
+    if not msNavIsText(hold["for"])
+        m.holdTimer.duration = hold["for"]
+        m.holdTimer.control = "start"
+    end if
+    ' The scene takes OK while a frame is held (the menu has the keys while an overlay shows).
+    if m.menu = invalid or not m.menu.overlayShowing then m.top.setFocus(true)
+end sub
+
+' The hold is over: cues at its time run, then the title plays on (or ends, if it ran out into the hold).
+function endHold() as boolean
+    clock = m.cueClock
+    if clock = invalid or clock.holding = invalid then return false
+    at = clock.holding["at"]
+    clock.holding = invalid
+    m.holdTimer.control = "stop"
+    cueClockAdvance(clock, at - 0.000001, at, true)
+    if m.player = invalid then return true
+    if clock.endAfterHold
+        clock.endAfterHold = false
+        finishTitle()
+        return true
+    end if
+    m.player.control = "resume"
+    if m.menu = invalid or not m.menu.overlayShowing then m.player.setFocus(true)
+    return true
+end function
+
+sub onHoldTimer()
+    endHold()
+end sub
+
+sub onHoldEnd()
+    endHold()
+end sub
+
+' The title ran out: a hold not reached yet happens first, as a disc shows its last still. True when
+' that's so (the title ends when the hold does).
+function holdBeforeEnd() as boolean
+    clock = m.cueClock
+    if clock = invalid then return false
+    if clock.holding <> invalid
+        clock.endAfterHold = true
+        return true
+    end if
+    for each h in clock.holds
+        if h["at"] > clock.last
+            cueClockAdvance(clock, clock.last, h["at"] - 0.000001, true)
+            clock.endAfterHold = true
+            clock.holding = h
+            if not msNavIsText(h["for"])
+                m.holdTimer.duration = h["for"]
+                m.holdTimer.control = "start"
+            end if
+            m.top.setFocus(true)
+            return true
+        end if
+    end for
+    return false
+end function
+
+' The title played to its end.
+sub finishTitle()
+    report("/Sessions/Playing/Stopped")
+    forgetStop(m.playing.item)
+    m.playing = invalid
+    closePlayer()
+    titleEnded()
 end sub
 
 ' Level 2: the menu left playback by itself (a cue opened a menu): stop, remembering where.
@@ -1084,11 +1190,8 @@ sub onPlayerState()
     else if state = "finished" and m.segPlay <> invalid
         nextSegment()
     else if state = "finished"
-        report("/Sessions/Playing/Stopped")
-        forgetStop(m.playing.item)
-        m.playing = invalid
-        closePlayer()
-        titleEnded()
+        if holdBeforeEnd() then return
+        finishTitle()
     else if state = "error"
         print "ovmplayer: playback error "; m.player.errorCode; " msg "; m.player.errorMsg; " info "; FormatJson(m.player.errorInfo)
         setStatus("Couldn't play this title: " + m.player.errorMsg)
@@ -1185,8 +1288,8 @@ sub startSegments(req as object, segments as object)
     end for
     m.segPlay = { pieces: pieces, index: 0, req: req }
     m.segClock = invalid
-    if req.cues <> invalid or req["end"] <> invalid
-        m.segClock = { cues: msOr(req.cues, []), end: req["end"], last: req.start, floor: req.start, inside: {} }
+    if req.cues <> invalid or req["end"] <> invalid or req.holds <> invalid
+        m.segClock = newCueClock(req)
     end if
     i = 0
     while i < pieces.Count() - 1 and req.start >= pieces[i + 1].offset
@@ -1252,9 +1355,12 @@ end sub
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
     if key = "back" and m.player <> invalid
+        m.holdTimer.control = "stop"
         stopTitle()
         return true
     end if
+    ' Level 2: OK goes on from a frame held until the viewer is ready.
+    if key = "OK" and m.player <> invalid and endHold() then return true
     ' Level 2: * is the remote's Menu key; the menus decide what it does during their titles.
     if key = "options" and m.player <> invalid and m.menu <> invalid
         m.menu.menuKey = titlePosition()

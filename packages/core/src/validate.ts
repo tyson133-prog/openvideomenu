@@ -21,7 +21,8 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits"],
+  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
+  hold: ["at", "for"],
   segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
   menu: ["canvas", "background", "label", "defaultButton", "autoNav", "buttons", "buttonsAt", "back", "timeout", "keys", "prohibits"],
@@ -38,7 +39,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits"],
+  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"],
   playAll: ["type", "items", "after"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
@@ -124,6 +125,7 @@ class Validator {
           if (m.cues !== undefined) this.cues(m.cues, `/media/${id}/cues`, mediaIds, menus);
           if (m.keys !== undefined) this.keys(m.keys, `/media/${id}/keys`, mediaIds, menus, true);
           if (m.prohibits !== undefined) this.prohibits(m.prohibits, `/media/${id}/prohibits`);
+          if (m.holds !== undefined) this.holds(m.holds, `/media/${id}/holds`);
         }
     if (data.keys !== undefined) this.keys(data.keys, "/keys", mediaIds, menus, true);
 
@@ -692,6 +694,25 @@ class Validator {
     if (value.cues !== undefined) this.cues(value.cues, `${path}/cues`, mediaIds, menus);
     if (value.keys !== undefined) this.keys(value.keys, `${path}/keys`, mediaIds, menus, true);
     if (value.prohibits !== undefined) this.prohibits(value.prohibits, `${path}/prohibits`);
+    if (value.holds !== undefined) this.holds(value.holds, `${path}/holds`);
+  }
+
+  /** Level 2: frames held for a time or until the viewer goes on (spec 6.3). */
+  private holds(value: unknown, path: string) {
+    if (!Array.isArray(value)) {
+      this.error(path, 'Must be a list of holds {at, for}, e.g. [{"at": 12.5, "for": "input"}].');
+      return;
+    }
+    value.forEach((h, i) => {
+      const hp = `${path}/${i}`;
+      if (!isObject(h)) {
+        this.error(hp, "Must be a hold {at, for}.");
+        return;
+      }
+      this.unknownKeys(h, KNOWN_KEYS.hold!, hp);
+      if (!(isFiniteNumber(h.at) && h.at >= 0)) this.error(`${hp}/at`, "Must be a non-negative number of seconds.");
+      if (!(h.for === "input" || (isFiniteNumber(h.for) && h.for > 0))) this.error(`${hp}/for`, 'Must be a positive number of seconds, or "input".');
+    });
   }
 
   /**

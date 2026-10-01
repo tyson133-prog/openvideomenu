@@ -737,6 +737,24 @@ function msNavPlayEffect(manifest as object, item as object, s as object) as obj
         end for
     end for
     if prohibits.Count() > 0 then effect.prohibits = prohibits
+    ' Frames to hold (the media's and the item's, in time order), which the player carries out (spec 6.3).
+    holds = []
+    for each list in [msOr(media["holds"], []), msOr(item["holds"], [])]
+        for each h in list
+            i = holds.Count()
+            while i > 0 and holds[i - 1]["at"] > h["at"]
+                i = i - 1
+            end while
+            holds.push(invalid)
+            j = holds.Count() - 1
+            while j > i
+                holds[j] = holds[j - 1]
+                j = j - 1
+            end while
+            holds[i] = h
+        end for
+    end for
+    if holds.Count() > 0 then effect.holds = holds
     return effect
 end function
 

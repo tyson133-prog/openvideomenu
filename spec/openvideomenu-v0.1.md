@@ -393,6 +393,23 @@ icon some discs show in certain scenes that branches to a featurette and back.
     film). The navigator emits `{ "type": "tracks", audio?, subtitle?, angle?, at }`; players SHOULD
     switch in place and MAY restart the title where it is with the new tracks.
   - `set`, `if` and `do` work as anywhere; `activate` is not allowed.
+- **`holds`** `[{ at, for }]` on a media entry (whenever it plays) or a play item (beside the media's)
+  keep a frame on screen: playback stops on the frame at `at` and stays there for `for` seconds, or
+  until the viewer goes on (`"for": "input"`). A disc's still cells: a photo gallery whose pictures wait
+  for the remote, an information page shown for ten seconds, a menu made of a title cell (an overlay over
+  a held frame). Rips keep a still cell as one frame, so without holds it would flash past.
+  - A hold doesn't move the timeline: positions, chapters and cues stay where they are, and the time held
+    is not counted.
+  - Cues before `at` have run when the hold starts, and an overlay whose window ends at `at` stays up
+    while the frame is held; cues at `at` run when the hold ends, as a disc runs a cell's command after its
+    still time.
+  - The viewer goes on from a hold with Enter (OK), or by pressing one of an overlay's buttons. Players
+    MAY end any hold on any key: the viewer can always move on. A hold that ends the title (a last still)
+    holds before playback counts as ended.
+  - Like point cues, a hold happens when ordinary play reaches it, not when seeking past it; playback that
+    comes round again (a loop) holds again.
+  - The play effect lists the item's holds (the media's and the item's, in time order) for the player to
+    carry out. Players without Level 2 play through them.
 - **Players** carry out a `seek` effect `{ "type": "seek", position }` by moving playback there, and
   watch for the cues listed in the play effect and report `cue` (a point cue's `at`,
   an overlay's `from`) and `cueEnd` (an overlay's `to`, or leaving its window by seeking). A player
@@ -536,6 +553,6 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Everything in this document: canvases and aspect, backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, all actions, and the navigation semantics. |
-| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback and stopping at `end` (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6). Menus per language are separate menus chosen with `@menuLanguage`. |
+| **2: Enhanced** | *(partial)* Motion backgrounds, menu audio, `buttonsAt`, transitions and skipping, menu timeouts, variables, player state, conditions and logic (§6.1), audio/subtitle selection, angles (§4.1), segments (§4.2), cues and buttons during playback, stopping at `end`, `seek`, live track changes and holds (§6.3), named actions (§6.4), the resume point (§6.5), menu keys and prohibitions (§6.6). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Players claim a level by passing that level's cases in [`conformance/`](../conformance). Each case lists input events and the expected state and effects, so any implementation in any language can run them.

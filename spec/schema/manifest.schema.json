@@ -250,6 +250,9 @@
         },
         "prohibits": {
           "$ref": "#/$defs/prohibits"
+        },
+        "holds": {
+          "$ref": "#/$defs/holds"
         }
       },
       "not": {
@@ -611,6 +614,9 @@
         },
         "prohibits": {
           "$ref": "#/$defs/prohibits"
+        },
+        "holds": {
+          "$ref": "#/$defs/holds"
         }
       }
     },
@@ -1259,6 +1265,34 @@
       "items": {
         "type": "string",
         "minLength": 1
+      }
+    },
+    "holds": {
+      "description": "Level 2: frames held on screen (spec 6.3): playback stops on the frame at `at` for `for` seconds, or until the viewer goes on (\"input\").",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "for"
+        ],
+        "properties": {
+          "at": {
+            "type": "number",
+            "minimum": 0
+          },
+          "for": {
+            "oneOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "const": "input"
+              }
+            ]
+          }
+        }
       }
     }
   }

@@ -100,17 +100,18 @@ public abstract record Effect
         int? Angle = null,
         double? End = null,
         IReadOnlyList<CueWatch>? Cues = null,
-        IReadOnlyList<string>? Prohibits = null) : Effect
+        IReadOnlyList<string>? Prohibits = null,
+        IReadOnlyList<Hold>? Holds = null) : Effect
     {
         public bool Equals(Play? other) =>
             other is not null && Media == other.Media && Start == other.Start && Audio == other.Audio && Subtitle == other.Subtitle &&
             Angle == other.Angle && End == other.End && (Cues ?? []).SequenceEqual(other.Cues ?? []) &&
-            (Prohibits ?? []).SequenceEqual(other.Prohibits ?? []);
+            (Prohibits ?? []).SequenceEqual(other.Prohibits ?? []) && (Holds ?? []).SequenceEqual(other.Holds ?? []);
 
         public override int GetHashCode() => HashCode.Combine(Media, Start, Audio, Subtitle, Angle, End, Cues?.Count ?? 0);
 
         public override string ToString() =>
-            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}], Prohibits = [{string.Join(", ", Prohibits ?? [])}] }}";
+            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}], Prohibits = [{string.Join(", ", Prohibits ?? [])}], Holds = [{string.Join(", ", Holds ?? [])}] }}";
     }
 
     /// <summary>Briefly show the button's activated state.</summary>
@@ -1174,7 +1175,9 @@ public static class Navigator
             .Select(c => c.Cue is PointCue point ? new CueWatch(c.Id, At: point.At) : new CueWatch(c.Id, From: ((Overlay)c.Cue).From, To: ((Overlay)c.Cue).To))
             .ToList();
         var prohibits = (manifest.Media.GetValueOrDefault(item.Media)?.Prohibits ?? []).Concat(item.Prohibits ?? []).Distinct().ToList();
-        return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null, prohibits.Count > 0 ? prohibits : null);
+        var holds = (manifest.Media.GetValueOrDefault(item.Media)?.Holds ?? []).Concat(item.Holds ?? []).OrderBy(h => h.At).ToList();
+        return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null,
+            prohibits.Count > 0 ? prohibits : null, holds.Count > 0 ? holds : null);
     }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>

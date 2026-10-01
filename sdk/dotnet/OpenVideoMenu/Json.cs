@@ -240,6 +240,28 @@ internal sealed class RectConverter : JsonConverter<Rect>
     }
 }
 
+internal sealed class HoldTimeConverter : JsonConverter<HoldTime>
+{
+    public override HoldTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
+    {
+        JsonTokenType.Number => new HoldTime(reader.GetDouble()),
+        JsonTokenType.String when reader.GetString() == "input" => HoldTime.Input,
+        _ => throw new JsonException("A hold lasts a number of seconds, or \"input\"."),
+    };
+
+    public override void Write(Utf8JsonWriter writer, HoldTime value, JsonSerializerOptions options)
+    {
+        if (value.Seconds is { } seconds)
+        {
+            writer.WriteNumberValue(seconds);
+        }
+        else
+        {
+            writer.WriteStringValue("input");
+        }
+    }
+}
+
 internal sealed class IntOrVarConverter : JsonConverter<IntOrVar>
 {
     public override IntOrVar Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
