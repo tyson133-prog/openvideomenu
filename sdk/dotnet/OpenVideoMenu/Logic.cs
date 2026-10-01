@@ -113,6 +113,7 @@ public static class PlayerState
         "seek", "chapterJump", "titleJump", "stop", "back", "previous", "next", "fastForward", "rewind", "pause",
         "menuKey", "titleKey", "audioMenuKey", "subtitleMenuKey", "angleMenuKey", "chapterMenuKey",
         "resume", "buttons", "endHold", "audioChange", "subtitleChange", "angleChange", "karaokeChange", "displayModeChange",
+        "skipIntro",
     ];
 
     public static readonly string[] TestOps = ["eq", "ne", "lt", "le", "gt", "ge", "has"];

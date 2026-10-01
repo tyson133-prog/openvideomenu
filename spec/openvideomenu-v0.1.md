@@ -192,7 +192,7 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 - **`image`** remains the poster: shown while the video loads, and by players without motion support. Those players still work, because they simply show the still.
 - **`buttonsAt`** is the number of seconds into the intro before buttons appear and respond. It's measured on the background video's clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.
 - **Intros play only on a fresh entry:** at start, or via `goto`. Returning to a menu with `back` or at the end of playback starts the background at `loopStart` with buttons ready, so the intro is not replayed.
-- **Any key or click during an intro skips it.** Players jump the background to `buttonsAt` and show the buttons. That input does nothing else. Pointer *hover* does not skip. Players MUST NOT make intros unskippable.
+- **Any key or click during an intro skips it.** Players jump the background to `buttonsAt` and show the buttons. That input does nothing else. Pointer *hover* does not skip. Players MUST NOT make intros unskippable, except a player that honours a `skipIntro` prohibition (§6.6).
 - **Keep menu assets small** (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC (in MP4/M4A) or Opus for audio. MP4/M4A files SHOULD be written with the index at the start ("faststart"), because some players, such as Android WebView, stall on files that must be read from the end first.
 
 ### 5.2 Menu timeouts (Level 2)
@@ -278,7 +278,7 @@ Every action is an object with a `type`:
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the playback for `resume`: the media, the position, and what was to follow. That is the *resume point* (§6.5). Completing that media's playback forgets it.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back (and, at Level 2, the menu keys of §6.6) is handled by the menu logic, except while an overlay's buttons show (§6.3).
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
-7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu. Hover is ignored.
+7. **Transitions:** a `goto` with `transition` pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). **Any key or click skips the transition** straight to the menu (unless the player honours a `skipIntro` prohibition, §6.6). Hover is ignored.
 
 ### 6.1 Variables and logic (Level 2)
 
@@ -386,7 +386,7 @@ On a DVD, the remote's Return key doesn't retrace every menu you visited: each m
 - **Page turns** (next/previous page of the same thing) SHOULD use `history: "replace"`, so they add no Back steps even in menus without `back`.
 - **Without `back`**, Back returns through history as in §6 (at the top, the player MAY exit).
 - **Back on `rootMenu` leaves the title** (the player exits), unless that menu has its own `back`. This holds however the viewer got there: a "return to the main menu" button is a `goto` and adds history, but the main menu is still the top, and retracing into a submenu from it surprises viewers.
-- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A DVD may leave Return inactive; a TV app must not.)
+- **Back never traps the viewer.** If a menu's `back` leaves the viewer on the same menu, players MUST return through history instead (or leave, on `rootMenu`). (A DVD may leave Return inactive; a TV app must not, unless it honours a `back` prohibition, §6.6.)
 - **Importers choose per menu** to match the source as closely as possible: a DVD's Go Up target, the menu's own on-screen Back button, or history (see the [DVD profile](profiles/dvd.md)).
 
 ### 6.3 During playback (Level 2)
@@ -553,11 +553,16 @@ film.
   `chapterJump`, `titleJump`, `stop`, `back`, `previous`, `next`, `fastForward`, `rewind`, `pause`,
   `menuKey`, `titleKey`, `audioMenuKey`, `subtitleMenuKey`, `angleMenuKey`, `chapterMenuKey`, `resume`,
   `buttons`, `endHold`, `audioChange`, `subtitleChange`, `angleChange`, `karaokeChange`,
-  `displayModeChange` (a DVD's user operations). Other values are allowed.
+  `displayModeChange` (a DVD's user operations), and `skipIntro` (skipping a menu's intro or a
+  transition). Other values are allowed.
 - **Prohibitions are information, never a requirement.** The viewer can skip anything, any time, unless
   the player chooses otherwise: a player MAY honour any of them and MUST NOT be required to. Recording a
   prohibition never obliges a player to enforce it. The play effect lists the prohibitions of what plays
   (the media's and the item's) for players that do honour them.
+- **Enforcement belongs to players, never to the spec.** Where this document gives the viewer a way out
+  (skipping intros and transitions, §5.1 and §6; Back never trapping, §6.2; ending holds, §6.3), a
+  player that chooses to honour the matching prohibition MAY withhold it and still conforms. The
+  conformance cases describe the default, a player that honours none.
 
 ### 6.7 Time: the navigation timer and counters (Level 2)
 

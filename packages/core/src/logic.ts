@@ -38,6 +38,7 @@ export const PROHIBITIONS = [
   "seek", "chapterJump", "titleJump", "stop", "back", "previous", "next", "fastForward", "rewind", "pause",
   "menuKey", "titleKey", "audioMenuKey", "subtitleMenuKey", "angleMenuKey", "chapterMenuKey",
   "resume", "buttons", "endHold", "audioChange", "subtitleChange", "angleChange", "karaokeChange", "displayModeChange",
+  "skipIntro",
 ] as const;
 
 export const TEST_OPS = ["eq", "ne", "lt", "le", "gt", "ge", "has"] as const;

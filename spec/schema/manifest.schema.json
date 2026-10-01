@@ -1385,7 +1385,7 @@
       }
     },
     "prohibits": {
-      "description": "Level 2: what the source forbids, as information; players decide whether to honour it (spec 6.6). Known values: seek, chapterJump, titleJump, stop, back, previous, next, fastForward, rewind, pause, menuKey, titleKey, audioMenuKey, subtitleMenuKey, angleMenuKey, chapterMenuKey, resume, buttons, endHold, audioChange, subtitleChange, angleChange, karaokeChange, displayModeChange.",
+      "description": "Level 2: what the source forbids, as information; players decide whether to honour it (spec 6.6). Known values: seek, chapterJump, titleJump, stop, back, previous, next, fastForward, rewind, pause, menuKey, titleKey, audioMenuKey, subtitleMenuKey, angleMenuKey, chapterMenuKey, resume, buttons, endHold, audioChange, subtitleChange, angleChange, karaokeChange, displayModeChange, skipIntro.",
       "type": "array",
       "items": {
         "type": "string",
