@@ -289,6 +289,9 @@ export class MenuPlayer {
         break;
       case "exit":
         if (this.options.onExit) this.options.onExit();
+        // Without a host to close, an exit action (Level 2) starts the title again, as a disc player
+        // goes back to the start of the disc; Back at the top menu stays there.
+        else if (this.state.mode === "idle") setTimeout(() => this.dispatch({ type: "start" }), 0);
         else this.toast("Top menu");
         break;
       case "transition":

@@ -33,7 +33,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   canvas: ["width", "height", "aspect"],
   background: ["image", "color", "video", "audio"],
   loopingMedia: ["src", "loopStart"],
-  button: ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action"],
+  button: ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action", "altRects"],
   state: ["image", "rect", "textColor", "fill"],
   fallbackGroup: ["label", "hidden", "items"],
   fallbackItem: ["label", "action"],
@@ -41,7 +41,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
   play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"],
-  playAll: ["type", "items", "after"],
+  playAll: ["type", "items", "after", "order", "count"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
   do: ["type", "steps"],
@@ -55,6 +55,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   timer: ["type", "after", "action"],
   cancelTimer: ["type"],
   requestParental: ["type", "level", "then", "else"],
+  exit: ["type"],
   clearResume: ["type"],
 };
 
@@ -571,6 +572,14 @@ class Validator {
       else own.add(b.id);
 
       this.rect(b.rect, `${bp}/rect`, canvas);
+      if (b.altRects !== undefined) {
+        if (!isObject(b.altRects)) this.error(`${bp}/altRects`, "Must be {letterbox?, panscan?}.");
+        else {
+          this.unknownKeys(b.altRects, ["letterbox", "panscan"], `${bp}/altRects`);
+          for (const key of ["letterbox", "panscan"] as const)
+            if (b.altRects[key] !== undefined) this.rect(b.altRects[key], `${bp}/altRects/${key}`, canvas);
+        }
+      }
       for (const key of ["label", "a11yLabel"] as const)
         if (b[key] !== undefined && typeof b[key] !== "string") this.error(`${bp}/${key}`, "Must be a string.");
       for (const key of ["showLabel", "autoAction"] as const)
@@ -823,6 +832,12 @@ class Validator {
             if (!isObject(item)) this.error(`${path}/items/${i}`, "Must be {media, chapter?, start?}.");
             else this.playItem(item, `${path}/items/${i}`, mediaIds, menus);
           });
+        if (value.order !== undefined && !["inOrder", "shuffle", "random"].includes(value.order as string))
+          this.error(`${path}/order`, 'Must be "inOrder", "shuffle" or "random".');
+        if (value.count !== undefined) {
+          if (!(Number.isInteger(value.count) && (value.count as number) >= 1)) this.error(`${path}/count`, "Must be a whole number of items, at least 1.");
+          else if (value.order !== "random") this.error(`${path}/count`, 'Only with order "random".');
+        }
         break;
       case "set": {
         const name = value.var;
@@ -955,7 +970,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek" || t === "timer" || t === "cancelTimer" || t === "requestParental")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek" || t === "timer" || t === "cancelTimer" || t === "requestParental" || t === "exit")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

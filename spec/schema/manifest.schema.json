@@ -428,6 +428,18 @@
         },
         "action": {
           "$ref": "#/$defs/action"
+        },
+        "altRects": {
+          "description": "Level 2, information: where the button sits when the source shows the canvas letterboxed or pan-scanned (a disc's other button groups).",
+          "type": "object",
+          "properties": {
+            "letterbox": {
+              "$ref": "#/$defs/rect"
+            },
+            "panscan": {
+              "$ref": "#/$defs/rect"
+            }
+          }
         }
       },
       "if": {
@@ -656,7 +668,8 @@
                 "clearResume",
                 "timer",
                 "cancelTimer",
-                "requestParental"
+                "requestParental",
+                "exit"
               ]
             }
           }
@@ -686,7 +699,8 @@
             "seek",
             "timer",
             "cancelTimer",
-            "requestParental"
+            "requestParental",
+            "exit"
           ]
         }
       },
@@ -786,6 +800,18 @@
               },
               "after": {
                 "$ref": "#/$defs/afterAction"
+              },
+              "order": {
+                "description": "Level 2: inOrder (default), shuffle (every item once, random order) or random (count items picked at random).",
+                "enum": [
+                  "inOrder",
+                  "shuffle",
+                  "random"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
               }
             }
           }
@@ -1061,6 +1087,18 @@
                 "$ref": "#/$defs/action"
               }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "exit"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: stop and leave the title (a disc's Exit)."
           }
         }
       ]

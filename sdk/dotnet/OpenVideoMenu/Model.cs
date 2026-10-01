@@ -395,6 +395,17 @@ public sealed class LoopingMedia
 }
 
 /// <summary>[x, y, width, height] in canvas pixels.</summary>
+/// <summary>Level 2, information: a button's place in the source's letterbox and pan-scan layouts.</summary>
+public sealed class AltRects
+{
+    public Rect? Letterbox { get; set; }
+
+    public Rect? Panscan { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+}
+
 [JsonConverter(typeof(RectConverter))]
 public readonly record struct Rect(double X, double Y, double Width, double Height)
 {
@@ -434,6 +445,12 @@ public sealed class Button
     public bool? AutoAction { get; set; }
 
     public MenuAction Action { get; set; } = new BackAction();
+
+    /// <summary>
+    /// Level 2, information: where the button sits when the source shows the canvas letterboxed or
+    /// pan-scanned (a disc's other button groups for a widescreen menu on a 4:3 TV).
+    /// </summary>
+    public AltRects? AltRects { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }

@@ -169,6 +169,7 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 | `states` | no | `normal`, `selected` and `activated`, each `{ image?, rect?, textColor?, fill? }`. |
 | `nav` | no | `{ up?, down?, left?, right? }`: button ids in the same menu. |
 | `autoAction` | no | If true, the button activates as soon as it is selected (DVD auto-action). |
+| `altRects` | no | *(Level 2, information)* `{ letterbox?, panscan? }`: where the button sits when the source shows the canvas letterboxed or pan-scanned (a disc's other button groups for a widescreen menu on a 4:3 TV). Players show the whole canvas at its aspect (§5), so `rect` is what they use; these keep the source's layouts. |
 
 **How states are drawn:**
 - The state's `image` is drawn over `rect`, or over the state's own `rect` if it has one. PNG with alpha is recommended.
@@ -253,7 +254,7 @@ Every action is an object with a `type`:
 | `type` | Fields | Behaviour |
 |---|---|---|
 | `play` | `media`, `chapter?`, `start?`, `end?`, `after?`, `cues?` | Play one media item. `chapter` (1-based) wins over `start` (seconds). *(Level 2)* `end` stops there as if the item ended; `cues` (§6.3). |
-| `playAll` | `items[]`, `after?` | Play `{ media, chapter?, start? }` items in order. |
+| `playAll` | `items[]`, `after?`, `order?`, `count?` | Play `{ media, chapter?, start? }` items in order. *(Level 2)* `order: "shuffle"` plays every item once in a random order; `"random"` plays `count` items (default: as many as there are), each picked at random (a disc's random and shuffle programs). Both draw from the seeded generator (§6.1). |
 | `goto` | `menu`, `button?`, `transition?`, `history?` | Open a menu, focusing `button` or its `defaultButton`. `transition` is a clip (path) played first, full screen. `history: "replace"` doesn't add the current menu to Back's history, for page turns (§6.2). |
 | `back` | — | Return to the previous menu in the history. At the top of the history, the player MAY exit. |
 | `activate` | `button` | Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu's `back` (§6.2). |
@@ -267,6 +268,7 @@ Every action is an object with a `type`:
 | `timer` | `after`, `action` | *(Level 2)* Start the navigation timer (§6.7). |
 | `cancelTimer` | — | *(Level 2)* Stop the navigation timer (§6.7). |
 | `requestParental` | `level`, `then`, `else?` | *(Level 2)* Ask the player to allow a parental level for now (§6.8). |
+| `exit` | — | *(Level 2)* Leave the title, from a menu or during playback, as the player's own Stop would (a disc's Exit). The player closes the title; one that can't starts it again. |
 | `resume` | `otherwise?` | Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a `playAll`, its `after`). When there's nothing to resume, run `otherwise` instead, as if it were the action itself (same history rules); without `otherwise`, nothing happens. `otherwise` is any action allowed where the `resume` is, but not another `resume`. |
 
 **Navigation semantics** (normative; the conformance suite checks them):
@@ -302,6 +304,10 @@ their values across menus and playback until it starts again. Names MUST NOT sta
 
 **Player state** is read as `@` variables. Players report what they know when they start (and when it
 changes, e.g. the viewer picks another soundtrack during playback); anything unknown reads as its default.
+Players SHOULD let the viewer choose the preferred languages in their settings, as a DVD player's setup
+does, and report them as `@audioLanguage`, `@subtitleLanguage` and `@menuLanguage`. A change reaches
+the logic as soon as it is reported; menus chosen once, at `firstPlay`, follow it the next time the
+title starts.
 
 | Variable | Type | Default | Meaning |
 |---|---|---|---|
@@ -318,6 +324,7 @@ changes, e.g. the viewer picks another soundtrack during playback); anything unk
 | `@aspect` | text | `"16:9"` | The TV's shape: `"16:9"` or `"4:3"`. |
 | `@resumeMedia` | text | `""` | Media id of the resume point (§6.5); `""` when there is none. |
 | `@navTimer` | integer | 0 | Whole seconds left on the navigation timer (§6.7); 0 when none runs. |
+| `@karaoke` | integer | 0 | Karaoke channels to mix in, as bits (a disc's SPRM 11). Writable. Players with karaoke audio MAY apply it; others keep it as a value. |
 
 **Values** are an integer, text, or `{"var": name}` (the current value of a variable or player state).
 

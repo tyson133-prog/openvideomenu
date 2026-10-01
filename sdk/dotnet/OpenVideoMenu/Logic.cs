@@ -101,6 +101,7 @@ public static class PlayerState
         ["@aspect"] = new(true, false, "16:9"),
         ["@resumeMedia"] = new(true, false, ""),
         ["@navTimer"] = new(false, false, 0),
+        ["@karaoke"] = new(false, true, 0),
     };
 
     /// <summary>Level 2: the menu keys a keys table may map (spec §6.6).</summary>

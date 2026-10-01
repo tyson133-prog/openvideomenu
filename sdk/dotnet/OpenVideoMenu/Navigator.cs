@@ -1037,7 +1037,16 @@ public static class Navigator
                     StartPlayback(manifest, s, [p.ToItem()], p.After, effects, cueAt);
                     break;
                 case PlayAllAction pa:
-                    StartPlayback(manifest, s, pa.Items, pa.After, effects, cueAt);
+                    StartPlayback(manifest, s, PlayOrder(s, pa), pa.After, effects, cueAt);
+                    break;
+                case ExitAction:
+                    // Level 2: leave the title, from a menu or during playback (a disc's Exit).
+                    s.Playing = null;
+                    s.Overlay = null;
+                    s.Mode = NavMode.Idle;
+                    s.Menu = null;
+                    s.Focus = null;
+                    effects.Add(new Effect.Exit());
                     break;
                 case ResumeAction resume:
                     if (s.LastStop is { } stop)
@@ -1189,6 +1198,41 @@ public static class Navigator
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Level 2: the items a playAll plays: in order, every one once in a shuffled order, or Count picked
+    /// at random (a disc's PGC playback modes), drawn from the seeded generator so every navigator agrees.
+    /// </summary>
+    private static List<PlayItem> PlayOrder(Working s, PlayAllAction playAll)
+    {
+        var items = playAll.Items;
+        var seed = s.Seed;
+        List<PlayItem> order;
+        if (playAll.Order == "shuffle")
+        {
+            order = [.. items];
+            for (var i = order.Count - 1; i > 0; i--)
+            {
+                var j = Logic.NextRandom(ref seed, i + 1) - 1;
+                (order[i], order[j]) = (order[j], order[i]);
+            }
+        }
+        else if (playAll.Order == "random")
+        {
+            order = [];
+            for (var n = 0; n < (playAll.Count ?? items.Count); n++)
+            {
+                order.Add(items[Logic.NextRandom(ref seed, items.Count) - 1]);
+            }
+        }
+        else
+        {
+            order = items;
+        }
+
+        s.Seed = seed;
+        return order;
     }
 
     /// <summary><paramref name="cueAt"/>: started by a cue during playback, which it interrupts and returns to (Level 2).</summary>

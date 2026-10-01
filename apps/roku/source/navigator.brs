@@ -597,7 +597,15 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "play"
         msNavStartPlayback(manifest, s, [action], action["after"], effects)
     else if t = "playAll"
-        msNavStartPlayback(manifest, s, action["items"], action["after"], effects)
+        msNavStartPlayback(manifest, s, msNavPlayOrder(s, action), action["after"], effects)
+    else if t = "exit"
+        ' Level 2: leave the title, from a menu or during playback (a disc's Exit).
+        s.playing = invalid
+        s.overlay = invalid
+        s.mode = "idle"
+        s.menu = invalid
+        s.focus = invalid
+        effects.push({ type: "exit" })
     else if t = "resume"
         if s.lastStop <> invalid
             ' The stopped playback continues: the item from where it stopped (with the tracks as they
@@ -721,6 +729,31 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         if named <> invalid then return named[action["action"]]
     end if
     return invalid
+end function
+
+' Level 2: the items a playAll plays: in order, every one once in a shuffled order, or count picked at
+' random (a disc's PGC playback modes), drawn from the seeded generator so every navigator agrees.
+function msNavPlayOrder(s as object, action as object) as object
+    items = action["items"]
+    if action["order"] = "shuffle"
+        order = msCopyArray(items)
+        i = order.Count() - 1
+        while i > 0
+            j = msNavNextRandom(s, i + 1) - 1
+            swap = order[i]
+            order[i] = order[j]
+            order[j] = swap
+            i = i - 1
+        end while
+        return order
+    else if action["order"] = "random"
+        order = []
+        for n = 1 to msOr(action["count"], items.Count())
+            order.push(items[msNavNextRandom(s, items.Count()) - 1])
+        end for
+        return order
+    end if
+    return items
 end function
 
 ' Started by a cue during playback (s.cueAt set): interrupts the current playback, which continues
@@ -978,7 +1011,7 @@ end function
 
 ' What an unset player-state variable reads as.
 function msNavPlayerDefault(name as string) as dynamic
-    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "", "@navTimer": 0 }
+    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "", "@navTimer": 0, "@karaoke": 0 }
     if defaults.DoesExist(name) then return defaults[name]
     return 0
 end function

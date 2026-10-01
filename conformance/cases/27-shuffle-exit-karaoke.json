@@ -1,0 +1,201 @@
+{
+  "description": "Smaller disc features: a playAll in shuffled order (every item once) or random order (count items picked at random), both drawn from the seeded generator; a writable @karaoke (a disc's karaoke mixing bits, which players may apply); exit, which leaves the title from a menu or from a cue during playback (a disc's Exit); and altRects, a button's place in the source's letterbox and pan-scan layouts, which is information for players.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": {
+      "name": "Odds and Ends"
+    },
+    "media": {
+      "s1": {
+        "ref": "Song 1.mkv"
+      },
+      "s2": {
+        "ref": "Song 2.mkv"
+      },
+      "s3": {
+        "ref": "Song 3.mkv"
+      },
+      "s4": {
+        "ref": "Song 4.mkv"
+      },
+      "film": {
+        "ref": "Film.mkv",
+        "kind": "feature",
+        "cues": [
+          {
+            "at": 30,
+            "action": {
+              "type": "exit"
+            }
+          }
+        ]
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "16:9"
+        },
+        "buttons": [
+          {
+            "id": "shuffle",
+            "rect": [
+              100,
+              40,
+              200,
+              40
+            ],
+            "altRects": {
+              "letterbox": [
+                100,
+                70,
+                200,
+                30
+              ],
+              "panscan": [
+                40,
+                40,
+                200,
+                40
+              ]
+            },
+            "action": {
+              "type": "playAll",
+              "order": "shuffle",
+              "items": [
+                {
+                  "media": "s1"
+                },
+                {
+                  "media": "s2"
+                },
+                {
+                  "media": "s3"
+                },
+                {
+                  "media": "s4"
+                }
+              ]
+            }
+          },
+          {
+            "id": "random",
+            "rect": [
+              100,
+              90,
+              200,
+              40
+            ],
+            "action": {
+              "type": "playAll",
+              "order": "random",
+              "count": 3,
+              "items": [
+                {
+                  "media": "s1"
+                },
+                {
+                  "media": "s2"
+                },
+                {
+                  "media": "s3"
+                },
+                {
+                  "media": "s4"
+                }
+              ]
+            }
+          },
+          {
+            "id": "karaoke",
+            "rect": [
+              100,
+              140,
+              200,
+              40
+            ],
+            "action": {
+              "type": "set",
+              "var": "@karaoke",
+              "value": 3,
+              "then": {
+                "type": "if",
+                "test": {
+                  "var": "@karaoke",
+                  "has": 2
+                },
+                "then": {
+                  "type": "play",
+                  "media": "s1"
+                }
+              }
+            }
+          },
+          {
+            "id": "film",
+            "rect": [
+              100,
+              190,
+              200,
+              40
+            ],
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          },
+          {
+            "id": "quit",
+            "rect": [
+              100,
+              240,
+              200,
+              40
+            ],
+            "action": {
+              "type": "exit"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Songs",
+        "items": [
+          {
+            "label": "Song 1",
+            "action": {
+              "type": "play",
+              "media": "s1"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event": {"type": "start", "seed": 1}, "expect": {"mode": "menu", "menu": "main", "effects": []}},
+    {"event": {"type": "activate", "button": "shuffle"}, "expect": {"mode": "playing", "effects": [{"type": "activated", "menu": "main", "button": "shuffle"}, {"type": "play", "media": "s2", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "playing", "effects": [{"type": "play", "media": "s4", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "playing", "effects": [{"type": "play", "media": "s1", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "playing", "effects": [{"type": "play", "media": "s3", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "menu", "menu": "main", "effects": []}},
+    {"event": {"type": "activate", "button": "random"}, "expect": {"mode": "playing", "effects": [{"type": "activated", "menu": "main", "button": "random"}, {"type": "play", "media": "s2", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "playing", "effects": [{"type": "play", "media": "s3", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "playing", "effects": [{"type": "play", "media": "s4", "start": 0}]}},
+    {"event": {"type": "ended"}, "expect": {"mode": "menu", "menu": "main", "effects": []}},
+    {"event": {"type": "activate", "button": "karaoke"}, "expect": {"mode": "playing", "effects": [{"type": "activated", "menu": "main", "button": "karaoke"}, {"type": "play", "media": "s1", "start": 0}]}},
+    {"event": {"type": "stopped", "position": 3}, "expect": {"mode": "menu", "menu": "main", "effects": []}},
+    {"event": {"type": "activate", "button": "film"}, "expect": {"mode": "playing", "effects": [{"type": "activated", "menu": "main", "button": "film"}, {"type": "play", "media": "film", "start": 0, "cues": [{"id": "media/0", "at": 30}]}]}},
+    {"event": {"type": "cue", "id": "media/0"}, "expect": {"mode": "idle", "effects": [{"type": "exit"}]}},
+    {"event": {"type": "start"}, "expect": {"mode": "menu", "menu": "main", "effects": []}},
+    {"event": {"type": "activate", "button": "quit"}, "expect": {"mode": "idle", "effects": [{"type": "activated", "menu": "main", "button": "quit"}, {"type": "exit"}]}}
+  ]
+}

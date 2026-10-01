@@ -6,7 +6,7 @@
  * can be checked against the same cases.
  */
 import type { Action, Button, ButtonSet, Cue, Direction, Hold, Manifest, Menu, MenuKey, Overlay, PlayItem, Scalar } from "./types.js";
-import { applyOp, evalTest, MENU_KEYS, readVar, valueOf } from "./logic.js";
+import { applyOp, evalTest, MENU_KEYS, nextRandom, readVar, valueOf } from "./logic.js";
 
 /** A remote key: the arrows, Enter and Back, and (Level 2) the menu keys (spec §6.6). */
 export type Key = Direction | "enter" | "back" | MenuKey;
@@ -657,7 +657,15 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         startPlayback(manifest, s, [action], action.after, effects, opts.cueAt);
         break;
       case "playAll":
-        startPlayback(manifest, s, action.items, action.after, effects, opts.cueAt);
+        startPlayback(manifest, s, playOrder(s, action), action.after, effects, opts.cueAt);
+        break;
+      case "exit":
+        // Level 2: leave the title, from a menu or during playback (a disc's Exit).
+        s.playing = undefined;
+        s.overlay = undefined;
+        s.mode = "idle";
+        s.menu = s.focus = undefined;
+        effects.push({ type: "exit" });
         break;
       case "resume":
         if (s.lastStop) {
@@ -763,6 +771,24 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         break;
     }
   }
+}
+
+/**
+ * Level 2: the items a playAll plays: in order, every one once in a shuffled order, or `count` picked at
+ * random (a disc's PGC playback modes), drawn from the seeded generator so every navigator agrees.
+ */
+function playOrder(s: NavState, action: Extract<Action, { type: "playAll" }>): PlayItem[] {
+  const items = action.items;
+  if (action.order === "shuffle") {
+    const shuffled = [...items];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = nextRandom(s, i + 1) - 1;
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    return shuffled;
+  }
+  if (action.order === "random") return Array.from({ length: action.count ?? items.length }, () => items[nextRandom(s, items.length) - 1]!);
+  return items;
 }
 
 /** `cueAt`: started by a cue during playback, which it interrupts and returns to (Level 2). */

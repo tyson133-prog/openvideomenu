@@ -22,7 +22,7 @@ importer's choice.
 | Button neighbours (up/down/left/right) | `nav`, using the manifest ids of those button numbers. Drop self-references. |
 | Auto-action button | `autoAction: true` |
 | Initial button (highlighted on entry) | `defaultButton` |
-| Button groups (4:3 / 16:9 / letterbox / pan-scan) | Use the group that matches `canvas.aspect`. Prefer widescreen when there is a choice. |
+| Button groups (4:3 / 16:9 / letterbox / pan-scan) | `rect` from the group that matches `canvas.aspect` (widescreen when there is a choice); the letterbox and pan-scan groups of a widescreen menu go in the button's `altRects`. |
 | Highlight subpicture + colour/contrast per state | Render per-button PNGs with alpha: the `selected` colours → `states.selected.image`, the `action` colours → `states.activated.image`. A hard-edged look is authentic. Don't smooth it. |
 | Button command resolving to title/chapter | `play { media, chapter }`, where `media` points to the file that holds that title |
 | Button command resolving to a menu | `goto { menu, button? }` |
@@ -55,6 +55,10 @@ importer's choice.
 | Shared programs: PGCs many links lead into (their pre-commands), menu-domain dispatchers, title post-commands, loops (a Goto back to an earlier line) | Named `actions`, each written once and reached with `run`. A loop is a named action that runs itself in tail position. Keeps the export about the size of the disc's own programs. |
 | The remote's Menu and Title keys, and menu calls (MenuCall: root, title, audio, subpicture, angle, PTT) | `keys`: `menu`, `title`, `audioMenu`, `subtitleMenu`, `angleMenu`, `chapterMenu`. During a title, the title set's menu of that type (its VTSM entry), on the media; in menus, on the manifest (VMG title menu) and per title set's menus. |
 | User operation prohibitions (UOPs, on PGCs and in navigation packets) | `prohibits` on the menu, media or play item: UOP 0/5 → `seek`, 1 → `chapterJump`, 2 → `titleJump`, 3 → `stop`, 4 → `back`, 6 → `previous`, 7 → `next`, 8 → `fastForward`, 9 → `rewind`, 10 → `titleKey`, 11 → `menuKey`, 12 → `subtitleMenuKey`, 13 → `audioMenuKey`, 14 → `angleMenuKey`, 15 → `chapterMenuKey`, 16 → `resume`, 17 → `buttons`, 18 → `endHold`, 19 → `pause`, 20 → `audioChange`, 21 → `subtitleChange`, 22 → `angleChange`, 23 → `karaokeChange`, 24 → `displayModeChange`. Information only: players decide. |
+| Exit | `exit`. |
+| PGC playback mode: random or shuffle (with a program count) | `playAll` with `order: "random"` and `count`, or `order: "shuffle"`. |
+| Karaoke mixing (SetAMXMD, SPRM 11) | `set` on `@karaoke`. |
+| Menu language (SPRM 0, the player's setup) | `@menuLanguage`, which the player reports from its settings; menus per language as below. |
 | SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
 | Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
 | Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |

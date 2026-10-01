@@ -74,6 +74,14 @@ public sealed class PlayAllAction : MenuAction
     public List<PlayItem> Items { get; set; } = [];
 
     public MenuAction? After { get; set; }
+
+    /// <summary>
+    /// Level 2: "shuffle" plays every item once in a random order; "random" plays <see cref="Count"/>
+    /// items (default: as many as there are) each picked at random. Default "inOrder".
+    /// </summary>
+    public string? Order { get; set; }
+
+    public int? Count { get; set; }
 }
 
 /// <summary>Open a menu, optionally with a button focused and a transition clip first.</summary>
@@ -220,6 +228,12 @@ public sealed class RequestParentalAction : MenuAction
     public MenuAction Then { get; set; } = new BackAction();
 
     public MenuAction? Else { get; set; }
+}
+
+/// <summary>Level 2: stop and leave the title, as the player's own Stop would (a disc's Exit).</summary>
+public sealed class ExitAction : MenuAction
+{
+    public override string Type => "exit";
 }
 
 /// <summary>Level 2: forget the resume point.</summary>

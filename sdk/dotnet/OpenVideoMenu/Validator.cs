@@ -28,7 +28,7 @@ internal sealed class Validator
         ["canvas"] = ["width", "height", "aspect"],
         ["background"] = ["image", "color", "video", "audio"],
         ["loopingMedia"] = ["src", "loopStart"],
-        ["button"] = ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action"],
+        ["button"] = ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action", "altRects"],
         ["state"] = ["image", "rect", "textColor", "fill"],
         ["fallbackGroup"] = ["label", "hidden", "items"],
         ["fallbackItem"] = ["label", "action"],
@@ -38,7 +38,7 @@ internal sealed class Validator
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
         ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"]),
-        ("playAll", ["type", "items", "after"]),
+        ("playAll", ["type", "items", "after", "order", "count"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
         ("do", ["type", "steps"]),
@@ -52,6 +52,7 @@ internal sealed class Validator
         ("timer", ["type", "after", "action"]),
         ("cancelTimer", ["type"]),
         ("requestParental", ["type", "level", "then", "else"]),
+        ("exit", ["type"]),
         ("clearResume", ["type"]),
     ];
 
@@ -1114,6 +1115,24 @@ internal sealed class Validator
             }
 
             Rect(b["rect"], $"{bp}/rect", canvas);
+            if (b["altRects"] is { } altRects)
+            {
+                if (!Obj.TryFrom(altRects, out var alt))
+                {
+                    Error($"{bp}/altRects", "Must be {letterbox?, panscan?}.");
+                }
+                else
+                {
+                    UnknownKeys(alt, ["letterbox", "panscan"], $"{bp}/altRects");
+                    foreach (var key in new[] { "letterbox", "panscan" })
+                    {
+                        if (alt[key] is { } r)
+                        {
+                            Rect(r, $"{bp}/altRects/{key}", canvas);
+                        }
+                    }
+                }
+            }
             foreach (var key in new[] { "label", "a11yLabel" })
             {
                 if (b[key] is { } s && s.ValueKind != JsonValueKind.String)
@@ -1576,6 +1595,24 @@ internal sealed class Validator
                     }
                 }
 
+                var order = action["order"];
+                if (order is not null && !(order.Value.ValueKind == JsonValueKind.String && order.Value.GetString() is "inOrder" or "shuffle" or "random"))
+                {
+                    Error($"{path}/order", "Must be \"inOrder\", \"shuffle\" or \"random\".");
+                }
+
+                if (action["count"] is { } itemCount)
+                {
+                    if (!(IsInteger(itemCount) && itemCount.GetDouble() >= 1))
+                    {
+                        Error($"{path}/count", "Must be a whole number of items, at least 1.");
+                    }
+                    else if (!(order is { ValueKind: JsonValueKind.String } o && o.GetString() == "random"))
+                    {
+                        Error($"{path}/count", "Only with order \"random\".");
+                    }
+                }
+
                 break;
             case "set":
             {
@@ -1875,7 +1912,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek" or "timer" or "cancelTimer" or "requestParental")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek" or "timer" or "cancelTimer" or "requestParental" or "exit")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

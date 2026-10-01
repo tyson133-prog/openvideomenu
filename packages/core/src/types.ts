@@ -190,6 +190,11 @@ export interface Button {
   /** Activate as soon as the button is selected (DVD auto-action buttons). */
   autoAction?: boolean;
   action: Action;
+  /**
+   * Level 2, information (spec §5): where the button sits when the source shows the canvas another way,
+   * like a disc's letterbox and pan-scan button groups for a widescreen menu on a 4:3 TV.
+   */
+  altRects?: { letterbox?: Rect; panscan?: Rect };
 }
 
 export interface Menu {
@@ -318,7 +323,17 @@ export interface PlayItem {
 
 export type Action =
   | ({ type: "play"; after?: Action } & PlayItem)
-  | { type: "playAll"; items: PlayItem[]; after?: Action }
+  | {
+      type: "playAll";
+      items: PlayItem[];
+      after?: Action;
+      /**
+       * Level 2 (spec §6): "shuffle" plays every item once in a random order; "random" plays `count`
+       * items (default: as many as there are) each picked at random. Default: in order.
+       */
+      order?: "inOrder" | "shuffle" | "random";
+      count?: number;
+    }
   | {
       type: "goto";
       menu: string;
@@ -364,6 +379,8 @@ export type Action =
   | { type: "timer"; after: number; action: Action }
   /** Level 2: stop the navigation timer. */
   | { type: "cancelTimer" }
+  /** Level 2: stop and leave the title, as the player's own Stop would (a disc's Exit). */
+  | { type: "exit" }
   /**
    * Level 2: ask the player to allow parental level `level` for now (a disc's SetTmpPML): `then` runs if it
    * does (and @parentalLevel becomes `level`), `else` if not (spec §6.8).

@@ -1,0 +1,26 @@
+{
+  "description": "A playAll's order is inOrder, shuffle or random, and count (a whole number) goes only with random; altRects holds letterbox and panscan rects; exit can't be a fallback item.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/menus/main/buttons/0/action/order", "/menus/main/buttons/1/action/count", "/menus/main/buttons/2/action/count", "/menus/main/buttons/3/altRects/letterbox", "/fallback/0/items/1/action/type"],
+  "warnings": ["/menus/main/buttons/3/altRects/wide"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Odds and Ends" },
+    "media": { "a": { "ref": "a.mp4" }, "b": { "ref": "b.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "w", "rect": [0, 0, 10, 10], "action": { "type": "playAll", "order": "backwards", "items": [{ "media": "a" }, { "media": "b" }] } },
+          { "id": "x", "rect": [0, 20, 10, 10], "action": { "type": "playAll", "order": "shuffle", "count": 2, "items": [{ "media": "a" }, { "media": "b" }] } },
+          { "id": "y", "rect": [0, 40, 10, 10], "action": { "type": "playAll", "order": "random", "count": 0, "items": [{ "media": "a" }, { "media": "b" }] } },
+          { "id": "z", "rect": [0, 60, 10, 10], "altRects": { "letterbox": [0, 0], "wide": [0, 0, 1, 1] }, "action": { "type": "play", "media": "a" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "a" } }, { "label": "Quit", "action": { "type": "exit" } }] }]
+  }
+}

@@ -24,6 +24,7 @@ export const PLAYER_VARS: Record<string, { type: "number" | "string"; writable: 
   "@aspect": { type: "string", writable: false, default: "16:9" }, // the TV's shape: "16:9" or "4:3"
   "@resumeMedia": { type: "string", writable: false, default: "" }, // media id of the resume point ("" = none)
   "@navTimer": { type: "number", writable: false, default: 0 }, // seconds left on the navigation timer (0 = none)
+  "@karaoke": { type: "number", writable: true, default: 0 }, // karaoke channels mixed in (a disc's SPRM 11 bits)
 };
 
 /** Level 2: the menu keys a `keys` table may map (spec §6.6). */
