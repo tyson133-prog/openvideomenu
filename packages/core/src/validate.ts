@@ -18,7 +18,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -52,6 +52,8 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   run: ["type", "action"],
   saveResume: ["type", "media", "at", "chapter"],
   seek: ["type", "at", "chapter"],
+  timer: ["type", "after", "action"],
+  cancelTimer: ["type"],
   clearResume: ["type"],
 };
 
@@ -114,6 +116,13 @@ class Validator {
     if (data.source !== undefined) this.source(data.source);
 
     this.vars(data.vars);
+    if (data.counters !== undefined) {
+      if (!Array.isArray(data.counters)) this.error("/counters", "Must be a list of variable names.");
+      else
+        data.counters.forEach((name, i) => {
+          if (this.varTypes.get(name as string) !== "number") this.error(`/counters/${i}`, `No integer variable "${String(name)}" in /vars.`);
+        });
+    }
     if (data.resumePoint !== undefined && data.resumePoint !== "untilEnd" && data.resumePoint !== "untilUsed")
       this.error("/resumePoint", 'Must be "untilEnd" or "untilUsed".');
     this.collectActions(data.actions);
@@ -872,6 +881,13 @@ class Validator {
         else if (value.chapter !== undefined && !(Number.isInteger(value.chapter) && (value.chapter as number) >= 1))
           this.error(`${path}/chapter`, "Must be a chapter number (from 1).");
         break;
+      case "timer":
+        if (!(isFiniteNumber(value.after) && value.after > 0)) this.error(`${path}/after`, "Must be a positive number of seconds.");
+        // It runs wherever the viewer is when the time is up, playback included: as a cue's action.
+        this.cueDepth++;
+        this.action(value.action, `${path}/action`, mediaIds, menus);
+        this.cueDepth--;
+        break;
       case "activate":
         if (!ownButtons) this.error(`${path}/type`, `"activate" is only allowed in a menu's back, timeout or keys.`);
         else if (!isNonEmptyString(value.button) || !ownButtons.has(value.button))
@@ -932,7 +948,7 @@ class Validator {
         if (!isNonEmptyString(item.label)) this.error(`${ip}/label`, "Required.");
         this.action(item.action, `${ip}/action`, mediaIds, menus);
         const t = isObject(item.action) ? item.action.type : undefined;
-        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek")
+        if (t === "goto" || t === "back" || t === "resume" || t === "set" || t === "activate" || t === "if" || t === "do" || t === "run" || t === "saveResume" || t === "clearResume" || t === "seek" || t === "timer" || t === "cancelTimer")
           this.error(`${ip}/action/type`, `Fallback items must play something ("${String(t)}" needs a menu-capable player).`);
       });
       if (g.hidden !== true) visibleItems += g.items.length;

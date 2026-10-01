@@ -138,7 +138,13 @@ public sealed class ConformanceTests
     private static IEnumerable<string> Strings(JsonElement c, string name) =>
         c.TryGetProperty(name, out var list) ? list.EnumerateArray().Select(e => e.GetString()!) : [];
 
-    private static NavEvent Event(JsonElement e) => e.GetProperty("type").GetString() switch
+    private static NavEvent Event(JsonElement e)
+    {
+        var navEvent = EventBody(e);
+        return e.TryGetProperty("time", out var time) ? navEvent with { Time = time.GetDouble() } : navEvent;
+    }
+
+    private static NavEvent EventBody(JsonElement e) => e.GetProperty("type").GetString() switch
     {
         "start" => new NavEvent.Start(
             e.TryGetProperty("player", out var player) ? player.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.String ? new Scalar(p.Value.GetString()!) : new Scalar(p.Value.GetInt32())) : null,
@@ -154,6 +160,7 @@ public sealed class ConformanceTests
         "timeout" => new NavEvent.Timeout(e.GetProperty("menu").GetString()!),
         "cue" => new NavEvent.Cue(e.GetProperty("id").GetString()!),
         "cueEnd" => new NavEvent.CueEnd(e.GetProperty("id").GetString()!),
+        "navTimer" => new NavEvent.NavTimer(e.TryGetProperty("position", out var timerPosition) ? timerPosition.GetDouble() : null),
         "buttonSet" => new NavEvent.ButtonSetChanged(e.GetProperty("index").ValueKind == JsonValueKind.Null ? null : e.GetProperty("index").GetInt32()),
         var other => throw new InvalidDataException($"Unknown event {other}"),
     };
@@ -180,6 +187,8 @@ public sealed class ConformanceTests
             "startTimer" => new Effect.StartTimer(e.GetProperty("menu").GetString()!, e.GetProperty("after").GetDouble()),
             "budgetExceeded" => new Effect.BudgetExceeded(),
             "seek" => new Effect.Seek(e.GetProperty("position").GetDouble()),
+            "startNavTimer" => new Effect.StartNavTimer(e.GetProperty("after").GetDouble()),
+            "cancelNavTimer" => new Effect.CancelNavTimer(),
             "tracks" => new Effect.Tracks(e.GetProperty("at").GetDouble(), Int("audio"), Int("subtitle"), Int("angle")),
             var other => throw new InvalidDataException($"Unknown effect {other}"),
         };

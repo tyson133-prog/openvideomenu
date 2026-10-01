@@ -86,6 +86,14 @@
     },
     "keys": {
       "$ref": "#/$defs/menuKeys"
+    },
+    "counters": {
+      "description": "Level 2: integer variables of vars that count seconds by themselves, like a disc's registers in counter mode (spec 6.7).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
   "dependentRequired": {
@@ -645,7 +653,9 @@
                 "do",
                 "run",
                 "saveResume",
-                "clearResume"
+                "clearResume",
+                "timer",
+                "cancelTimer"
               ]
             }
           }
@@ -672,7 +682,9 @@
             "run",
             "saveResume",
             "clearResume",
-            "seek"
+            "seek",
+            "timer",
+            "cancelTimer"
           ]
         }
       },
@@ -981,6 +993,43 @@
                 ]
               }
             ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "timer"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: start the navigation timer: action runs after `after` seconds, wherever the viewer is (spec 6.7).",
+            "required": [
+              "after",
+              "action"
+            ],
+            "properties": {
+              "after": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "action": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cancelTimer"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: stop the navigation timer."
           }
         }
       ]

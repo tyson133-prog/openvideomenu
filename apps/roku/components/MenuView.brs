@@ -71,6 +71,8 @@ end function
 ' --- the navigator loop ------------------------------------------------------------------------
 
 sub stepWith(event as object)
+    ' Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    if event.time = invalid then event.time = UpTime(0)
     before = m.nav
     result = msNavStep(m.manifest, m.nav, event)
     m.nav = result.state
@@ -110,6 +112,9 @@ sub apply(effect as object)
         at = msOr(menu["buttonsAt"], 0)
         if m.videoRole = "background" then m.motion.seek = at
         drawButtons()
+    else if t = "startNavTimer" or t = "cancelNavTimer"
+        ' Level 2: the scene keeps the navigation timer, so it can say where playback is when it runs out.
+        m.top.navTimerRequest = effect
     else if t = "seek"
         ' Level 2: the scene moves the title (spec 6.3).
         m.top.seekRequest = effect.position
@@ -163,6 +168,13 @@ end function
 ' Level 2: the scene passes the Menu key (*) pressed during playback, with the title's position.
 sub onMenuKey()
     stepWith({ type: "press", key: "menu", position: m.top.menuKey })
+end sub
+
+' Level 2: the navigation timer ran out; the scene passes where playback is (-1 when nothing plays).
+sub onNavTimerFired()
+    event = { type: "navTimer" }
+    if m.top.navTimerFired >= 0 then event.position = m.top.navTimerFired
+    stepWith(event)
 end sub
 
 sub onPlaybackEnded()

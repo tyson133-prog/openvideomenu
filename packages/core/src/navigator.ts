@@ -11,7 +11,13 @@ import { applyOp, evalTest, MENU_KEYS, readVar, valueOf } from "./logic.js";
 /** A remote key: the arrows, Enter and Back, and (Level 2) the menu keys (spec §6.6). */
 export type Key = Direction | "enter" | "back" | MenuKey;
 
-export type NavEvent =
+/**
+ * What the player reports. Any event MAY carry `time`: the player's clock in seconds (any origin, never
+ * going back), which counters and the navigation timer read (Level 2, spec §6.7).
+ */
+export type NavEvent = NavEventBody & { time?: number };
+
+type NavEventBody =
   /**
    * Begin: run firstPlay, or open the root menu. Players pass what they know of the viewer's setup as
    * "@" player state (languages, region, …) and a random seed.
@@ -49,7 +55,12 @@ export type NavEvent =
    * Level 2: the menu's clock entered the window of one of its button sets (its index), or left them all
    * (null): those buttons show now (spec §5.3).
    */
-  | { type: "buttonSet"; index: number | null };
+  | { type: "buttonSet"; index: number | null }
+  /**
+   * Level 2: the navigation timer a "startNavTimer" effect asked for ran out. During playback, players
+   * pass the position, as with a menu key.
+   */
+  | { type: "navTimer"; position?: number };
 
 /** Level 2: a cue the host watches for during playback, from the play effect. */
 export type CueWatch = { id: string; at: number } | { id: string; from: number; to: number };
@@ -88,6 +99,13 @@ export type Effect =
    * [after] seconds, unless another startTimer replaces it or the viewer leaves that menu first.
    */
   | { type: "startTimer"; menu: string; after: number }
+  /**
+   * Level 2: (re)start the navigation timer: report {type: "navTimer"} after [after] seconds, wherever
+   * the viewer is, unless another startNavTimer replaces it or cancelNavTimer stops it (spec §6.7).
+   */
+  | { type: "startNavTimer"; after: number }
+  /** Level 2: stop the navigation timer. */
+  | { type: "cancelNavTimer" }
   /**
    * Level 2: move the playback in progress to [position] seconds on its timeline (a seek action, §6.3).
    * Cues behave as when the viewer seeks: point cues on the way are skipped, overlays follow the position.
@@ -136,6 +154,12 @@ export interface NavState {
   buttonSet?: number;
   /** Level 2: a button asked for on entering the menu that only one of its button sets has. */
   focusWanted?: string;
+  /** Level 2: the player's clock at the latest event that gave one (spec §6.7). */
+  now?: number;
+  /** Level 2: counter variables, and the time each was last set. */
+  counters?: Record<string, number>;
+  /** Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known). */
+  navTimer?: { action: Action; ends?: number };
   /**
    * The resume point, for "resume": where the viewer stopped last (or a saveResume put it). Hosts may
    * seed it from their own records with just media and position. Set by the navigator, it also holds
@@ -190,12 +214,16 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
   stepsLeft = STEP_BUDGET;
   resumeSet = false;
   const s: NavState = { ...state, history: [...state.history] };
+  if (event.time !== undefined) s.now = event.time;
 
   switch (event.type) {
     case "start":
       s.history = [];
       s.playing = undefined;
       s.vars = { ...(manifest.vars ?? {}) };
+      // Level 2: counters start counting now; the navigation timer starts stopped.
+      s.counters = manifest.counters?.length ? Object.fromEntries(manifest.counters.map((name) => [name, s.now ?? 0])) : undefined;
+      s.navTimer = undefined;
       s.player = { ...(s.player ?? {}), ...(event.player ?? {}) };
       if (event.seed !== undefined) s.seed = event.seed;
       if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
@@ -283,6 +311,18 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "cueEnd":
       if (s.overlay?.cue === event.id) s.overlay = undefined;
       break;
+
+    case "navTimer": {
+      // Level 2: the navigation timer ran out. Nobody chose this: in menus it runs as a step up, like
+      // a timeout; during playback, like a cue's action where playback is.
+      const timer = s.navTimer;
+      if (!timer) break;
+      s.navTimer = undefined;
+      if (s.mode === "playing" && s.playing)
+        run(manifest, s, timer.action, effects, { pushHistory: false, cueAt: event.position ?? startTime(manifest, s.playing.item) });
+      else run(manifest, s, timer.action, effects, { pushHistory: false, up: true });
+      break;
+    }
 
     case "buttonSet": {
       if (s.mode !== "menu" || !s.menu) break;
@@ -632,11 +672,23 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
           } else if (action.var.startsWith("@")) {
             s.player = { ...s.player, [action.var]: value };
             if (duringPlayback) liveTrack(manifest, s, action.var, value, opts.cueAt!, effects);
-          } else s.vars = { ...s.vars, [action.var]: value };
+          } else {
+            s.vars = { ...s.vars, [action.var]: value };
+            // Setting a counter starts its count again from the new value.
+            if (s.counters?.[action.var] !== undefined) s.counters = { ...s.counters, [action.var]: s.now ?? 0 };
+          }
         }
         next = action.then;
         break;
       }
+      case "timer":
+        s.navTimer = { action: action.action, ...(s.now !== undefined ? { ends: s.now + action.after } : {}) };
+        effects.push({ type: "startNavTimer", after: action.after });
+        break;
+      case "cancelTimer":
+        if (s.navTimer) effects.push({ type: "cancelNavTimer" });
+        s.navTimer = undefined;
+        break;
       case "seek":
         // Only during playback: the title continues elsewhere, as a link ends a disc's program.
         if (duringPlayback) {

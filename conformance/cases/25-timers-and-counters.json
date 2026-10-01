@@ -1,0 +1,53 @@
+{
+  "description": "The navigation timer and counters, read against the player's clock (events' time). A timer action runs after its time wherever the viewer is: in menus as a step up, during playback like a cue's action at the position reported (leaving for a menu remembers it for resume). A new timer replaces the old; cancelTimer stops it, and a late report is ignored. @navTimer reads the seconds left. A counter (a disc's register in counter mode) reads as its value plus the whole seconds since it was last set.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Timers" },
+    "vars": { "elapsed": 0 },
+    "counters": ["elapsed"],
+    "media": { "film": { "ref": "Film.mkv", "kind": "feature" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "arm", "rect": [100, 40, 200, 40], "action": { "type": "timer", "after": 10, "action": { "type": "goto", "menu": "late" } } },
+          { "id": "left", "rect": [100, 90, 200, 40], "action": { "type": "if", "test": { "var": "@navTimer", "gt": 5 }, "then": { "type": "goto", "menu": "plenty" }, "else": { "type": "goto", "menu": "short" } } },
+          { "id": "check", "rect": [100, 140, 200, 40], "action": { "type": "if", "test": { "var": "elapsed", "ge": 30 }, "then": { "type": "goto", "menu": "plenty" }, "else": { "type": "goto", "menu": "short" } } },
+          { "id": "reset", "rect": [100, 190, 200, 40], "action": { "type": "set", "var": "elapsed", "value": 0 } },
+          { "id": "film", "rect": [100, 240, 200, 40], "action": { "type": "do", "steps": [{ "type": "timer", "after": 5, "action": { "type": "goto", "menu": "late" } }, { "type": "play", "media": "film" }] } },
+          { "id": "cancel", "rect": [100, 290, 200, 40], "action": { "type": "cancelTimer" } }
+        ]
+      },
+      "late": { "canvas": { "width": 720, "height": 480 }, "back": { "type": "goto", "menu": "main" }, "buttons": [{ "id": "resume", "rect": [100, 100, 200, 40], "action": { "type": "resume", "otherwise": { "type": "back" } } }] },
+      "plenty": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 100, 200, 40], "action": { "type": "back" } }] },
+      "short": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 100, 200, 40], "action": { "type": "back" } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start", "time": 100 }, "expect": { "mode": "menu", "menu": "main", "focus": "arm" } },
+    { "event": { "type": "activate", "button": "arm", "time": 101 }, "expect": { "menu": "main", "effects": [{ "type": "activated", "menu": "main", "button": "arm" }, { "type": "startNavTimer", "after": 10 }] } },
+    { "event": { "type": "activate", "button": "left", "time": 103 }, "expect": { "menu": "plenty" } },
+    { "event": { "type": "press", "key": "back", "time": 104 }, "expect": { "menu": "main", "focus": "left" } },
+    { "event": { "type": "activate", "button": "left", "time": 107 }, "expect": { "menu": "short" } },
+    { "event": { "type": "navTimer", "time": 111 }, "expect": { "mode": "menu", "menu": "late", "focus": "resume", "effects": [] } },
+    { "event": { "type": "press", "key": "enter", "time": 112 }, "expect": { "menu": "main", "focus": "left" } },
+    { "event": { "type": "activate", "button": "check", "time": 140 }, "expect": { "menu": "plenty" } },
+    { "event": { "type": "press", "key": "back", "time": 141 }, "expect": { "menu": "main" } },
+    { "event": { "type": "activate", "button": "reset", "time": 150 }, "expect": { "menu": "main" } },
+    { "event": { "type": "activate", "button": "check", "time": 160 }, "expect": { "menu": "short" } },
+    { "event": { "type": "press", "key": "back", "time": 161 }, "expect": { "menu": "main" } },
+    { "event": { "type": "activate", "button": "film", "time": 170 }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "main", "button": "film" }, { "type": "startNavTimer", "after": 5 }, { "type": "play", "media": "film", "start": 0 }] } },
+    { "event": { "type": "navTimer", "position": 4.8, "time": 175 }, "expect": { "mode": "menu", "menu": "late", "focus": "resume" } },
+    { "event": { "type": "press", "key": "enter", "time": 176 }, "expect": { "mode": "playing", "effects": [{ "type": "activated", "menu": "late", "button": "resume" }, { "type": "play", "media": "film", "start": 4.8 }] } },
+    { "event": { "type": "stopped", "position": 20, "time": 190 }, "expect": { "mode": "menu", "menu": "late" } },
+    { "event": { "type": "press", "key": "back", "time": 191 }, "expect": { "menu": "main" } },
+    { "event": { "type": "activate", "button": "arm", "time": 200 }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "arm" }, { "type": "startNavTimer", "after": 10 }] } },
+    { "event": { "type": "activate", "button": "cancel", "time": 201 }, "expect": { "effects": [{ "type": "activated", "menu": "main", "button": "cancel" }, { "type": "cancelNavTimer" }] } },
+    { "event": { "type": "navTimer", "time": 210 }, "expect": { "mode": "menu", "menu": "main", "effects": [] } }
+  ]
+}

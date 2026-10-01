@@ -24,12 +24,23 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     s.stepsLeft = msNavStepBudget()
     ' Whether this event saved or cleared the resume point itself (Level 2); not part of the state either.
     s.resumeSet = false
+    ' Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    if event["time"] <> invalid then s.now = event["time"]
     t = event["type"]
 
     if t = "start"
         s.history = []
         s.playing = invalid
         s.vars = msNavCopyVars(msOr(manifest["vars"], {}))
+        ' Level 2: counters start counting now; the navigation timer starts stopped.
+        s.counters = invalid
+        if manifest["counters"] <> invalid
+            s.counters = {}
+            for each name in manifest["counters"]
+                s.counters[name] = msOr(s.now, 0)
+            end for
+        end if
+        s.navTimer = invalid
         ' What the player knows of the viewer's setup ("@" player state) and a random seed (Level 2).
         player = msNavCopyVars(s.player)
         if event["player"] <> invalid then player.Append(event["player"])
@@ -128,6 +139,21 @@ function msNavStep(manifest as object, state as object, event as object) as obje
 
     else if t = "buttonSet"
         msNavButtonSet(manifest, s, event["index"])
+
+    else if t = "navTimer"
+        ' Level 2: the navigation timer ran out. In menus it runs as a step up, like a timeout; during
+        ' playback, like a cue's action where playback is.
+        timer = s.navTimer
+        if timer <> invalid
+            s.navTimer = invalid
+            if s.mode = "playing" and s.playing <> invalid
+                position = event["position"]
+                if position = invalid then position = msNavStartTime(manifest, s.playing.item)
+                msNavRunCue(manifest, s, timer.action, effects, position)
+            else
+                msNavRunOpts(manifest, s, timer.action, effects, false, true)
+            end if
+        end if
     end if
 
     s.Delete("stepsLeft")
@@ -585,6 +611,14 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
                 vars = msNavCopyVars(s.vars)
                 vars[name] = nextValue
                 s.vars = vars
+                ' Setting a counter starts its count again from the new value.
+                if s.counters <> invalid
+                    if s.counters.DoesExist(name)
+                        counters = msCopyAA(s.counters)
+                        counters[name] = msOr(s.now, 0)
+                        s.counters = counters
+                    end if
+                end if
             end if
         end if
         return action["then"]
@@ -631,6 +665,14 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "clearResume"
         s.lastStop = invalid
         s.resumeSet = true
+    else if t = "timer"
+        ' Level 2: one navigation timer, wherever the viewer is (a disc's SetNVTMR).
+        s.navTimer = { action: action["action"] }
+        if s.now <> invalid then s.navTimer.ends = s.now + action["after"]
+        effects.push({ type: "startNavTimer", after: action["after"] })
+    else if t = "cancelTimer"
+        if s.navTimer <> invalid then effects.push({ type: "cancelNavTimer" })
+        s.navTimer = invalid
     else if t = "seek"
         ' Level 2, only during playback: the title continues elsewhere, as a link ends a disc's program.
         if duringPlayback
@@ -907,7 +949,7 @@ end function
 
 ' What an unset player-state variable reads as.
 function msNavPlayerDefault(name as string) as dynamic
-    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "" }
+    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "", "@navTimer": 0 }
     if defaults.DoesExist(name) then return defaults[name]
     return 0
 end function
@@ -917,6 +959,24 @@ function msNavRead(s as object, name as string) as dynamic
     if name = "@resumeMedia"
         if s.lastStop = invalid then return ""
         return s.lastStop.media
+    end if
+    if name = "@navTimer"
+        if s.navTimer = invalid or s.now = invalid then return 0
+        if s.navTimer.ends = invalid then return 0
+        left = s.navTimer.ends - s.now
+        if left <= 0 then return 0
+        whole = Int(left)
+        if whole < left then whole = whole + 1
+        return whole
+    end if
+    ' A counter counts whole seconds by itself since it was last set (a disc's register in counter mode).
+    if s.counters <> invalid
+        if s.counters.DoesExist(name) and msNavIsNumber(s.vars[name])
+            since = s.counters[name]
+            elapsed = msOr(s.now, since) - since
+            if elapsed < 0 then elapsed = 0
+            return s.vars[name] + Int(elapsed)
+        end if
     end if
     if Left(name, 1) = "@"
         if s.player.DoesExist(name) then return s.player[name]

@@ -30,6 +30,10 @@
     <field id="stopRequest" type="boolean" alwaysNotify="true" />
     <!-- Level 2, out: an overlay button was pressed over a held frame: go on from it -->
     <field id="holdEnd" type="boolean" alwaysNotify="true" />
+    <!-- Level 2, out: { type: "startNavTimer", after } or { type: "cancelNavTimer" } for the scene's timer -->
+    <field id="navTimerRequest" type="assocarray" alwaysNotify="true" />
+    <!-- Level 2, in: the navigation timer ran out, at this title position (-1 when no title plays) -->
+    <field id="navTimerFired" type="float" alwaysNotify="true" onChange="onNavTimerFired" />
     <!-- Level 2, out: move the title to this position on its timeline (seconds) -->
     <field id="seekRequest" type="float" alwaysNotify="true" />
     <!-- Level 2, out: change a track of the title now: { at, audio?, subtitle?, angle? } -->

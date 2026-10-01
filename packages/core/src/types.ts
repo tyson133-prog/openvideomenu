@@ -34,6 +34,11 @@ export interface Manifest {
   resumePoint?: "untilEnd" | "untilUsed";
   /** Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6). */
   keys?: MenuKeys;
+  /**
+   * Level 2: integer variables of `vars` that count seconds by themselves, like a disc's registers in
+   * counter mode (spec §6.7): each reads as its value plus the whole seconds since it was last set.
+   */
+  counters?: string[];
   [extension: `x-${string}`]: unknown;
 }
 
@@ -351,7 +356,14 @@ export type Action =
    * Level 2: continue the playback in progress elsewhere on its timeline (spec §6.3): at `at` seconds or
    * at the start of `chapter`. A disc's link to a cell, program or chapter of the title playing.
    */
-  | { type: "seek"; at?: number; chapter?: number };
+  | { type: "seek"; at?: number; chapter?: number }
+  /**
+   * Level 2: start the navigation timer (spec §6.7): `action` runs after `after` seconds, wherever the
+   * viewer is (a disc's SetNVTMR). One timer: a new one replaces it.
+   */
+  | { type: "timer"; after: number; action: Action }
+  /** Level 2: stop the navigation timer. */
+  | { type: "cancelTimer" };
 
 export type ActionType = Action["type"];
 

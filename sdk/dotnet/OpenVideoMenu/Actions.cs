@@ -188,6 +188,25 @@ public sealed class SeekAction : MenuAction
     public int? Chapter { get; set; }
 }
 
+/// <summary>
+/// Level 2: start the navigation timer (spec §6.7): <see cref="Action"/> runs after <see cref="After"/>
+/// seconds, wherever the viewer is (a disc's SetNVTMR). One timer: a new one replaces it.
+/// </summary>
+public sealed class TimerAction : MenuAction
+{
+    public override string Type => "timer";
+
+    public double After { get; set; }
+
+    public MenuAction Action { get; set; } = new BackAction();
+}
+
+/// <summary>Level 2: stop the navigation timer.</summary>
+public sealed class CancelTimerAction : MenuAction
+{
+    public override string Type => "cancelTimer";
+}
+
 /// <summary>Level 2: forget the resume point.</summary>
 public sealed class ClearResumeAction : MenuAction
 {

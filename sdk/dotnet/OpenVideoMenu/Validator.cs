@@ -13,7 +13,7 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -49,6 +49,8 @@ internal sealed class Validator
         ("run", ["type", "action"]),
         ("saveResume", ["type", "media", "at", "chapter"]),
         ("seek", ["type", "at", "chapter"]),
+        ("timer", ["type", "after", "action"]),
+        ("cancelTimer", ["type"]),
         ("clearResume", ["type"]),
     ];
 
@@ -120,6 +122,27 @@ internal sealed class Validator
         }
 
         Vars(m["vars"]);
+        if (m["counters"] is { } counters)
+        {
+            if (counters.ValueKind != JsonValueKind.Array)
+            {
+                Error("/counters", "Must be a list of variable names.");
+            }
+            else
+            {
+                var i = 0;
+                foreach (var name in counters.EnumerateArray())
+                {
+                    if (!(name.ValueKind == JsonValueKind.String && _varTypes.TryGetValue(name.GetString()!, out var isText) && !isText))
+                    {
+                        Error($"/counters/{i}", $"No integer variable \"{JsString(name)}\" in /vars.");
+                    }
+
+                    i++;
+                }
+            }
+        }
+
         if (m["resumePoint"] is { } resumePoint && !(resumePoint.ValueKind == JsonValueKind.String && resumePoint.GetString() is "untilEnd" or "untilUsed"))
         {
             Error("/resumePoint", "Must be \"untilEnd\" or \"untilUsed\".");
@@ -1710,6 +1733,17 @@ internal sealed class Validator
                 break;
             }
 
+            case "timer":
+                if (!(action["after"] is { } after && IsFiniteNumber(after) && after.GetDouble() > 0))
+                {
+                    Error($"{path}/after", "Must be a positive number of seconds.");
+                }
+
+                // It runs wherever the viewer is when the time is up, playback included: as a cue's action.
+                _cueDepth++;
+                Action(action["action"], $"{path}/action", mediaIds, menus);
+                _cueDepth--;
+                break;
             case "activate":
                 if (ownButtons is null)
                 {
@@ -1827,7 +1861,7 @@ internal sealed class Validator
 
                 Action(item["action"], $"{ip}/action", mediaIds, menus);
                 var t = Obj.TryFrom(item["action"], out var ao) && ao["type"] is { ValueKind: JsonValueKind.String } te ? te.GetString() : null;
-                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek")
+                if (t is "goto" or "back" or "resume" or "set" or "activate" or "if" or "do" or "run" or "saveResume" or "clearResume" or "seek" or "timer" or "cancelTimer")
                 {
                     Error($"{ip}/action/type", $"Fallback items must play something (\"{t}\" needs a menu-capable player).");
                 }

@@ -38,6 +38,12 @@ public enum Key
 public abstract record NavEvent
 {
     /// <summary>
+    /// Level 2: the player's clock in seconds (any origin, never going back), which counters and the
+    /// navigation timer read (spec §6.7). Any event may carry it.
+    /// </summary>
+    public double? Time { get; init; }
+
+    /// <summary>
     /// Begin: run firstPlay, or open the root menu. <paramref name="Player"/> is what the player knows of
     /// the viewer's setup as "@" player state; <paramref name="Seed"/> seeds random (Level 2).
     /// </summary>
@@ -87,6 +93,12 @@ public abstract record NavEvent
     /// them all (null): those buttons show now (spec §5.3).
     /// </summary>
     public sealed record ButtonSetChanged(int? Index) : NavEvent;
+
+    /// <summary>
+    /// Level 2: the navigation timer a StartNavTimer effect asked for ran out. During playback, players
+    /// pass the <paramref name="Position"/>, as with a menu key.
+    /// </summary>
+    public sealed record NavTimer(double? Position = null) : NavEvent;
 }
 
 /// <summary>Something the player must do.</summary>
@@ -143,6 +155,16 @@ public abstract record Effect
     public sealed record StartTimer(string Menu, double After) : Effect;
 
     /// <summary>
+    /// Level 2: (re)start the navigation timer: report <see cref="NavEvent.NavTimer"/> after
+    /// <paramref name="After"/> seconds wherever the viewer is, unless another StartNavTimer replaces it
+    /// or CancelNavTimer stops it (spec §6.7).
+    /// </summary>
+    public sealed record StartNavTimer(double After) : Effect;
+
+    /// <summary>Level 2: stop the navigation timer.</summary>
+    public sealed record CancelNavTimer : Effect;
+
+    /// <summary>
     /// Level 2: move the playback in progress to <paramref name="Position"/> seconds on its timeline (a
     /// seek action, spec §6.3). Cues behave as when the viewer seeks.
     /// </summary>
@@ -193,6 +215,9 @@ public sealed record OverlayFocus(string Cue, string Focus);
 /// </summary>
 public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null);
 
+/// <summary>Level 2: the navigation timer: what it runs, and when it runs out (when the clock is known).</summary>
+public sealed record NavTimerState(MenuAction Action, double? Ends);
+
 /// <summary>Navigation state. Treat as a value: <see cref="Navigator.Step"/> returns a new one.</summary>
 public sealed record NavState
 {
@@ -228,6 +253,15 @@ public sealed record NavState
     /// <summary>Level 2: a button asked for on entering the menu that only one of its button sets has.</summary>
     public string? FocusWanted { get; init; }
 
+    /// <summary>Level 2: the player's clock at the latest event that gave one (spec §6.7).</summary>
+    public double? Now { get; init; }
+
+    /// <summary>Level 2: counter variables, and the time each was last set.</summary>
+    public IReadOnlyDictionary<string, double>? Counters { get; init; }
+
+    /// <summary>Level 2: the navigation timer, if one runs.</summary>
+    public NavTimerState? NavTimer { get; init; }
+
     /// <summary>Where the viewer stopped last. Hosts may set it from their own records to seed resume.</summary>
     public LastStop? LastStop { get; init; }
 
@@ -254,6 +288,10 @@ public static class Navigator
     {
         var s = new Working(state);
         var effects = new List<Effect>();
+        if (navEvent.Time is { } time)
+        {
+            s.Now = time;
+        }
 
         switch (navEvent)
         {
@@ -261,6 +299,9 @@ public static class Navigator
                 s.History.Clear();
                 s.Playing = null;
                 s.Vars = new Dictionary<string, Scalar>(manifest.Vars ?? []);
+                // Level 2: counters start counting now; the navigation timer starts stopped.
+                s.Counters = manifest.Counters is { Count: > 0 } counters ? counters.Distinct().ToDictionary(c => c, _ => s.Now ?? 0) : null;
+                s.NavTimer = null;
                 foreach (var (k, v) in start.Player ?? new Dictionary<string, Scalar>())
                 {
                     s.Player[k] = v;
@@ -408,6 +449,28 @@ public static class Navigator
                 }
 
                 break;
+
+            case NavEvent.NavTimer navTimer:
+            {
+                // Level 2: the navigation timer ran out. Nobody chose this: in menus it runs as a step up,
+                // like a timeout; during playback, like a cue's action where playback is.
+                if (s.NavTimer is not { } timer)
+                {
+                    break;
+                }
+
+                s.NavTimer = null;
+                if (s.Mode == NavMode.Playing && s.Playing is { } playing)
+                {
+                    Run(manifest, s, timer.Action, effects, pushHistory: false, cueAt: navTimer.Position ?? StartTime(manifest, playing.Item));
+                }
+                else
+                {
+                    Run(manifest, s, timer.Action, effects, pushHistory: false, up: true);
+                }
+
+                break;
+            }
 
             case NavEvent.ButtonSetChanged changed:
             {
@@ -970,6 +1033,18 @@ public static class Navigator
                     s.LastStop = null;
                     s.ResumeSet = true;
                     break;
+                case TimerAction timerAction:
+                    s.NavTimer = new NavTimerState(timerAction.Action, s.Now + timerAction.After);
+                    effects.Add(new Effect.StartNavTimer(timerAction.After));
+                    break;
+                case CancelTimerAction:
+                    if (s.NavTimer is not null)
+                    {
+                        effects.Add(new Effect.CancelNavTimer());
+                    }
+
+                    s.NavTimer = null;
+                    break;
                 case SeekAction seek:
                     // Only during playback: the title continues elsewhere, as a link ends a disc's program.
                     if (duringPlayback)
@@ -1010,6 +1085,11 @@ public static class Navigator
                         else
                         {
                             s.Vars = new Dictionary<string, Scalar>(s.Vars) { [set.Var] = value };
+                            // Setting a counter starts its count again from the new value.
+                            if (s.Counters?.ContainsKey(set.Var) == true)
+                            {
+                                s.Counters[set.Var] = s.Now ?? 0;
+                            }
                         }
                     }
 
@@ -1272,6 +1352,12 @@ public static class Navigator
 
         public string? FocusWanted { get; set; } = from.FocusWanted;
 
+        public double? Now { get; set; } = from.Now;
+
+        public Dictionary<string, double>? Counters { get; set; } = from.Counters is null ? null : new(from.Counters);
+
+        public NavTimerState? NavTimer { get; set; } = from.NavTimer;
+
         public LastStop? LastStop { get; set; } = from.LastStop;
 
         public IReadOnlyDictionary<string, Scalar> Vars { get; set; } = from.Vars;
@@ -1288,7 +1374,26 @@ public static class Navigator
         /// <summary>The current event saved or cleared the resume point itself, so leaving playback keeps that (Level 2).</summary>
         public bool ResumeSet { get; set; }
 
-        public Scalar Read(string name) => name == "@resumeMedia" ? LastStop?.Media ?? "" : Logic.Read(Vars, Player, Focus, name);
+        public Scalar Read(string name)
+        {
+            if (name == "@resumeMedia")
+            {
+                return LastStop?.Media ?? "";
+            }
+
+            if (name == "@navTimer")
+            {
+                return NavTimer?.Ends is { } ends && Now is { } now ? (int)Math.Max(0, Math.Ceiling(ends - now)) : 0;
+            }
+
+            // A counter counts whole seconds by itself since it was last set (a disc's register in counter mode).
+            if (Counters is not null && Counters.TryGetValue(name, out var since) && Vars.TryGetValue(name, out var value) && value.Number is { } n)
+            {
+                return n + (int)Math.Floor(Math.Max(0, (Now ?? since) - since));
+            }
+
+            return Logic.Read(Vars, Player, Focus, name);
+        }
 
         public NavState ToState() => new()
         {
@@ -1303,6 +1408,9 @@ public static class Navigator
             Overlay = Overlay,
             ButtonSet = ButtonSet,
             FocusWanted = FocusWanted,
+            Now = Now,
+            Counters = Counters,
+            NavTimer = NavTimer,
             LastStop = LastStop,
             Vars = Vars,
             Player = Player,

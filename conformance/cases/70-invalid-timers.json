@@ -1,0 +1,25 @@
+{
+  "description": "The navigation timer needs a positive time and an action, which may run during playback, so it follows a cue's rules (no after on playback it starts). Counters name integer variables.",
+  "level": 2,
+  "valid": false,
+  "errors": ["/counters/0", "/counters/1", "/menus/main/buttons/0/action/after", "/menus/main/buttons/1/action/action/after", "/fallback/0/items/1/action/type"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Timers" },
+    "vars": { "label": "x" },
+    "counters": ["label", "missing"],
+    "media": { "feature": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "a", "rect": [0, 0, 10, 10], "action": { "type": "timer", "after": 0, "action": { "type": "back" } } },
+          { "id": "b", "rect": [0, 20, 10, 10], "action": { "type": "timer", "after": 5, "action": { "type": "play", "media": "feature", "after": { "type": "back" } } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }, { "label": "Stop timer", "action": { "type": "cancelTimer" } }] }]
+  }
+}

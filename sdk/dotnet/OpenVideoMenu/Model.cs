@@ -60,6 +60,12 @@ public sealed partial class Manifest
     /// <summary>Level 2: what the remote's menu keys do, in menus and during playback (spec §6.6).</summary>
     public MenuKeys? Keys { get; set; }
 
+    /// <summary>
+    /// Level 2: integer variables of <see cref="Vars"/> that count seconds by themselves, like a disc's
+    /// registers in counter mode (spec §6.7).
+    /// </summary>
+    public List<string>? Counters { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

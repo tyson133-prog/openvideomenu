@@ -37,7 +37,8 @@ importer's choice.
 | Highlight information that changes during a menu cell (new HLI start/end times in the menu's navigation packets) | `buttonSets` on the menu: one set per run of the cell with the same buttons, `from`/`to` on the menu video's clock; the menu's own `buttons` are the ones it shows longest. |
 | Menu that moves on by itself (still time or end of the menu's video, then a link) | If the next part has the same buttons, it's the same menu looping: `background.video` with `loopStart`. Otherwise menu `timeout` with `after` = the time until it moves on and the link as its `action`; `restartOnInput: false` to match the disc's timer exactly. |
 | Next / previous page (`LinkNextPG`, `LinkPrevPG`, PGC next/prev) | `goto` with `history: "replace"`, so paging adds no Back steps. |
-| General registers (GPRM 0–15) | Manifest `vars` (integers). Registers in counter mode (SetGPRMMD) count seconds; keep them in `x-dvd` for now. |
+| General registers (GPRM 0–15) | Manifest `vars` (integers). Registers in counter mode (SetGPRMMD) are also listed in `counters`. |
+| Navigation timer (SetNVTMR; SPRM 9 and 10) | `timer` with `after` = the seconds and `action` = a `run` of the PGC it names (a `play` of that title); a time of 0 is `cancelTimer`. SPRM 9 reads as `@navTimer`. |
 | Register commands (Set: mov, add, sub, mul, div, mod, and, or, xor, rnd) | `set` with the matching `op` (`rnd` → `random`). |
 | Conditional commands (`if (a op b)`), Goto/Break programs | `if`, `do`; a program's skipped lines become `else` branches. |
 | Player settings read by commands (SPRM) | Player state: SPRM 1/2/3 → `@audio`/`@subtitle`/`@angle` (SPRM 2 is off when bit 6 is clear), 8 → `@focus` (button number ÷ 1024 → its id), 0/16/18 → `@menuLanguage`/`@audioLanguage`/`@subtitleLanguage` (ISO 639 codes as text), 4–7 → `@lastMedia`/`@lastChapter`, 12 → `@country`, 13 → `@parentalLevel`, 14 → `@aspect`, 20 → `@region`. |

@@ -23,6 +23,7 @@ export const PLAYER_VARS: Record<string, { type: "number" | "string"; writable: 
   "@country": { type: "string", writable: false, default: "" }, // ISO 3166-1 alpha-2
   "@aspect": { type: "string", writable: false, default: "16:9" }, // the TV's shape: "16:9" or "4:3"
   "@resumeMedia": { type: "string", writable: false, default: "" }, // media id of the resume point ("" = none)
+  "@navTimer": { type: "number", writable: false, default: 0 }, // seconds left on the navigation timer (0 = none)
 };
 
 /** Level 2: the menu keys a `keys` table may map (spec §6.6). */
@@ -49,11 +50,21 @@ export interface LogicState {
   seed: number;
   /** The resume point, read as @resumeMedia. */
   lastStop?: { media: string };
+  /** Level 2: the player's clock (seconds) at the latest event that gave one; counters and @navTimer use it. */
+  now?: number;
+  /** Level 2: counter variables, and the time each was last set. */
+  counters?: Record<string, number>;
+  /** Level 2: when the navigation timer runs out, read as @navTimer. */
+  navTimer?: { ends?: number };
 }
 
 export function readVar(s: LogicState, name: string): Scalar {
   if (name === "@focus") return s.focus ?? "";
   if (name === "@resumeMedia") return s.lastStop?.media ?? "";
+  if (name === "@navTimer") return s.navTimer?.ends !== undefined && s.now !== undefined ? Math.max(0, Math.ceil(s.navTimer.ends - s.now)) : 0;
+  // A counter counts whole seconds by itself since it was last set (a disc's register in counter mode).
+  const since = s.counters?.[name];
+  if (since !== undefined && typeof s.vars[name] === "number") return (s.vars[name] as number) + Math.floor(Math.max(0, (s.now ?? since) - since));
   if (name.startsWith("@")) return s.player[name] ?? PLAYER_VARS[name]?.default ?? 0;
   return s.vars[name] ?? 0;
 }

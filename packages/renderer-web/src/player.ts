@@ -182,6 +182,7 @@ export class MenuPlayer {
     this.playback.destroy();
     clearTimeout(this.toastTimer);
     clearTimeout(this.menuTimer);
+    clearTimeout(this.navTimer);
     this.root.remove();
   }
 
@@ -192,7 +193,8 @@ export class MenuPlayer {
   /** Feed a navigator event (also used by hosts with custom input). Returns false while busy. */
   dispatch(event: NavEvent): boolean {
     if (this.busy) return false;
-    const { state, effects } = step(this.options.manifest, this.state, event);
+    // Level 2: the player's clock, for counters and the navigation timer (spec 6.7).
+    const { state, effects } = step(this.options.manifest, this.state, { ...event, time: event.time ?? performance.now() / 1000 });
     const flash = effects.find((e): e is Extract<Effect, { type: "activated" }> => e.type === "activated");
     // A cue that opens a menu leaves playback without the player reporting a stop: stop it here.
     const leftPlayback = this.state.mode === "playing" && state.mode !== "playing" && event.type !== "ended" && event.type !== "stopped";
@@ -291,6 +293,12 @@ export class MenuPlayer {
       case "startTimer":
         this.startMenuTimer(effect.menu, effect.after);
         break;
+      case "startNavTimer":
+        this.startNavTimer(effect.after);
+        break;
+      case "cancelNavTimer":
+        clearTimeout(this.navTimer);
+        break;
       case "activated":
         // An overlay button pressed over a held frame goes on from it (Level 2).
         if ("cue" in effect) this.playback.endHold?.();
@@ -322,6 +330,20 @@ export class MenuPlayer {
     if (change.audio !== undefined && change.subtitle === undefined && change.angle === undefined && this.playback.switchAudio?.(change.audio)) return;
     const at = this.playback.currentPosition?.() ?? change.at;
     this.playMedia(next.media, at, next.audio, next.subtitle, next.angle, next.end, next.cues, next.holds);
+  }
+
+  /** Level 2: the navigation timer (spec 6.7), which runs wherever the viewer is. */
+  private navTimer?: ReturnType<typeof setTimeout>;
+
+  private startNavTimer(after: number) {
+    clearTimeout(this.navTimer);
+    const fire = () => {
+      // During playback, say where it is (a native host's position isn't known here: the navigator
+      // then uses the item's start).
+      const position = this.state.mode === "playing" ? this.playback.currentPosition?.() : undefined;
+      if (!this.dispatch({ type: "navTimer", ...(position !== undefined ? { position } : {}) })) this.navTimer = setTimeout(fire, 200);
+    };
+    this.navTimer = setTimeout(fire, after * 1000);
   }
 
   /** (Re)start a menu's countdown; when it runs out, tell the navigator (which ignores stale ones). */

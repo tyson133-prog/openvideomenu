@@ -23,6 +23,10 @@ sub init()
     m.showRows.observeField("rowItemSelected", "onShowTileChosen")
 
     ' While a title plays, tell the server where we are, as its own apps do (~every 10 s).
+    ' Level 2: the navigation timer (spec 6.7).
+    m.navTimer = CreateObject("roSGNode", "Timer")
+    m.navTimer.repeat = false
+    m.navTimer.observeField("fire", "onNavTimer")
     ' Level 2: how long a frame is held (spec 6.3).
     m.holdTimer = CreateObject("roSGNode", "Timer")
     m.holdTimer.repeat = false
@@ -702,6 +706,7 @@ sub startMenu()
     m.menu.observeField("playRequest", "onPlayRequest")
     m.menu.observeField("seekRequest", "onSeekRequest")
     m.menu.observeField("holdEnd", "onHoldEnd")
+    m.menu.observeField("navTimerRequest", "onNavTimerRequest")
     m.menu.observeField("tracksRequest", "onTracksRequest")
     m.menu.observeField("exit", "onMenuExit")
     m.menu.observeField("stopRequest", "onMenuStop")
@@ -1043,6 +1048,24 @@ sub cueClockAdvance(clock as object, last as dynamic, position as dynamic, playe
         closePlayer()
         titleEnded()
     end if
+end sub
+
+' Level 2: the menus start or stop the navigation timer.
+sub onNavTimerRequest()
+    request = m.menu.navTimerRequest
+    m.navTimer.control = "stop"
+    if request.type = "startNavTimer"
+        m.navTimer.duration = request.after
+        m.navTimer.control = "start"
+    end if
+end sub
+
+' The navigation timer ran out: tell the menus where the title is, if one plays.
+sub onNavTimer()
+    if m.menu = invalid then return
+    position = -1
+    if m.player <> invalid then position = titlePosition()
+    m.menu.navTimerFired = position
 end sub
 
 ' Level 2: stop on the hold's frame, for its time or until the viewer goes on (OK, or an overlay button).
