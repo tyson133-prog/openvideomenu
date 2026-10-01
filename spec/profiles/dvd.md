@@ -1,6 +1,6 @@
 # DVD import profile (early draft)
 
-This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. It covers Level 1 today. Level 2 items (motion menus, menu timeouts, variables, audio/subtitle setup, angles, segments and cues during playback) have their own rows; what the core can't express yet is listed at the end, for importers to keep in `x-dvd`.
+This profile describes how a tool that reads a DVD's menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. Level 1 rows give menus every player shows. Level 2 rows cover the rest of the disc's navigation model: motion menus and timeouts, the disc's programs (registers, conditions, named actions for shared programs), its resume point, remote keys and prohibitions, angles, segments, and what happens during playback (cues, seeks, track changes, still cells). An importer that translates the disc's programs, rather than simulating them, can write each PGC's commands once as named actions.
 
 ## What to export
 
@@ -46,7 +46,7 @@ importer's choice.
 | Player settings read by commands (SPRM) | Player state: SPRM 1/2/3 → `@audio`/`@subtitle`/`@angle` (SPRM 2 is off when bit 6 is clear), 8 → `@focus` (button number ÷ 1024 → its id), 0/16/18 → `@menuLanguage`/`@audioLanguage`/`@subtitleLanguage` (ISO 639 codes as text), 4–7 → `@lastMedia`/`@lastChapter`, 12 → `@country`, 13 → `@parentalLevel`, 14 → `@aspect`, 20 → `@region`. |
 | SetSTN (choose audio/subtitle/angle) | `set` on `@audio`/`@subtitle`/`@angle`. In a cell command or a button over the film, it changes the playing title's track at once. |
 | Multi-angle title (angle blocks in its cells) | Media `angles`: one file per angle, as the rip wrote them (each whole title, the angle blocks differing). Or `angleTracks` when the rip keeps the angles as video tracks of one file. Menus that choose an angle with SetSTN set `@angle`. |
-| Title that ends at a cell (a cell command `LinkTailPGC`/`Exit`, e.g. one song of a concert) | Play item `end` at that cell's end time. |
+| Title that ends at a cell (a cell command `LinkTailPGC`, e.g. one song of a concert) | Play item `end` at that cell's end time. |
 | Other cell commands during a title (SetGPRM, CallSS to a menu, conditional links) | Point cues `{ at, action }` at the cell's end time: `set`, `goto`, `if`. Jumps within the title (LinkCN, LinkPGN, LinkPTTN, a cell linking to its own start to loop) are `seek` to that cell's time on the title's timeline. |
 | Still cells (a cell's still time, 1–254 seconds or 255 = until the viewer goes on; a PGC's still time after its last cell) | `holds` on the media (or the play item, when only one way of playing it holds): `{ at, for }` at the cell's last frame on the title's timeline, `for` the seconds or `"input"`. |
 | Menus made of title cells (a still or short cell whose buttons wait for a choice) | An overlay with the cell's buttons over the cell's time, and a hold `"input"` at its last frame; a cell that loops instead is a point cue at its end that `seek`s back to its start. |
@@ -61,7 +61,7 @@ importer's choice.
 | Menu language (SPRM 0, the player's setup) | `@menuLanguage`, which the player reports from its settings; menus per language as below. |
 | SetHL_BTN (highlight a button) | `set` on `@focus`, or `goto` with `button`. |
 | Menus per language (several language units in a menu table) | One menu per language; `firstPlay` (or the link into them) chooses with `if` on `@menuLanguage`. |
-| Anything not expressible yet | `x-dvd` on the menu or button: VTS/PGC/cell/button numbers, raw VM commands, register conditions |
+| The disc's own numbers and commands | `x-dvd` on the menu or button (below): VTS/PGC/cell/button numbers, raw VM commands, so an export can be traced back to the disc. |
 
 ## Suggested `x-dvd` shape
 
@@ -77,10 +77,11 @@ On a button:
 "x-dvd": { "button": 3, "colorTable": 0, "commands": ["SetSTN (audio 1)", "JumpVTS_PTT 1:1"] }
 ```
 
-## Not supported yet
+## Coverage
 
-Every feature found in an audit of 954 discs now has a manifest form. Importers still keep the disc's
-own numbers in `x-dvd` (above) so an export can be traced back to the disc.
+Every part of the DVD navigation model has a manifest form, including what wasn't seen in an audit of
+954 discs (counter registers, karaoke mixing). Where a disc says what the viewer may not do, the manifest
+records it in `prohibits`, and players decide whether to honour it.
 
 ## Assets
 
