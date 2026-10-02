@@ -1624,8 +1624,8 @@ public static class Navigator
                 return n + (int)Math.Floor(Math.Max(0, (Now ?? since) - since));
             }
 
-            // While an overlay shows, @focus is its highlighted button.
-            return Logic.Read(Vars, Player, Overlay?.Focus ?? Focus, name);
+            // During playback: the overlay's highlighted button, or none ("") without one.
+            return Logic.Read(Vars, Player, Mode == NavMode.Playing ? Overlay?.Focus ?? "" : Focus, name);
         }
 
         public NavState ToState() => new()

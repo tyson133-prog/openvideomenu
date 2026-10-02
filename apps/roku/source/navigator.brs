@@ -1145,8 +1145,11 @@ function msNavPlayerDefault(name as string) as dynamic
 end function
 
 function msNavRead(s as object, name as string) as dynamic
-    ' While an overlay shows, @focus is its highlighted button.
-    if name = "@focus" and s.overlay <> invalid then return s.overlay.focus
+    ' During playback: the overlay's highlighted button, or none ("") without one.
+    if name = "@focus" and s.mode = "playing"
+        if s.overlay <> invalid then return s.overlay.focus
+        return ""
+    end if
     if name = "@focus" then return msOr(s.focus, "")
     if name = "@resumeMedia"
         if s.lastStop = invalid then return ""

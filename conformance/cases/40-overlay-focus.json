@@ -1,5 +1,5 @@
 {
-  "description": "While an overlay's buttons show, @focus is the overlay's highlighted button (a disc's SPRM 8 over a title cell): a key or a cue reads it, and setting it moves the overlay's highlight. Without an overlay, a set on @focus during playback changes nothing.",
+  "description": "While an overlay's buttons show, @focus is the overlay's highlighted button (a disc's SPRM 8 over a title cell): a key or a cue reads it, and setting it moves the overlay's highlight. During playback without an overlay nothing is highlighted: @focus reads \"\", and a set on it changes nothing.",
   "level": 3,
   "valid": true,
   "manifest": {
@@ -7,7 +7,7 @@
     "version": "0.1",
     "level": 3,
     "title": { "name": "Green Nose" },
-    "keys": { "title": { "type": "if", "test": { "var": "@focus", "eq": "b2" }, "then": { "type": "goto", "menu": "main", "button": "m2" }, "else": { "type": "goto", "menu": "main", "button": "m1" } } },
+    "keys": { "title": { "type": "if", "test": { "var": "@focus", "eq": "b2" }, "then": { "type": "goto", "menu": "main", "button": "m2" }, "else": { "type": "if", "test": { "var": "@focus", "eq": "" }, "then": { "type": "goto", "menu": "none" }, "else": { "type": "goto", "menu": "main", "button": "m1" } } } },
     "media": {
       "cell": { "ref": "Cell.mkv", "holds": [{ "at": 2, "for": "input" }], "cues": [
         { "from": 0, "to": 2, "canvas": { "width": 720, "height": 480 }, "defaultButton": "b2", "buttons": [
@@ -24,7 +24,8 @@
           { "id": "m1", "rect": [100, 100, 200, 40], "nav": { "down": "m2" }, "action": { "type": "play", "media": "cell" } },
           { "id": "m2", "rect": [100, 160, 200, 40], "nav": { "up": "m1" }, "action": { "type": "play", "media": "cell" } }
         ]
-      }
+      },
+      "none": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 100, 200, 40], "action": { "type": "goto", "menu": "main" } }] }
     },
     "rootMenu": "main",
     "fallback": [{ "label": "Cell", "items": [{ "label": "Play", "action": { "type": "play", "media": "cell" } }] }]
@@ -43,6 +44,6 @@
     { "event": { "type": "cue", "id": "media/1" }, "expect": { "overlay": { "cue": "media/0", "focus": "b1" } } },
     { "event": { "type": "cueEnd", "id": "media/0" }, "expect": { "overlay": null } },
     { "event": { "type": "cue", "id": "media/1" }, "expect": { "mode": "playing", "overlay": null } },
-    { "event": { "type": "press", "key": "title", "position": 6 }, "expect": { "mode": "menu", "menu": "main", "focus": "m1" } }
+    { "event": { "type": "press", "key": "title", "position": 6 }, "expect": { "mode": "menu", "menu": "none", "focus": "ok" } }
   ]
 }

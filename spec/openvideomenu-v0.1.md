@@ -331,7 +331,7 @@ title starts.
 | `@audio` | integer | 0 (unknown) | Current audio track, 1-based. Writable. |
 | `@subtitle` | integer | 0 (off) | Current subtitle track, 1-based; 0 = off. Writable. |
 | `@angle` | integer | 1 | Current angle, 1-based. Writable. |
-| `@focus` | text | — | The highlighted button's id: of the overlay showing during playback (§6.3), else of the menu. Writable: setting it highlights that button of the overlay or the menu. |
+| `@focus` | text | — | The highlighted button's id: of the menu; during playback, of the overlay showing (§6.3), or `""` when none shows. Writable: setting it highlights that button of the menu or the overlay. |
 | `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
 | `@lastMedia` | text | `""` | Media id of the playback in progress, or of the last one. |
 | `@lastNumber` | integer | 0 | That media's `number` (§4); 0 when it has none. |

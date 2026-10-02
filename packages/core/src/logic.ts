@@ -52,6 +52,8 @@ export interface LogicState {
   focus?: string;
   /** Level 2: the overlay showing during playback; while it shows, @focus is its highlighted button. */
   overlay?: { focus: string };
+  /** The navigator's mode: during playback without an overlay, nothing is highlighted. */
+  mode?: string;
   seed: number;
   /** The resume point, read as @resumeMedia. */
   lastStop?: { media: string };
@@ -64,7 +66,8 @@ export interface LogicState {
 }
 
 export function readVar(s: LogicState, name: string): Scalar {
-  if (name === "@focus") return s.overlay?.focus ?? s.focus ?? "";
+  // During playback: the overlay's highlighted button, or none ("") without one.
+  if (name === "@focus") return s.mode === "playing" ? (s.overlay?.focus ?? "") : (s.focus ?? "");
   if (name === "@resumeMedia") return s.lastStop?.media ?? "";
   if (name === "@navTimer") return s.navTimer?.ends !== undefined && s.now !== undefined ? Math.max(0, Math.ceil(s.navTimer.ends - s.now)) : 0;
   // A counter counts whole seconds by itself since it was last set (a disc's register in counter mode).
