@@ -1,0 +1,139 @@
+{
+  "description": "saveResume with media can say what follows it when resumed: the rest of a play-all (queue), then its after. A disc's shared program saving a resume cell inside a play-all of episodes needs this, since it can't save \"here\".",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "resumePoint": "untilUsed",
+    "title": {
+      "name": "Play All, Later"
+    },
+    "media": {
+      "e1": {
+        "ref": "Episode 1.mkv"
+      },
+      "e2": {
+        "ref": "Episode 2.mkv"
+      },
+      "e3": {
+        "ref": "Episode 3.mkv"
+      }
+    },
+    "actions": {
+      "save-e2": {
+        "type": "saveResume",
+        "media": "e2",
+        "at": 30,
+        "queue": [
+          {
+            "media": "e3"
+          }
+        ],
+        "after": {
+          "type": "goto",
+          "menu": "done"
+        }
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "later",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "do",
+              "steps": [
+                {
+                  "type": "run",
+                  "action": "save-e2"
+                },
+                {
+                  "type": "goto",
+                  "menu": "extras"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "extras": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "resume",
+              "otherwise": {
+                "type": "goto",
+                "menu": "main"
+              }
+            }
+          }
+        ]
+      },
+      "done": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "back"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Episodes",
+        "items": [
+          {
+            "label": "Episode 1",
+            "action": {
+              "type": "play",
+              "media": "e1"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"later","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"extras","focus":"resume","effects":[{"type":"activated","menu":"main","button":"later"}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"extras","button":"resume"},{"type":"play","media":"e2","start":30}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"play","media":"e3","start":0}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"done","focus":"ok","effects":[]}}
+  ]
+}

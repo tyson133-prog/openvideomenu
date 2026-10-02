@@ -689,6 +689,9 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             at = msOr(action["at"], 0)
             if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: action["media"], chapter: action["chapter"] })
             s.lastStop = { media: action["media"], position: at }
+            ' What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
+            if action["queue"] <> invalid and action["queue"].Count() > 0 then s.lastStop.queue = action["queue"]
+            if action["after"] <> invalid then s.lastStop.after = action["after"]
         else if s.mode = "playing" and s.playing <> invalid
             at = msOr(action["at"], msOr(s.cueAt, 0))
             if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: s.playing.item["media"], chapter: action["chapter"] })
@@ -761,7 +764,16 @@ end function
 sub msNavStartPlayback(manifest as object, s as object, items as object, after as dynamic, effects as object)
     queue = msCopyArray(items)
     first = queue.shift()
-    if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
+    if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid and manifest["cuePlayback"] = "replace"
+        ' Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume as
+        ' when a cue opens a menu. The new playback returns where the old one would have.
+        current = s.playing
+        if not s.resumeSet then s.lastStop = msNavResumePointOf(current, s.cueAt)
+        player = msNavCopyVars(s.player)
+        player["@lastChapter"] = msNavChapterAt(manifest, current.item["media"], s.cueAt)
+        s.player = player
+        s.playing = { item: first, queue: queue, after: after, returnTo: current.returnTo }
+    else if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
         s.playing = { item: first, queue: queue, after: invalid, returnTo: s.playing.returnTo, resumeTo: { playing: s.playing, at: s.cueAt } }
     else
         s.playing = { item: first, queue: queue, after: after, returnTo: msNavCurrentPosition(s) }

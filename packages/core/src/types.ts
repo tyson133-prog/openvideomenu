@@ -33,6 +33,12 @@ export interface Manifest {
    */
   resumePoint?: "untilEnd" | "untilUsed";
   /**
+   * Level 2: what playback started during playback (from a cue, an overlay's button, a key or the
+   * timer) does to the title playing (spec §6.3). "interrupt" (default): it returns there afterwards.
+   * "replace": it ends that title, as a disc's links do.
+   */
+  cuePlayback?: "interrupt" | "replace";
+  /**
    * The lowest conformance level at which the menus work as authored (spec §10): 0–3. A player below it
    * shows the fallback list. Absent: players try the menus.
    */
@@ -369,7 +375,15 @@ export type Action =
    * Level 3: save the resume point (spec §6.5): `media` from `chapter` or `at` seconds; without
    * `media`, the playback in progress, at `at` (default: the cue's time).
    */
-  | { type: "saveResume"; media?: string; at?: number; chapter?: number }
+  | {
+      type: "saveResume";
+      media?: string;
+      at?: number;
+      chapter?: number;
+      /** With `media`: what plays after it when resumed (the rest of a play-all), then `after`. */
+      queue?: PlayItem[];
+      after?: Action;
+    }
   /** Level 3: forget the resume point. */
   | { type: "clearResume" }
   /**

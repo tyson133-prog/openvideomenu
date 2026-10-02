@@ -1072,7 +1072,12 @@ public static class Navigator
                 case SaveResumeAction save:
                     if (save.Media is { } savedMedia)
                     {
-                        s.LastStop = new LastStop(savedMedia, save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = savedMedia, Chapter = c }) : save.At ?? 0);
+                        // What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
+                        s.LastStop = new LastStop(
+                            savedMedia,
+                            save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = savedMedia, Chapter = c }) : save.At ?? 0,
+                            Queue: save.Queue is { Count: > 0 } queue ? queue : null,
+                            After: save.After);
                     }
                     else if (s.Mode == NavMode.Playing && s.Playing is { } here)
                     {
@@ -1238,10 +1243,25 @@ public static class Navigator
     /// <summary><paramref name="cueAt"/>: started by a cue during playback, which it interrupts and returns to (Level 2).</summary>
     private static void StartPlayback(Manifest manifest, Working s, IReadOnlyList<PlayItem> items, MenuAction? after, List<Effect> effects, double? cueAt = null)
     {
-        var interrupted = cueAt is not null && s.Mode == NavMode.Playing ? s.Playing : null;
-        s.Playing = interrupted is not null
-            ? new Playback(items[0], items.Skip(1).ToList(), null, interrupted.ReturnTo, new Interrupted(interrupted, cueAt!.Value))
-            : new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
+        var current = cueAt is not null && s.Mode == NavMode.Playing ? s.Playing : null;
+        if (current is not null && manifest.CuePlayback == "replace")
+        {
+            // Level 2: it ends the title playing, as a disc's link does; that title is remembered for
+            // resume as when a cue opens a menu. The new playback returns where the old one would have.
+            if (!s.ResumeSet)
+            {
+                s.LastStop = ResumePointOf(current, cueAt!.Value);
+            }
+
+            s.Player["@lastChapter"] = ChapterAt(manifest, current.Item.Media, cueAt!.Value);
+            s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, current.ReturnTo);
+        }
+        else
+        {
+            s.Playing = current is not null
+                ? new Playback(items[0], items.Skip(1).ToList(), null, current.ReturnTo, new Interrupted(current, cueAt!.Value))
+                : new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
+        }
         s.Mode = NavMode.Playing;
         s.Overlay = null;
         s.Seq++;

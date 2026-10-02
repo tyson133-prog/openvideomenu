@@ -13,7 +13,7 @@ export type Level = 0 | 1 | 2 | 3;
  */
 const LEVEL2_FIELDS = new Set([
   "video", "audio", "buttonsAt", "timeout", "buttonSets", "transition", "angles", "angleTracks", "segments",
-  "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count",
+  "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback",
 ]);
 
 /** Level 2 actions. */
@@ -56,7 +56,11 @@ export function levelUsed(manifest: unknown): Level {
       walk(v);
     }
   };
-  for (const [key, v] of Object.entries(manifest)) if (key !== "fallback" && key !== "title" && key !== "source" && !key.startsWith("x-")) walk(v);
+  for (const [key, v] of Object.entries(manifest)) {
+    if (key === "fallback" || key === "title" || key === "source" || key.startsWith("x-")) continue;
+    if (LEVEL2_FIELDS.has(key)) raise(2); // e.g. the manifest's keys, cuePlayback
+    walk(v);
+  }
   return level;
 }
 

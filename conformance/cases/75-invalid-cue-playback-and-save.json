@@ -1,0 +1,25 @@
+{
+  "description": "cuePlayback is interrupt or replace; without replace, playback started during playback still can't have an after. saveResume's queue and after go only with media, the queue holds play items, and after must not start playback.",
+  "level": 3,
+  "valid": false,
+  "errors": ["/cuePlayback", "/menus/main/buttons/0/action/queue", "/menus/main/buttons/1/action/queue/0/media", "/menus/main/buttons/2/action/after"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "cuePlayback": "sometimes",
+    "title": { "name": "Broken Replace" },
+    "media": { "a": { "ref": "a.mp4" } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 1280, "height": 720 },
+        "buttons": [
+          { "id": "x", "rect": [0, 0, 10, 10], "action": { "type": "saveResume", "at": 3, "queue": [{ "media": "a" }] } },
+          { "id": "y", "rect": [0, 20, 10, 10], "action": { "type": "saveResume", "media": "a", "queue": [{ "media": "nowhere" }] } },
+          { "id": "z", "rect": [0, 40, 10, 10], "action": { "type": "saveResume", "media": "a", "after": { "type": "play", "media": "a" } } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "a" } }] }]
+  }
+}

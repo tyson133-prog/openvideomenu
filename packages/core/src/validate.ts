@@ -19,7 +19,7 @@ export interface ValidationResult {
 }
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
-  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "$schema"],
+  manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -51,7 +51,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   resume: ["type", "otherwise"],
   activate: ["type", "button"],
   run: ["type", "action"],
-  saveResume: ["type", "media", "at", "chapter"],
+  saveResume: ["type", "media", "at", "chapter", "queue", "after"],
   seek: ["type", "at", "chapter"],
   timer: ["type", "after", "action"],
   cancelTimer: ["type"],
@@ -119,6 +119,9 @@ class Validator {
     if (data.source !== undefined) this.source(data.source);
 
     this.vars(data.vars);
+    if (data.cuePlayback !== undefined && data.cuePlayback !== "interrupt" && data.cuePlayback !== "replace")
+      this.error("/cuePlayback", 'Must be "interrupt" or "replace".');
+    this.replacing = data.cuePlayback === "replace";
     if (data.counters !== undefined) {
       if (!Array.isArray(data.counters)) this.error("/counters", "Must be a list of variable names.");
       else
@@ -176,6 +179,9 @@ class Validator {
 
   /** Media id → how many angles it has (1 without angles). */
   private angleCounts = new Map<string, number>();
+
+  /** Level 2: playback started during playback replaces the title playing (cuePlayback "replace"), so it may have an after. */
+  private replacing = false;
 
   /** Above 0 while checking named actions, which may run during playback wherever they're run from. */
   private namedDepth = 0;
@@ -886,7 +892,7 @@ class Validator {
         break;
       case "run":
         if (!isNonEmptyString(value.action) || !this.named.has(value.action)) this.error(`${path}/action`, `No action "${String(value.action)}" in /actions.`);
-        else if (this.cueDepth > 0 && this.playsWithAfter.has(value.action))
+        else if (this.cueDepth > 0 && !this.replacing && this.playsWithAfter.has(value.action))
           this.error(`${path}/action`, `Action "${value.action}" starts playback with after; playback started during playback returns to it, so after is not allowed here.`);
         break;
       case "saveResume":
@@ -901,6 +907,29 @@ class Validator {
           this.error(`${path}/chapter`, "Must be a chapter number (from 1).");
         if (value.at !== undefined && !(isFiniteNumber(value.at) && value.at >= 0)) this.error(`${path}/at`, "Must be a non-negative number of seconds.");
         if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
+        // What follows the saved media when resumed: only with media (without it, "here" brings its own).
+        if ((value.queue !== undefined || value.after !== undefined) && value.media === undefined)
+          this.error(`${path}/${value.queue !== undefined ? "queue" : "after"}`, "Only with media: saving \"here\" keeps what follows the playback in progress.");
+        if (value.queue !== undefined) {
+          if (!Array.isArray(value.queue) || value.queue.length === 0) this.error(`${path}/queue`, "Must be a list of at least one item {media, chapter?, start?}.");
+          else
+            value.queue.forEach((item, i) => {
+              if (!isObject(item)) this.error(`${path}/queue/${i}`, "Must be {media, chapter?, start?}.");
+              else this.playItem(item, `${path}/queue/${i}`, mediaIds, menus);
+            });
+        }
+        if (value.after !== undefined) {
+          // Runs when the resumed playback completes, as a play's after: it must not start playback.
+          const after = this.resolveRun(value.after);
+          if (isObject(after) && (after.type === "play" || after.type === "playAll"))
+            this.error(`${path}/after`, "After-playback action must not start another playback; use queue instead.");
+          else {
+            const depth = this.cueDepth;
+            this.cueDepth = 0;
+            this.action(value.after, `${path}/after`, mediaIds, menus);
+            this.cueDepth = depth;
+          }
+        }
         break;
       case "seek":
         if (this.cueDepth === 0 && this.namedDepth === 0)
@@ -942,7 +971,7 @@ class Validator {
         break;
       }
     }
-    if ((type === "play" || type === "playAll") && value.after !== undefined && this.cueDepth > 0) {
+    if ((type === "play" || type === "playAll") && value.after !== undefined && this.cueDepth > 0 && !this.replacing) {
       this.error(`${path}/after`, "Playback started during playback returns to it when done; after is not allowed here.");
     } else if ((type === "play" || type === "playAll") && value.after !== undefined) {
       const after: unknown = this.resolveRun(value.after);

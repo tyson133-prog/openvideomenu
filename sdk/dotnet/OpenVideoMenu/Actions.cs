@@ -180,6 +180,12 @@ public sealed class SaveResumeAction : MenuAction
     public double? At { get; set; }
 
     public int? Chapter { get; set; }
+
+    /// <summary>With <see cref="Media"/>: what plays after it when resumed (the rest of a play-all).</summary>
+    public List<PlayItem>? Queue { get; set; }
+
+    /// <summary>With <see cref="Media"/>: what runs when the resumed playback completes.</summary>
+    public MenuAction? After { get; set; }
 }
 
 /// <summary>

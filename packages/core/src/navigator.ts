@@ -683,7 +683,13 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         break;
       case "saveResume":
         if (action.media !== undefined) {
-          s.lastStop = { media: action.media, position: action.chapter !== undefined ? startTime(manifest, { media: action.media, chapter: action.chapter }) : (action.at ?? 0) };
+          s.lastStop = {
+            media: action.media,
+            position: action.chapter !== undefined ? startTime(manifest, { media: action.media, chapter: action.chapter }) : (action.at ?? 0),
+            // What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
+            ...(action.queue?.length ? { queue: action.queue } : {}),
+            ...(action.after ? { after: action.after } : {}),
+          };
         } else if (s.mode === "playing" && s.playing) {
           // "Here": the playback in progress (a disc's CallSS names the cell to resume at).
           const media = s.playing.item.media;
@@ -794,10 +800,18 @@ function playOrder(s: NavState, action: Extract<Action, { type: "playAll" }>): P
 /** `cueAt`: started by a cue during playback, which it interrupts and returns to (Level 2). */
 function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after: Action | undefined, effects: Effect[], cueAt?: number) {
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
-  const interrupted = cueAt !== undefined && s.mode === "playing" ? s.playing : undefined;
-  s.playing = interrupted
-    ? { item: first, queue, returnTo: interrupted.returnTo, resumeTo: { playing: interrupted, at: cueAt! } }
-    : { item: first, queue, after, returnTo: currentPosition(s) };
+  const current = cueAt !== undefined && s.mode === "playing" ? s.playing : undefined;
+  if (current && manifest.cuePlayback === "replace") {
+    // Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume
+    // as when a cue opens a menu. The new playback returns where the old one would have.
+    const media = current.item.media;
+    if (!resumeSet) s.lastStop = resumePointOf(current, cueAt!);
+    s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, cueAt!) };
+    s.playing = { item: first, queue, after, returnTo: current.returnTo };
+  } else
+    s.playing = current
+      ? { item: first, queue, returnTo: current.returnTo, resumeTo: { playing: current, at: cueAt! } }
+      : { item: first, queue, after, returnTo: currentPosition(s) };
   s.mode = "playing";
   s.overlay = undefined;
   s.seq += 1;

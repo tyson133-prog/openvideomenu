@@ -59,6 +59,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `actions` | no | *(Level 3)* [Named actions](#64-named-actions-level-3), run from anywhere with `run`. |
 | `resumePoint` | no | *(Level 3)* How long the [resume point](#65-the-resume-point-level-3) lasts: `"untilEnd"` (default) or `"untilUsed"`. |
 | `keys` | no | *(Level 2)* What the remote's [menu keys](#66-remote-keys-and-prohibitions-level-2) do. |
+| `cuePlayback` | no | *(Level 2)* What playback started [during playback](#63-during-playback-level-2) does to the title playing: `"interrupt"` (default) or `"replace"`. |
 | `counters` | no | *(Level 3)* Variables that [count seconds](#67-time-the-navigation-timer-and-counters-level-3) by themselves. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
@@ -263,7 +264,7 @@ Every action is an object with a `type`:
 | `if` | `test`, `then`, `else?` | *(Level 3)* Run `then` or `else` depending on a condition (§6.1). |
 | `do` | `steps` | *(Level 3)* Run actions in order until one navigates (§6.1). |
 | `run` | `action` | *(Level 3)* Run a named action from `actions`, as if it were written here (§6.4). |
-| `saveResume` | `media?`, `at?`, `chapter?` | *(Level 3)* Save the resume point (§6.5). |
+| `saveResume` | `media?`, `at?`, `chapter?`, `queue?`, `after?` | *(Level 3)* Save the resume point (§6.5). |
 | `clearResume` | — | *(Level 3)* Forget the resume point (§6.5). |
 | `seek` | `at` or `chapter` | *(Level 2)* During playback, continue the title elsewhere on its timeline (§6.3). |
 | `timer` | `after`, `action` | *(Level 3)* Start the navigation timer (§6.7). |
@@ -429,6 +430,13 @@ icon some discs show in certain scenes that branches to a featurette and back.
   - Starting playback (`play`, `playAll`, `resume`) **interrupts** the current one. When the new
     playback ends or the viewer stops it, the interrupted one continues from the cue's time. `after`
     is not allowed there.
+  - **`cuePlayback: "replace"`** (top level) makes it **replace** the current one instead, as a disc's
+    links do: the title playing ends and nothing returns to it. It is remembered for `resume` at the
+    cue's time, as when a cue opens a menu (unless the cue saved or cleared the resume point itself),
+    and the new playback returns where the old one would have. `after` is allowed. This holds for
+    every way playback starts during playback: cues, overlays' buttons, keys (§6.6) and the timer (§6.7).
+    A manifest uses one behaviour throughout; a single replacing jump in an interrupting manifest is a
+    `goto` with `saveResume`, then `resume`.
   - `goto` leaves playback; it is remembered for `resume` at the cue's time, unless the cue saved or
     cleared the resume point itself (§6.5).
   - `back` stops playback, like the remote's Back.
@@ -517,9 +525,14 @@ names the cell to come back to, and the point survives other titles until a Resu
 - **`resumePoint`**: `"untilEnd"` (default): completing that media's playback forgets the point.
   `"untilUsed"`: the point lasts through other playback and menus until a `resume` uses it, or a stop,
   a cue or `saveResume` replaces it, or `clearResume` forgets it.
-- **`saveResume`** `{ media?, at?, chapter? }` saves a point: `media` from `chapter` (its start) or `at`
-  seconds (default 0). Without `media`, it saves the playback in progress "here", at `chapter` or `at`, or
-  by default the cue's time; outside playback it does nothing. `at` and `chapter` are not both given.
+- **`saveResume`** `{ media?, at?, chapter?, queue?, after? }` saves a point: `media` from `chapter` (its
+  start) or `at` seconds (default 0). Without `media`, it saves the playback in progress "here", at
+  `chapter` or `at`, or by default the cue's time; outside playback it does nothing. `at` and `chapter`
+  are not both given.
+- With `media`, **`queue`** (play items) and **`after`** say what follows it when it's resumed, as a
+  stopped playback remembers them: the rest of a play-all, then its after-action, which must not start
+  playback. That lets logic shared by many places (a named action) save a point inside a play-all,
+  where it can't say "here".
 - **`clearResume`** forgets the point.
 - A cue that saves or clears the point and then leaves for a menu keeps what it said: leaving saves
   "here" only when the cue's action didn't save or clear the point itself.
@@ -659,7 +672,7 @@ Every manifest MUST include a fallback list: groups of items whose actions are `
 |---|---|
 | **0: Basic** | The fallback list and playback. |
 | **1: Menus** | Canvases and aspect, still backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, the actions `play`, `playAll`, `goto`, `back`, `resume` and `activate`, a menu's `back`, and the navigation semantics. |
-| **2: Enhanced** | What a player shows and plays from the manifest as written: motion backgrounds, menu audio, `buttonsAt`, transitions and skipping (§5.1), menu timeouts (§5.2), button sets (§5.3), angles (§4.1), segments (§4.2), track numbers on play items (§6.1), cues and buttons during playback, `end`, `seek` and holds (§6.3), menu keys (§6.6), `playAll` order and `exit` (§6). Prohibitions and `altRects` are information players MAY use. |
+| **2: Enhanced** | What a player shows and plays from the manifest as written: motion backgrounds, menu audio, `buttonsAt`, transitions and skipping (§5.1), menu timeouts (§5.2), button sets (§5.3), angles (§4.1), segments (§4.2), track numbers on play items (§6.1), cues and buttons during playback, `end`, `seek`, holds and `cuePlayback` (§6.3), menu keys (§6.6), `playAll` order and `exit` (§6). Prohibitions and `altRects` are information players MAY use. |
 | **3: Disc logic** | Program state: variables, player state, conditions and logic, and focus and tracks from variables (§6.1); live track changes (§6.3); named actions (§6.4); the resume point (§6.5); the navigation timer and counters (§6.7); parental level requests (§6.8). Menus per language are separate menus chosen with `@menuLanguage`. |
 
 Each level includes the ones below it. Players without a level ignore its fields and actions; a manifest

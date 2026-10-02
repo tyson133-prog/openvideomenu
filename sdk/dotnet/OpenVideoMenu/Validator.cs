@@ -13,7 +13,7 @@ internal sealed class Validator
 {
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
-        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "$schema"],
+        ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
@@ -47,7 +47,7 @@ internal sealed class Validator
         ("resume", ["type", "otherwise"]),
         ("activate", ["type", "button"]),
         ("run", ["type", "action"]),
-        ("saveResume", ["type", "media", "at", "chapter"]),
+        ("saveResume", ["type", "media", "at", "chapter", "queue", "after"]),
         ("seek", ["type", "at", "chapter"]),
         ("timer", ["type", "after", "action"]),
         ("cancelTimer", ["type"]),
@@ -69,6 +69,9 @@ internal sealed class Validator
 
     /// <summary>Media id → how many angles it has (1 without angles).</summary>
     private readonly Dictionary<string, int> _angleCounts = new(StringComparer.Ordinal);
+
+    /// <summary>Level 2: playback started during playback replaces the title playing (cuePlayback "replace"), so it may have an after.</summary>
+    private bool _replacing;
 
     /// <summary>Above 0 while checking named actions, which may run during playback wherever they're run from.</summary>
     private int _namedDepth;
@@ -124,6 +127,12 @@ internal sealed class Validator
         }
 
         Vars(m["vars"]);
+        if (m["cuePlayback"] is { } cuePlayback && !(cuePlayback.ValueKind == JsonValueKind.String && cuePlayback.GetString() is "interrupt" or "replace"))
+        {
+            Error("/cuePlayback", "Must be \"interrupt\" or \"replace\".");
+        }
+
+        _replacing = m["cuePlayback"] is { ValueKind: JsonValueKind.String } cp && cp.GetString() == "replace";
         if (m["counters"] is { } counters)
         {
             if (counters.ValueKind != JsonValueKind.Array)
@@ -1724,7 +1733,7 @@ internal sealed class Validator
                 {
                     Error($"{path}/action", $"No action \"{JsString(target)}\" in /actions.");
                 }
-                else if (_cueDepth > 0 && _playsWithAfter.Contains(target.Value.GetString()!))
+                else if (_cueDepth > 0 && !_replacing && _playsWithAfter.Contains(target.Value.GetString()!))
                 {
                     Error($"{path}/action", $"Action \"{target.Value.GetString()}\" starts playback with after; playback started during playback returns to it, so after is not allowed here.");
                 }
@@ -1759,6 +1768,52 @@ internal sealed class Validator
                 if (action["at"] is not null && chapter is not null)
                 {
                     Error($"{path}/at", "Give at or chapter, not both.");
+                }
+
+                // What follows the saved media when resumed: only with media (without it, "here" brings its own).
+                if ((action["queue"] is not null || action["after"] is not null) && action["media"] is null)
+                {
+                    Error($"{path}/{(action["queue"] is not null ? "queue" : "after")}", "Only with media: saving \"here\" keeps what follows the playback in progress.");
+                }
+
+                if (action["queue"] is { } queue)
+                {
+                    if (queue.ValueKind != JsonValueKind.Array || queue.GetArrayLength() == 0)
+                    {
+                        Error($"{path}/queue", "Must be a list of at least one item {media, chapter?, start?}.");
+                    }
+                    else
+                    {
+                        var i = 0;
+                        foreach (var item in queue.EnumerateArray())
+                        {
+                            var ip = $"{path}/queue/{i++}";
+                            if (!Obj.TryFrom(item, out var io))
+                            {
+                                Error(ip, "Must be {media, chapter?, start?}.");
+                            }
+                            else
+                            {
+                                PlayItem(io, ip, mediaIds, menus);
+                            }
+                        }
+                    }
+                }
+
+                if (action["after"] is { } saveAfter)
+                {
+                    // Runs when the resumed playback completes, as a play's after: it must not start playback.
+                    if (Obj.TryFrom(ResolveRun(saveAfter), out var sa) && sa["type"] is { ValueKind: JsonValueKind.String } st && st.GetString() is "play" or "playAll")
+                    {
+                        Error($"{path}/after", "After-playback action must not start another playback; use queue instead.");
+                    }
+                    else
+                    {
+                        var depth = _cueDepth;
+                        _cueDepth = 0;
+                        Action(saveAfter, $"{path}/after", mediaIds, menus);
+                        _cueDepth = depth;
+                    }
                 }
 
                 break;
@@ -1857,7 +1912,7 @@ internal sealed class Validator
             }
         }
 
-        if (type is "play" or "playAll" && action["after"] is not null && _cueDepth > 0)
+        if (type is "play" or "playAll" && action["after"] is not null && _cueDepth > 0 && !_replacing)
         {
             Error($"{path}/after", "Playback started during playback returns to it when done; after is not allowed here.");
         }

@@ -58,6 +58,13 @@ public sealed partial class Manifest
     public string? ResumePoint { get; set; }
 
     /// <summary>
+    /// Level 2: what playback started during playback (from a cue, an overlay's button, a key or the
+    /// timer) does to the title playing (spec §6.3): "interrupt" (default) returns there afterwards;
+    /// "replace" ends that title, as a disc's links do.
+    /// </summary>
+    public string? CuePlayback { get; set; }
+
+    /// <summary>
     /// The lowest conformance level at which the menus work as authored (spec §10): 0–3. A player below
     /// it shows the fallback list. Null: players try the menus. See <see cref="LevelUsed"/>.
     /// </summary>

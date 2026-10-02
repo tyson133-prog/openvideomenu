@@ -17,7 +17,7 @@ public static class Levels
     private static readonly HashSet<string> Level2Fields =
     [
         "video", "audio", "buttonsAt", "timeout", "buttonSets", "transition", "angles", "angleTracks", "segments",
-        "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count",
+        "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback",
     ];
 
     private static readonly HashSet<string> Level2Actions = ["seek", "exit"];
@@ -103,6 +103,12 @@ public static class Levels
         {
             if (p.Name is not ("fallback" or "title" or "source") && !p.Name.StartsWith("x-", StringComparison.Ordinal))
             {
+                // e.g. the manifest's keys, cuePlayback
+                if (Level2Fields.Contains(p.Name))
+                {
+                    level = Math.Max(level, 2);
+                }
+
                 Walk(p.Value);
             }
         }
