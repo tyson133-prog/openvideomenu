@@ -892,6 +892,15 @@ function startItem(manifest: Manifest, s: NavState, item: PlayItem, from?: numbe
   return effect;
 }
 
+/**
+ * The chapter an item's playback ends in when it plays to its end: the one its `end` closes (reached
+ * from before), or the media's last chapter (a disc's SPRM 7 after a title completes).
+ */
+function chapterAtEnd(manifest: Manifest, item: PlayItem): number {
+  const chapters = manifest.media[item.media]?.chapters ?? [];
+  return item.end !== undefined ? chapters.filter((c) => c.time < item.end!).length : chapters.length;
+}
+
 /** The 1-based chapter a time falls in (0 when the media has no chapters). */
 export function chapterAt(manifest: Manifest, media: string, seconds: number): number {
   const chapters = manifest.media[media]?.chapters ?? [];
@@ -922,6 +931,7 @@ function finishPlayback(
   }
   if ("completed" in how) {
     if (forgetsOnEnd(manifest, s, playing)) s.lastStop = undefined;
+    s.player = { ...s.player, "@lastChapter": chapterAtEnd(manifest, playing.item) };
   } else if (how.stoppedAt !== undefined) {
     s.lastStop = resumePointOf(playing, how.stoppedAt);
     s.player = { ...s.player, "@lastChapter": chapterAt(manifest, playing.item.media, how.stoppedAt) };

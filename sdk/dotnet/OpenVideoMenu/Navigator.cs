@@ -1337,6 +1337,16 @@ public static class Navigator
         }
     }
 
+    /// <summary>
+    /// The chapter an item's playback ends in when it plays to its end: the one its end closes (reached
+    /// from before), or the media's last chapter (a disc's SPRM 7 after a title completes).
+    /// </summary>
+    private static int ChapterAtEnd(Manifest manifest, PlayItem item)
+    {
+        var chapters = manifest.Media.GetValueOrDefault(item.Media)?.Chapters ?? [];
+        return item.End is { } end ? chapters.Count(c => c.Time < end) : chapters.Count;
+    }
+
     /// <summary>The resume point for <paramref name="playing"/> stopped (or left) at <paramref name="at"/>.</summary>
     private static LastStop ResumePointOf(Playback playing, double at) =>
         new(playing.Item.Media, at, playing.Item, playing.Queue.Count > 0 ? playing.Queue : null, playing.After);
@@ -1437,6 +1447,8 @@ public static class Navigator
             {
                 s.LastStop = null;
             }
+
+            s.Player["@lastChapter"] = ChapterAtEnd(manifest, playing.Item);
         }
         else if (stoppedAt is { } position)
         {

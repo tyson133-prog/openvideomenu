@@ -328,7 +328,7 @@ title starts.
 | `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
 | `@lastMedia` | text | `""` | Media id of the playback in progress, or of the last one. |
 | `@lastNumber` | integer | 0 | That media's `number` (§4); 0 when it has none. |
-| `@lastChapter` | integer | 0 | Chapter (1-based) playback is in, or was in when it last stopped. Logic run during playback reads it live: for a cue or an overlay's button, the chapter playback is in just before the cue's time (so a cue at a chapter's start reads the chapter it ends, as a disc's cell command does); for a key or the timer, the chapter at the position reported. |
+| `@lastChapter` | integer | 0 | Chapter (1-based) playback is in, or was in when it last stopped; after playback completes, the chapter it ended in (the one its `end` closes, or the media's last). Logic run during playback reads it live: for a cue or an overlay's button, the chapter playback is in just before the cue's time (so a cue at a chapter's start reads the chapter it ends, as a disc's cell command does); for a key or the timer, the chapter at the position reported. |
 | `@region` | integer | 0 (unknown) | Player region, 1–8. |
 | `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. A granted `requestParental` raises it (§6.8). |
 | `@country` | text | `""` | ISO 3166-1 alpha-2. |

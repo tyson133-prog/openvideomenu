@@ -1,0 +1,36 @@
+{
+  "description": "@lastChapter after playback completes is the chapter it ended in (a disc's SPRM 7, which menus read afterwards): the one the item's end closes, reached from before, or the media's last chapter when it plays to the end of the media. The after-action and the menu returned to read it.",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "title": { "name": "Where It Ended" },
+    "media": { "film": { "ref": "Film.mkv", "chapters": [{ "time": 0 }, { "time": 100 }, { "time": 200 }, { "time": 300 }] } },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "all", "rect": [100, 10, 200, 40], "nav": { "down": "part" }, "action": { "type": "play", "media": "film",
+            "after": { "type": "if", "test": { "var": "@lastChapter", "eq": 4 }, "then": { "type": "goto", "menu": "four" } } } },
+          { "id": "part", "rect": [100, 60, 200, 40], "nav": { "up": "all" }, "action": { "type": "play", "media": "film", "end": 200,
+            "after": { "type": "if", "test": { "var": "@lastChapter", "eq": 2 }, "then": { "type": "goto", "menu": "two" } } } }
+        ]
+      },
+      "four": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 10, 200, 40], "action": { "type": "back" } }] },
+      "two": { "canvas": { "width": 720, "height": 480 }, "buttons": [{ "id": "ok", "rect": [100, 10, 200, 40], "action": { "type": "back" } }] }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "all" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "four", "focus": "ok" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "menu", "menu": "main", "focus": "all" } },
+    { "event": { "type": "press", "key": "down" }, "expect": { "focus": "part" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "ended" }, "expect": { "mode": "menu", "menu": "two", "focus": "ok" } }
+  ]
+}

@@ -857,6 +857,18 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
     end if
     if completed
         if msNavForgetsOnEnd(manifest, s, playing) then s.lastStop = invalid
+        ' The chapter it ended in: the one its end closes (reached from before), or the media's last
+        ' (a disc's SPRM 7 after a title completes).
+        chapter = 0
+        info = manifest["media"][playing.item["media"]]
+        if info <> invalid and info["chapters"] <> invalid
+            for each c in info["chapters"]
+                if playing.item["end"] = invalid or c["time"] < playing.item["end"] then chapter = chapter + 1
+            end for
+        end if
+        player = msNavCopyVars(s.player)
+        player["@lastChapter"] = chapter
+        s.player = player
     else if stoppedAt <> invalid
         s.lastStop = msNavResumePointOf(playing, stoppedAt)
         player = msNavCopyVars(s.player)
