@@ -224,7 +224,13 @@ public sealed record OverlayFocus(string Cue, string Focus);
 /// media and position. Set by the navigator, it also holds the rest of that playback (the item, what
 /// was queued after it, its after-action), so resuming continues a play-all as a disc does.
 /// </summary>
-public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null);
+public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null, int? Chapter = null);
+
+/// <summary>
+/// Level 3: after a resume, @lastChapter keeps the chapter the resume point was saved in until playback of
+/// <paramref name="Media"/> reaches <paramref name="Until"/> seconds (the next chapter's start).
+/// </summary>
+public sealed record ChapterHold(string Media, double Until);
 
 /// <summary>Level 3: a parental level request waiting for an answer, and how its branches run.</summary>
 public sealed record ParentalRequest(int Level, MenuAction Then, MenuAction? Else, bool PushHistory, bool Up, double? CueAt);
@@ -266,6 +272,9 @@ public sealed record NavState
 
     /// <summary>Level 2: a button asked for on entering the menu that only one of its button sets has.</summary>
     public string? FocusWanted { get; init; }
+
+    /// <summary>Level 3: the chapter a resume restored, held until playback reaches the next chapter.</summary>
+    public ChapterHold? ChapterHeld { get; init; }
 
     /// <summary>Level 3: the player's clock at the latest event that gave one (spec §6.7).</summary>
     public double? Now { get; init; }
@@ -1049,7 +1058,7 @@ public static class Navigator
                     // From a cue: like the remote's Back during playback.
                     if (duringPlayback)
                     {
-                        FinishPlayback(manifest, s, effects, completed: false, stoppedAt: cueAt);
+                        FinishPlayback(manifest, s, effects, completed: false, stoppedAt: cueAt, fromCue: true);
                     }
                     else
                     {
@@ -1096,6 +1105,15 @@ public static class Navigator
                         }
 
                         StartPlayback(manifest, s, [item, .. stop.Queue ?? []], stop.After, effects, cueAt);
+
+                        // Level 3: the chapter it was saved in comes back with it, until playback reaches
+                        // the next chapter (a disc's Resume restores SPRM 7 with the resume cell).
+                        if (stop.Chapter is { } savedChapter && savedChapter != ChapterAt(manifest, stop.Media, stop.Position))
+                        {
+                            var nextChapter = manifest.Media.GetValueOrDefault(stop.Media)?.Chapters?.FirstOrDefault(c => c.Time > stop.Position);
+                            s.Player["@lastChapter"] = savedChapter;
+                            s.ChapterHeld = new ChapterHold(stop.Media, nextChapter?.Time ?? double.PositiveInfinity);
+                        }
                     }
                     else
                     {
@@ -1114,13 +1132,14 @@ public static class Navigator
                             save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = savedMedia, Chapter = c }) : save.At ?? 0,
                             Item: save.Item,
                             Queue: save.Queue is { Count: > 0 } queue ? queue : null,
-                            After: save.After);
+                            After: save.After,
+                            Chapter: ChapterNow(s));
                     }
                     else if (s.Mode == NavMode.Playing && s.Playing is { } here)
                     {
                         // "Here": the playback in progress (a disc's CallSS names the cell to resume at).
                         var at = save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = here.Item.Media, Chapter = c }) : save.At ?? cueAt ?? 0;
-                        s.LastStop = ResumePointOf(here, at);
+                        s.LastStop = ResumePointOf(here, at, ChapterNow(s));
                     }
 
                     s.ResumeSet = true;
@@ -1154,6 +1173,7 @@ public static class Navigator
                         var position = seek.Chapter is { } chapter ? StartTime(manifest, new PlayItem { Media = media, Chapter = chapter }) : seek.At ?? 0;
                         s.Overlay = null;
                         s.Seq++;
+                        s.ChapterHeld = null;
                         s.Player["@lastChapter"] = ChapterAt(manifest, media, position);
                         effects.Add(new Effect.Seek(position));
                     }
@@ -1285,12 +1305,12 @@ public static class Navigator
         {
             // Level 2: it ends the title playing, as a disc's link does; that title is remembered for
             // resume as when a cue opens a menu. The new playback returns where the old one would have.
+            // @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
             if (!s.ResumeSet)
             {
-                s.LastStop = ResumePointOf(current, cueAt!.Value);
+                s.LastStop = ResumePointOf(current, cueAt!.Value, ChapterNow(s));
             }
 
-            s.Player["@lastChapter"] = ChapterAt(manifest, current.Item.Media, cueAt!.Value);
             s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, current.ReturnTo);
         }
         else
@@ -1311,13 +1331,14 @@ public static class Navigator
     /// </summary>
     private static void LeavePlayback(Manifest manifest, Working s, double at)
     {
-        var media = s.Playing!.Item.Media;
+        // @lastChapter stays what the cue's logic read: at a chapter boundary, the chapter it ends (a disc's
+        // SPRM 7 through a call from a cell command).
         if (!s.ResumeSet)
         {
-            s.LastStop = ResumePointOf(s.Playing, at);
+            s.LastStop = ResumePointOf(s.Playing!, at, ChapterNow(s));
         }
 
-        s.Player["@lastChapter"] = ChapterAt(manifest, media, at);
+        s.ChapterHeld = null;
         s.Playing = null;
         s.Overlay = null;
     }
@@ -1358,8 +1379,11 @@ public static class Navigator
     }
 
     /// <summary>The resume point for <paramref name="playing"/> stopped (or left) at <paramref name="at"/>.</summary>
-    private static LastStop ResumePointOf(Playback playing, double at) =>
-        new(playing.Item.Media, at, playing.Item, playing.Queue.Count > 0 ? playing.Queue : null, playing.After);
+    private static LastStop ResumePointOf(Playback playing, double at, int? chapter) =>
+        new(playing.Item.Media, at, playing.Item, playing.Queue.Count > 0 ? playing.Queue : null, playing.After, chapter);
+
+    /// <summary>Level 3: @lastChapter as it is now, which a saved resume point keeps.</summary>
+    private static int? ChapterNow(Working s) => s.Player.TryGetValue("@lastChapter", out var c) ? c.Number : null;
 
     /// <summary>Playback of the resume point's media completed: forget it, unless it lasts until used (a disc's).</summary>
     private static bool ForgetsOnEnd(Manifest manifest, Working s, Playback playing) =>
@@ -1372,6 +1396,7 @@ public static class Navigator
     private static Effect.Play StartItem(Manifest manifest, Working s, PlayItem item, double? from = null)
     {
         var effect = PlayEffect(manifest, item, s, from);
+        s.ChapterHeld = null;
         s.Player["@lastMedia"] = item.Media;
         s.Player["@lastNumber"] = manifest.Media.GetValueOrDefault(item.Media)?.Number ?? 0;
         s.Player["@lastChapter"] = ChapterAt(manifest, item.Media, effect.Start);
@@ -1388,6 +1413,13 @@ public static class Navigator
         if (s.Playing is { } playing)
         {
             var media = playing.Item.Media;
+            // After a resume, the chapter it was saved in holds until playback reaches the next chapter.
+            if (s.ChapterHeld is { } held && held.Media == media && (before ? at <= held.Until : at < held.Until))
+            {
+                return;
+            }
+
+            s.ChapterHeld = null;
             // Arriving from before: the chapters that start strictly before it.
             s.Player["@lastChapter"] = before && at > 0
                 ? manifest.Media.GetValueOrDefault(media)?.Chapters?.Count(c => c.Time < at) ?? 0
@@ -1430,7 +1462,7 @@ public static class Navigator
         return n;
     }
 
-    private static void FinishPlayback(Manifest manifest, Working s, List<Effect> effects, bool completed, double? stoppedAt)
+    private static void FinishPlayback(Manifest manifest, Working s, List<Effect> effects, bool completed, double? stoppedAt, bool fromCue = false)
     {
         var playing = s.Playing!;
         s.Playing = null;
@@ -1451,6 +1483,8 @@ public static class Navigator
             return;
         }
 
+        var held = s.ChapterHeld?.Media == playing.Item.Media ? s.ChapterHeld : null;
+        s.ChapterHeld = null;
         if (completed)
         {
             if (ForgetsOnEnd(manifest, s, playing))
@@ -1458,12 +1492,21 @@ public static class Navigator
                 s.LastStop = null;
             }
 
-            s.Player["@lastChapter"] = ChapterAtEnd(manifest, playing.Item);
+            // Ending before the next chapter after a resume keeps the chapter the resume restored.
+            if (!(held is not null && (playing.Item.End ?? double.PositiveInfinity) <= held.Until))
+            {
+                s.Player["@lastChapter"] = ChapterAtEnd(manifest, playing.Item);
+            }
         }
         else if (stoppedAt is { } position)
         {
-            s.LastStop = ResumePointOf(playing, position);
-            s.Player["@lastChapter"] = ChapterAt(manifest, playing.Item.Media, position);
+            // The viewer stopped: the chapter playback is in there. A cue's back keeps what its logic read.
+            if (!fromCue && !(held is not null && position < held.Until))
+            {
+                s.Player["@lastChapter"] = ChapterAt(manifest, playing.Item.Media, position);
+            }
+
+            s.LastStop = ResumePointOf(playing, position, ChapterNow(s));
         }
 
         // Go back to where playback was started from, then run the after-action from there.
@@ -1534,6 +1577,8 @@ public static class Navigator
 
         public string? FocusWanted { get; set; } = from.FocusWanted;
 
+        public ChapterHold? ChapterHeld { get; set; } = from.ChapterHeld;
+
         public double? Now { get; set; } = from.Now;
 
         public Dictionary<string, double>? Counters { get; set; } = from.Counters is null ? null : new(from.Counters);
@@ -1592,6 +1637,7 @@ public static class Navigator
             Overlay = Overlay,
             ButtonSet = ButtonSet,
             FocusWanted = FocusWanted,
+            ChapterHeld = ChapterHeld,
             Now = Now,
             Counters = Counters,
             NavTimer = NavTimer,

@@ -335,7 +335,7 @@ title starts.
 | `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
 | `@lastMedia` | text | `""` | Media id of the playback in progress, or of the last one. |
 | `@lastNumber` | integer | 0 | That media's `number` (§4); 0 when it has none. |
-| `@lastChapter` | integer | 0 | Chapter (1-based) playback is in, or was in when it last stopped; after playback completes, the chapter it ended in (the one its `end` closes, or the media's last). Logic run during playback reads it live: for a cue or an overlay's button, the chapter playback is in just before the cue's time (so a cue at a chapter's start reads the chapter it ends, as a disc's cell command does); for a key or the timer, the chapter at the position reported. |
+| `@lastChapter` | integer | 0 | Chapter (1-based) playback is in, or was in when it last stopped; after playback completes, the chapter it ended in (the one its `end` closes, or the media's last); after a resume, the chapter the resume point was saved in until playback reaches the next chapter (§6.5). Logic run during playback reads it live: for a cue or an overlay's button, the chapter playback is in just before the cue's time (so a cue at a chapter's start reads the chapter it ends, as a disc's cell command does); for a key or the timer, the chapter at the position reported. |
 | `@region` | integer | 0 (unknown) | Player region, 1–8. |
 | `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. A granted `requestParental` raises it (§6.8). |
 | `@country` | text | `""` | ISO 3166-1 alpha-2. |
@@ -548,6 +548,11 @@ names the cell to come back to, and the point survives other titles until a Resu
 - **`clearResume`** forgets the point.
 - A cue that saves or clears the point and then leaves for a menu keeps what it said: leaving saves
   "here" only when the cue's action didn't save or clear the point itself.
+- **The point remembers `@lastChapter`** as it was when saved (Level 3), as a disc's call saves its chapter
+  register with the resume cell. When it is resumed, `@lastChapter` reads that chapter until playback
+  reaches the next chapter, then is live again. For a viewer's stop, or a save "here", that is the
+  chapter playing anyway; it differs when a save names another position (a call's resume cell). Leaving
+  playback from a cue keeps the chapter the cue's logic read.
 - **`@resumeMedia`** reads the point's media id, `""` when there is none, so logic can choose (a disc's
   "if a title was stopped, show Resume").
 - Hosts MAY restore a point from their own records (the viewer's last position from the media server) as

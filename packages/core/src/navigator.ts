@@ -163,6 +163,11 @@ export interface NavState {
   buttonSet?: number;
   /** Level 2: a button asked for on entering the menu that only one of its button sets has. */
   focusWanted?: string;
+  /**
+   * Level 3: after a resume, @lastChapter keeps the chapter the resume point was saved in until playback
+   * of [media] reaches [until] seconds (the next chapter's start), then is live again.
+   */
+  chapterHeld?: { media: string; until: number };
   /** Level 3: the player's clock at the latest event that gave one (spec §6.7). */
   now?: number;
   /** Level 3: counter variables, and the time each was last set. */
@@ -191,6 +196,8 @@ export interface NavState {
 export interface ResumePoint {
   media: string;
   position: number;
+  /** Level 3: @lastChapter when it was saved, which a resume restores (a disc's SPRM 7, saved by a call). */
+  chapter?: number;
   item?: PlayItem;
   queue?: PlayItem[];
   after?: Action;
@@ -447,9 +454,19 @@ function handleInput(
 function playedTo(manifest: Manifest, s: NavState, at: number, before: boolean) {
   if (!s.playing) return;
   const media = s.playing.item.media;
+  // After a resume, the chapter it was saved in holds until playback reaches the next chapter.
+  const held = s.chapterHeld;
+  if (held && held.media === media && (before ? at <= held.until : at < held.until)) return;
+  s.chapterHeld = undefined;
   // Arriving from before: the chapters that start strictly before it.
   const chapter = before && at > 0 ? (manifest.media[media]?.chapters ?? []).filter((c) => c.time < at).length : chapterAt(manifest, media, at);
   s.player = { ...s.player, "@lastChapter": chapter };
+}
+
+/** Level 3: @lastChapter as it is now, which a saved resume point keeps. */
+function chapterNow(s: NavState): number | undefined {
+  const chapter = s.player["@lastChapter"];
+  return typeof chapter === "number" ? chapter : undefined;
 }
 
 function isMenuKey(key: Key): key is MenuKey {
@@ -677,7 +694,7 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
       }
       case "back":
         // From a cue: like the remote's Back during playback.
-        if (duringPlayback) finishPlayback(manifest, s, effects, { stoppedAt: opts.cueAt });
+        if (duringPlayback) finishPlayback(manifest, s, effects, { stoppedAt: opts.cueAt, fromCue: true });
         else goBack(manifest, s, effects);
         break;
       case "play":
@@ -703,6 +720,14 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
           const { chapter: _c, start: _s, audio: _a, subtitle: _t, angle: _g, ...item } = point.item ?? { media: point.media };
           if (manifest.resumePoint === "untilUsed") s.lastStop = undefined;
           startPlayback(manifest, s, [{ ...item, start: point.position }, ...(point.queue ?? [])], point.after, effects, opts.cueAt);
+          // Level 3: the chapter it was saved in comes back with it, until playback reaches the next
+          // chapter (a disc's Resume restores SPRM 7 with the resume cell).
+          const live = chapterAt(manifest, point.media, point.position);
+          if (point.chapter !== undefined && point.chapter !== live) {
+            const next = (manifest.media[point.media]?.chapters ?? []).find((c) => c.time > point.position);
+            s.player = { ...s.player, "@lastChapter": point.chapter };
+            s.chapterHeld = { media: point.media, until: next?.time ?? Infinity };
+          }
         }
         // Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if stopped,
         // LinkRSM, else go to the picker").
@@ -719,12 +744,13 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
             // What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
             ...(action.queue?.length ? { queue: action.queue } : {}),
             ...(action.after ? { after: action.after } : {}),
+            ...(chapterNow(s) !== undefined ? { chapter: chapterNow(s)! } : {}),
           };
         } else if (s.mode === "playing" && s.playing) {
           // "Here": the playback in progress (a disc's CallSS names the cell to resume at).
           const media = s.playing.item.media;
           const at = action.chapter !== undefined ? startTime(manifest, { media, chapter: action.chapter }) : (action.at ?? opts.cueAt ?? 0);
-          s.lastStop = resumePointOf(s.playing, at);
+          s.lastStop = resumePointOf(s.playing, at, chapterNow(s));
         }
         resumeSet = true;
         break;
@@ -770,6 +796,7 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
           const position = action.chapter !== undefined ? startTime(manifest, { media: item.media, chapter: action.chapter }) : (action.at ?? 0);
           s.overlay = undefined;
           s.seq += 1;
+          s.chapterHeld = undefined;
           s.player = { ...s.player, "@lastChapter": chapterAt(manifest, item.media, position) };
           effects.push({ type: "seek", position });
         }
@@ -834,9 +861,8 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   if (current && manifest.cuePlayback === "replace") {
     // Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume
     // as when a cue opens a menu. The new playback returns where the old one would have.
-    const media = current.item.media;
-    if (!resumeSet) s.lastStop = resumePointOf(current, cueAt!);
-    s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, cueAt!) };
+    // @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
+    if (!resumeSet) s.lastStop = resumePointOf(current, cueAt!, chapterNow(s));
     s.playing = { item: first, queue, after, returnTo: current.returnTo };
   } else
     s.playing = current
@@ -853,9 +879,10 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
  * or cleared the resume point itself (a disc's CallSS names its resume cell; a JumpSS saves none).
  */
 function leavePlayback(manifest: Manifest, s: NavState, at: number) {
-  const media = s.playing!.item.media;
-  if (!resumeSet) s.lastStop = resumePointOf(s.playing!, at);
-  s.player = { ...s.player, "@lastChapter": chapterAt(manifest, media, at) };
+  // @lastChapter stays what the cue's logic read: at a chapter boundary, the chapter it ends (a disc's
+  // SPRM 7 through a call from a cell command).
+  if (!resumeSet) s.lastStop = resumePointOf(s.playing!, at, chapterNow(s));
+  s.chapterHeld = undefined;
   s.playing = undefined;
   s.overlay = undefined;
 }
@@ -875,10 +902,11 @@ function liveTrack(manifest: Manifest, s: NavState, name: string, value: Scalar,
 }
 
 /** The resume point for [playing] stopped (or left) at [at]: the item, what's queued after it, its after-action. */
-function resumePointOf(playing: Playing, at: number): ResumePoint {
+function resumePointOf(playing: Playing, at: number, chapter?: number): ResumePoint {
   return {
     media: playing.item.media,
     position: at,
+    ...(chapter !== undefined ? { chapter } : {}),
     item: playing.item,
     ...(playing.queue.length ? { queue: playing.queue } : {}),
     ...(playing.after ? { after: playing.after } : {}),
@@ -888,6 +916,7 @@ function resumePointOf(playing: Playing, at: number): ResumePoint {
 /** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). `from`: start elsewhere than the item's own start. */
 function startItem(manifest: Manifest, s: NavState, item: PlayItem, from?: number): Effect {
   const effect = playEffect(manifest, item, s, from);
+  s.chapterHeld = undefined;
   s.player = {
     ...s.player,
     "@lastMedia": item.media,
@@ -920,7 +949,7 @@ function finishPlayback(
   manifest: Manifest,
   s: NavState,
   effects: Effect[],
-  how: { completed: true } | { stoppedAt: number | undefined },
+  how: { completed: true } | { stoppedAt: number | undefined; fromCue?: boolean },
 ) {
   const playing = s.playing!;
   s.playing = undefined;
@@ -934,12 +963,17 @@ function finishPlayback(
     effects.push(startItem(manifest, s, playing.resumeTo.playing.item, playing.resumeTo.at));
     return;
   }
+  const held = s.chapterHeld?.media === playing.item.media ? s.chapterHeld : undefined;
+  s.chapterHeld = undefined;
   if ("completed" in how) {
     if (forgetsOnEnd(manifest, s, playing)) s.lastStop = undefined;
-    s.player = { ...s.player, "@lastChapter": chapterAtEnd(manifest, playing.item) };
+    // Ending before the next chapter after a resume keeps the chapter the resume restored.
+    if (!(held && (playing.item.end ?? Infinity) <= held.until)) s.player = { ...s.player, "@lastChapter": chapterAtEnd(manifest, playing.item) };
   } else if (how.stoppedAt !== undefined) {
-    s.lastStop = resumePointOf(playing, how.stoppedAt);
-    s.player = { ...s.player, "@lastChapter": chapterAt(manifest, playing.item.media, how.stoppedAt) };
+    // The viewer stopped: the chapter playback is in there. A cue's back keeps what its logic read.
+    if (!how.fromCue && !(held && how.stoppedAt < held.until))
+      s.player = { ...s.player, "@lastChapter": chapterAt(manifest, playing.item.media, how.stoppedAt) };
+    s.lastStop = resumePointOf(playing, how.stoppedAt, chapterNow(s));
   }
 
   // Go back to where playback was started from, then run the after-action from there.

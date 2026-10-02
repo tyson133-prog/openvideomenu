@@ -353,12 +353,10 @@ end sub
 
 ' A cue opened a menu: playback ends, remembered for resume at the cue's time.
 sub msNavLeavePlayback(manifest as object, s as object, at as dynamic)
-    media = s.playing.item["media"]
     ' Unless the cue saved or cleared the resume point itself (a disc's CallSS names its resume cell).
-    if not s.resumeSet then s.lastStop = msNavResumePointOf(s.playing, at)
-    player = msNavCopyVars(s.player)
-    player["@lastChapter"] = msNavChapterAt(manifest, media, at)
-    s.player = player
+    ' @lastChapter stays what the cue's logic read: at a chapter boundary, the chapter it ends.
+    if not s.resumeSet then s.lastStop = msNavResumePointOf(s.playing, at, s)
+    s.chapterHeld = invalid
     s.playing = invalid
     s.overlay = invalid
 end sub
@@ -598,7 +596,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "back"
         ' From a cue: like the remote's Back during playback.
         if duringPlayback
-            msNavFinishPlayback(manifest, s, effects, false, s.cueAt)
+            msNavFinishPlayback(manifest, s, effects, false, s.cueAt, true)
         else
             msNavGoBack(manifest, s, effects)
         end if
@@ -630,6 +628,22 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             if point.queue <> invalid then items.Append(point.queue)
             if manifest["resumePoint"] = "untilUsed" then s.lastStop = invalid
             msNavStartPlayback(manifest, s, items, point.after, effects)
+            ' Level 3: the chapter it was saved in comes back with it, until playback reaches the next
+            ' chapter (a disc's Resume restores SPRM 7 with the resume cell).
+            if point.chapter <> invalid
+                if point.chapter <> msNavChapterAt(manifest, point.media, point.position)
+                    player = msNavCopyVars(s.player)
+                    player["@lastChapter"] = point.chapter
+                    s.player = player
+                    s.chapterHeld = { media: point.media, until: invalid }
+                    info = manifest["media"][point.media]
+                    if info <> invalid and info["chapters"] <> invalid
+                        for each c in info["chapters"]
+                            if c["time"] > point.position and s.chapterHeld.until = invalid then s.chapterHeld.until = c["time"]
+                        end for
+                    end if
+                end if
+            end if
         else
             ' Nothing to resume: the fallback runs as if it were the action itself (a DVD's "if
             ' stopped, LinkRSM, else go to the picker").
@@ -699,6 +713,8 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             at = msOr(action["at"], 0)
             if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: saved, chapter: action["chapter"] })
             s.lastStop = { media: saved, position: at }
+            ' Level 3: the chapter as it is now, which a resume restores.
+            if msNavIsNumber(s.player["@lastChapter"]) then s.lastStop.chapter = s.player["@lastChapter"]
             ' A saved item keeps its own end, cues and holds.
             if action["item"] <> invalid then s.lastStop.item = action["item"]
             ' What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
@@ -707,7 +723,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         else if s.mode = "playing" and s.playing <> invalid
             at = msOr(action["at"], msOr(s.cueAt, 0))
             if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: s.playing.item["media"], chapter: action["chapter"] })
-            s.lastStop = msNavResumePointOf(s.playing, at)
+            s.lastStop = msNavResumePointOf(s.playing, at, s)
         end if
         s.resumeSet = true
     else if t = "clearResume"
@@ -733,6 +749,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             if action["chapter"] <> invalid then position = msNavStartTime(manifest, { media: media, chapter: action["chapter"] })
             s.overlay = invalid
             s.seq = s.seq + 1
+            s.chapterHeld = invalid
             player = msNavCopyVars(s.player)
             player["@lastChapter"] = msNavChapterAt(manifest, media, position)
             s.player = player
@@ -780,10 +797,8 @@ sub msNavStartPlayback(manifest as object, s as object, items as object, after a
         ' Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume as
         ' when a cue opens a menu. The new playback returns where the old one would have.
         current = s.playing
-        if not s.resumeSet then s.lastStop = msNavResumePointOf(current, s.cueAt)
-        player = msNavCopyVars(s.player)
-        player["@lastChapter"] = msNavChapterAt(manifest, current.item["media"], s.cueAt)
-        s.player = player
+        ' @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
+        if not s.resumeSet then s.lastStop = msNavResumePointOf(current, s.cueAt, s)
         s.playing = { item: first, queue: queue, after: after, returnTo: current.returnTo }
     else if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
         s.playing = { item: first, queue: queue, after: invalid, returnTo: s.playing.returnTo, resumeTo: { playing: s.playing, at: s.cueAt } }
@@ -801,6 +816,7 @@ end sub
 function msNavPlaying(manifest as object, s as object, item as object, from = invalid as dynamic) as object
     effect = msNavPlayEffect(manifest, item, s)
     if from <> invalid then effect.start = from
+    s.chapterHeld = invalid
     player = msNavCopyVars(s.player)
     player["@lastMedia"] = item["media"]
     player["@lastNumber"] = 0
@@ -817,6 +833,9 @@ end function
 sub msNavPlayedTo(manifest as object, s as object, at as dynamic, before as boolean)
     if s.playing = invalid then return
     media = s.playing.item["media"]
+    ' After a resume, the chapter it was saved in holds until playback reaches the next chapter.
+    if msNavHolding(s, media, at, before) then return
+    s.chapterHeld = invalid
     chapter = msNavChapterAt(manifest, media, at)
     if before and at > 0
         ' Arriving from before: the chapters that start strictly before it (no tiny offset, which
@@ -846,7 +865,18 @@ function msNavChapterAt(manifest as object, media as string, seconds as dynamic)
 end function
 
 ' completed: the item played to the end. Otherwise stoppedAt is the position (invalid = unknown).
-sub msNavFinishPlayback(manifest as object, s as object, effects as object, completed as boolean, stoppedAt as dynamic)
+' Level 3: whether the chapter a resume restored still holds for [media] at [at] (until the next chapter;
+' before: a cue's time, reached from before).
+function msNavHolding(s as object, media as string, at as dynamic, before as boolean) as boolean
+    held = s.chapterHeld
+    if held = invalid or at = invalid then return false
+    if held.media <> media then return false
+    if held.until = invalid then return true
+    if before then return at <= held.until
+    return at < held.until
+end function
+
+sub msNavFinishPlayback(manifest as object, s as object, effects as object, completed as boolean, stoppedAt as dynamic, fromCue = false as boolean)
     playing = s.playing
     s.playing = invalid
     s.overlay = invalid
@@ -859,7 +889,13 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
         effects.push(msNavPlaying(manifest, s, s.playing.item, playing.resumeTo.at))
         return
     end if
-    if completed
+    endsHeld = completed and msNavHolding(s, playing.item["media"], msOr(playing.item["end"], 1e30), true)
+    stopHeld = (not completed) and msNavHolding(s, playing.item["media"], stoppedAt, false)
+    s.chapterHeld = invalid
+    if completed and endsHeld
+        ' Ending before the next chapter after a resume keeps the chapter the resume restored.
+        if msNavForgetsOnEnd(manifest, s, playing) then s.lastStop = invalid
+    else if completed
         if msNavForgetsOnEnd(manifest, s, playing) then s.lastStop = invalid
         ' The chapter it ended in: the one its end closes (reached from before), or the media's last
         ' (a disc's SPRM 7 after a title completes).
@@ -874,10 +910,13 @@ sub msNavFinishPlayback(manifest as object, s as object, effects as object, comp
         player["@lastChapter"] = chapter
         s.player = player
     else if stoppedAt <> invalid
-        s.lastStop = msNavResumePointOf(playing, stoppedAt)
-        player = msNavCopyVars(s.player)
-        player["@lastChapter"] = msNavChapterAt(manifest, playing.item["media"], stoppedAt)
-        s.player = player
+        ' The viewer stopped: the chapter playback is in there. A cue's back keeps what its logic read.
+        if not fromCue and not stopHeld
+            player = msNavCopyVars(s.player)
+            player["@lastChapter"] = msNavChapterAt(manifest, playing.item["media"], stoppedAt)
+            s.player = player
+        end if
+        s.lastStop = msNavResumePointOf(playing, stoppedAt, s)
     end if
 
     ' Go back to where playback was started from, then run the after-action from there.
@@ -908,8 +947,10 @@ sub msNavLiveTrack(manifest as object, s as object, name as string, value as dyn
 end sub
 
 ' The resume point for playback stopped (or left) at a time: the item, what's queued after it, its after-action.
-function msNavResumePointOf(playing as object, at as dynamic) as object
+function msNavResumePointOf(playing as object, at as dynamic, s as object) as object
     point = { media: playing.item["media"], position: at, item: playing.item }
+    ' Level 3: the chapter as it is now, which a resume restores.
+    if msNavIsNumber(s.player["@lastChapter"]) then point.chapter = s.player["@lastChapter"]
     if playing.queue <> invalid and playing.queue.Count() > 0 then point.queue = playing.queue
     if playing.after <> invalid then point.after = playing.after
     return point

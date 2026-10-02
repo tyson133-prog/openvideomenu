@@ -1,0 +1,186 @@
+{
+  "description": "A resume point carries @lastChapter as it was when saved, as a disc's call saves SPRM 7 with its resume cell. A song's last cell calls a menu, saving resume cell 1: leaving playback keeps the chapter the cue read (the song that ended), and after the resume @lastChapter reads that song until playback reaches the next chapter, then is live again.",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "title": {
+      "name": "Songs"
+    },
+    "media": {
+      "songs": {
+        "ref": "Songs.mkv",
+        "chapters": [
+          {
+            "time": 0
+          },
+          {
+            "time": 60
+          },
+          {
+            "time": 120
+          },
+          {
+            "time": 180
+          }
+        ]
+      }
+    },
+    "keys": {
+      "menu": {
+        "type": "if",
+        "test": {
+          "var": "@lastChapter",
+          "eq": 3
+        },
+        "then": {
+          "type": "goto",
+          "menu": "three"
+        },
+        "else": {
+          "type": "goto",
+          "menu": "other"
+        }
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "song3",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "play",
+              "media": "songs",
+              "chapter": 3,
+              "end": 180,
+              "cues": [
+                {
+                  "at": 180,
+                  "action": {
+                    "type": "do",
+                    "steps": [
+                      {
+                        "type": "saveResume",
+                        "chapter": 1
+                      },
+                      {
+                        "type": "goto",
+                        "menu": "after"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "after": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "check",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "if",
+              "test": {
+                "var": "@lastChapter",
+                "eq": 3
+              },
+              "then": {
+                "type": "goto",
+                "menu": "three"
+              }
+            }
+          }
+        ]
+      },
+      "three": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      },
+      "other": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Songs",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "songs"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"song3","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"main","button":"song3"},{"type":"play","media":"songs","start":120,"end":180,"cues":[{"id":"item/0","at":180}]}]}},
+    {"event":{"type":"cue","id":"item/0"},"expect":{"mode":"menu","menu":"after","focus":"check","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"three","focus":"resume","effects":[{"type":"activated","menu":"after","button":"check"}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"three","button":"resume"},{"type":"play","media":"songs","start":0,"end":180,"cues":[{"id":"item/0","at":180}]}]}},
+    {"event":{"type":"press","key":"menu","position":30},"expect":{"mode":"menu","menu":"three","focus":"resume","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"three","button":"resume"},{"type":"play","media":"songs","start":30,"end":180,"cues":[{"id":"item/0","at":180}]}]}},
+    {"event":{"type":"press","key":"menu","position":70},"expect":{"mode":"menu","menu":"other","focus":"ok","effects":[]}}
+  ]
+}
