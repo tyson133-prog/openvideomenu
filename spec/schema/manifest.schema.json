@@ -274,6 +274,10 @@
         },
         "holds": {
           "$ref": "#/$defs/holds"
+        },
+        "number": {
+          "type": "integer",
+          "description": "A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number."
         }
       },
       "not": {
@@ -750,6 +754,10 @@
               },
               "after": {
                 "$ref": "#/$defs/afterAction"
+              },
+              "item": {
+                "$ref": "#/$defs/playItem",
+                "description": "Instead of media: the play item to resume, with its own end, cues and holds."
               }
             },
             "not": {
@@ -757,7 +765,17 @@
                 "at",
                 "chapter"
               ]
-            }
+            },
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "media",
+                    "item"
+                  ]
+                }
+              }
+            ]
           }
         },
         {

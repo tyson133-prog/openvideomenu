@@ -16,7 +16,7 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
+        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds", "number"],
         ["hold"] = ["at", "for"],
         ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
@@ -47,7 +47,7 @@ internal sealed class Validator
         ("resume", ["type", "otherwise"]),
         ("activate", ["type", "button"]),
         ("run", ["type", "action"]),
-        ("saveResume", ["type", "media", "at", "chapter", "queue", "after"]),
+        ("saveResume", ["type", "media", "item", "at", "chapter", "queue", "after"]),
         ("seek", ["type", "at", "chapter"]),
         ("timer", ["type", "after", "action"]),
         ("cancelTimer", ["type"]),
@@ -708,6 +708,11 @@ internal sealed class Validator
             if (m["kind"] is { } kind && kind.ValueKind != JsonValueKind.String)
             {
                 Error($"{path}/kind", "Must be a string.");
+            }
+
+            if (m["number"] is { } number && !IsInteger(number))
+            {
+                Error($"{path}/number", "Must be an integer.");
             }
 
             if (m["duration"] is { } duration && !(IsFiniteNumber(duration) && duration.GetDouble() >= 0))
@@ -1743,6 +1748,25 @@ internal sealed class Validator
 
             case "saveResume":
             {
+                // The resumed play item, with its own end, cues and holds: checked as any play item, and
+                // its media is the saved one.
+                if (action["item"] is { } savedItem)
+                {
+                    if (action["media"] is not null)
+                    {
+                        Error($"{path}/item", "Give media or item, not both.");
+                    }
+                    else if (!Obj.TryFrom(savedItem, out var io))
+                    {
+                        Error($"{path}/item", "Must be a play item {media, end?, cues?, ...}.");
+                    }
+                    else
+                    {
+                        UnknownKeys(io, ActionKeys.First(a => a.Type == "play").Keys.Where(k => k is not ("type" or "after")).ToArray(), $"{path}/item");
+                        PlayItem(io, $"{path}/item", mediaIds, menus);
+                    }
+                }
+
                 var chapter = action["chapter"];
                 if (action["media"] is { } savedMedia)
                 {
@@ -1771,7 +1795,7 @@ internal sealed class Validator
                 }
 
                 // What follows the saved media when resumed: only with media (without it, "here" brings its own).
-                if ((action["queue"] is not null || action["after"] is not null) && action["media"] is null)
+                if ((action["queue"] is not null || action["after"] is not null) && action["media"] is null && action["item"] is null)
                 {
                     Error($"{path}/{(action["queue"] is not null ? "queue" : "after")}", "Only with media: saving \"here\" keeps what follows the playback in progress.");
                 }

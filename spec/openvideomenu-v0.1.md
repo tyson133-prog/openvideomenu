@@ -81,6 +81,8 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
   - `{ "scheme": "...", "id": "..." }`, an opaque reference the host player resolves. For example, a media server can use its own item ids. A player that doesn't know a scheme treats that media as unavailable.
 - `kind` suggests how to group the media: `feature`, `episode`, `trailer`, `featurette`, `behindthescenes`, `deleted`, `interview`, `scene`, `short` or `other`. Other values are allowed.
 - `chapters` are start times in seconds and MUST increase. Chapter numbers in actions start at **1**.
+- `number` is an optional integer for logic to read (Level 3, §6.1): a disc's title number, an episode
+  number. Players ignore it otherwise.
 
 ### 4.1 Angles (Level 2)
 
@@ -264,7 +266,7 @@ Every action is an object with a `type`:
 | `if` | `test`, `then`, `else?` | *(Level 3)* Run `then` or `else` depending on a condition (§6.1). |
 | `do` | `steps` | *(Level 3)* Run actions in order until one navigates (§6.1). |
 | `run` | `action` | *(Level 3)* Run a named action from `actions`, as if it were written here (§6.4). |
-| `saveResume` | `media?`, `at?`, `chapter?`, `queue?`, `after?` | *(Level 3)* Save the resume point (§6.5). |
+| `saveResume` | `media?` or `item?`, `at?`, `chapter?`, `queue?`, `after?` | *(Level 3)* Save the resume point (§6.5). |
 | `clearResume` | — | *(Level 3)* Forget the resume point (§6.5). |
 | `seek` | `at` or `chapter` | *(Level 2)* During playback, continue the title elsewhere on its timeline (§6.3). |
 | `timer` | `after`, `action` | *(Level 3)* Start the navigation timer (§6.7). |
@@ -324,8 +326,9 @@ title starts.
 | `@angle` | integer | 1 | Current angle, 1-based. Writable. |
 | `@focus` | text | — | The highlighted button's id. Writable: setting it highlights that button of the current menu. |
 | `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
-| `@lastMedia` | text | `""` | Media id of the last playback. |
-| `@lastChapter` | integer | 0 | Chapter (1-based) that playback started in, updated to where it stopped. |
+| `@lastMedia` | text | `""` | Media id of the playback in progress, or of the last one. |
+| `@lastNumber` | integer | 0 | That media's `number` (§4); 0 when it has none. |
+| `@lastChapter` | integer | 0 | Chapter (1-based) playback is in, or was in when it last stopped. Logic run during playback reads it live: for a cue or an overlay's button, the chapter playback is in just before the cue's time (so a cue at a chapter's start reads the chapter it ends, as a disc's cell command does); for a key or the timer, the chapter at the position reported. |
 | `@region` | integer | 0 (unknown) | Player region, 1–8. |
 | `@parentalLevel` | integer | 8 (unrestricted) | Parental level, 1–8. A granted `requestParental` raises it (§6.8). |
 | `@country` | text | `""` | ISO 3166-1 alpha-2. |
@@ -525,11 +528,13 @@ names the cell to come back to, and the point survives other titles until a Resu
 - **`resumePoint`**: `"untilEnd"` (default): completing that media's playback forgets the point.
   `"untilUsed"`: the point lasts through other playback and menus until a `resume` uses it, or a stop,
   a cue or `saveResume` replaces it, or `clearResume` forgets it.
-- **`saveResume`** `{ media?, at?, chapter?, queue?, after? }` saves a point: `media` from `chapter` (its
-  start) or `at` seconds (default 0). Without `media`, it saves the playback in progress "here", at
+- **`saveResume`** `{ media?, item?, at?, chapter?, queue?, after? }` saves a point: `media` from `chapter`
+  (its start) or `at` seconds (default 0). **`item`**, instead of `media`, saves a whole play item: the
+  resumed title keeps its own `end`, cues, holds and keys (its tracks are the current ones, as for any
+  resume), and its cues before the point don't run, as when the viewer seeks. Without `media`, it saves the playback in progress "here", at
   `chapter` or `at`, or by default the cue's time; outside playback it does nothing. `at` and `chapter`
   are not both given.
-- With `media`, **`queue`** (play items) and **`after`** say what follows it when it's resumed, as a
+- With `media` or `item`, **`queue`** (play items) and **`after`** say what follows it when it's resumed, as a
   stopped playback remembers them: the rest of a play-all, then its after-action, which must not start
   playback. That lets logic shared by many places (a named action) save a point inside a play-all,
   where it can't say "here".

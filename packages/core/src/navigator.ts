@@ -308,7 +308,10 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       if (s.mode !== "playing" || !s.playing) break;
       const cue = cueById(manifest, s.playing.item, event.id);
       if (!cue) break;
-      if ("at" in cue) run(manifest, s, cue.action, effects, { pushHistory: false, cueAt: cue.at });
+      if ("at" in cue) {
+        playedTo(manifest, s, cue.at, true);
+        run(manifest, s, cue.action, effects, { pushHistory: false, cueAt: cue.at });
+      }
       else {
         // The overlay's buttons show; a later one replaces one still showing.
         const focus = buttonRef(s, cue, cue.defaultButton) ?? cue.buttons[0]!.id;
@@ -340,8 +343,10 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       const timer = s.navTimer;
       if (!timer) break;
       s.navTimer = undefined;
-      if (s.mode === "playing" && s.playing)
+      if (s.mode === "playing" && s.playing) {
+        if (event.position !== undefined) playedTo(manifest, s, event.position, false);
         run(manifest, s, timer.action, effects, { pushHistory: false, cueAt: event.position ?? startTime(manifest, s.playing.item) });
+      }
       else run(manifest, s, timer.action, effects, { pushHistory: false, up: true });
       break;
     }
@@ -429,6 +434,19 @@ function handleInput(
 
 // --- helpers -------------------------------------------------------------------------------
 
+/**
+ * Playback has reached [at] seconds: @lastChapter is the chapter it is in (a disc's SPRM 7), read by the
+ * logic about to run. `before`: a cue's time, where playback arrives from before, so a cue at a
+ * chapter's start (a cell command at the previous cell's end) still reads the chapter it ends.
+ */
+function playedTo(manifest: Manifest, s: NavState, at: number, before: boolean) {
+  if (!s.playing) return;
+  const media = s.playing.item.media;
+  // Arriving from before: the chapters that start strictly before it.
+  const chapter = before && at > 0 ? (manifest.media[media]?.chapters ?? []).filter((c) => c.time < at).length : chapterAt(manifest, media, at);
+  s.player = { ...s.player, "@lastChapter": chapter };
+}
+
 function isMenuKey(key: Key): key is MenuKey {
   return (MENU_KEYS as readonly string[]).includes(key);
 }
@@ -444,6 +462,7 @@ function menuKey(manifest: Manifest, s: NavState, key: MenuKey, position: number
   if (s.mode === "playing" && s.playing) {
     const item = s.playing.item;
     const action = item.keys?.[key] ?? manifest.media[item.media]?.keys?.[key] ?? manifest.keys?.[key] ?? fallback;
+    if (position !== undefined) playedTo(manifest, s, position, false);
     if (action) run(manifest, s, action, effects, { pushHistory: false, cueAt: position ?? startTime(manifest, item) });
   } else if (s.mode === "menu" && s.menu) {
     const action = menuOf(manifest, s.menu).keys?.[key] ?? manifest.keys?.[key] ?? fallback;
@@ -507,6 +526,7 @@ function activateOverlay(manifest: Manifest, s: NavState, buttonId: string, effe
   if (!overlay || !button || !s.overlay) return;
   s.overlay = { ...s.overlay, focus: button.id };
   effects.push({ type: "activated", cue: s.overlay.cue, button: button.id });
+  playedTo(manifest, s, overlay.to, true);
   run(manifest, s, button.action, effects, { pushHistory: false, cueAt: overlay.to });
 }
 
@@ -682,10 +702,13 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         else next = action.otherwise;
         break;
       case "saveResume":
-        if (action.media !== undefined) {
+        const saved = action.item?.media ?? action.media;
+        if (saved !== undefined) {
           s.lastStop = {
-            media: action.media,
-            position: action.chapter !== undefined ? startTime(manifest, { media: action.media, chapter: action.chapter }) : (action.at ?? 0),
+            media: saved,
+            position: action.chapter !== undefined ? startTime(manifest, { media: saved, chapter: action.chapter }) : (action.at ?? 0),
+            // The resumed item keeps its own end, cues and holds (its tracks are the current ones).
+            ...(action.item ? { item: action.item } : {}),
             // What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
             ...(action.queue?.length ? { queue: action.queue } : {}),
             ...(action.after ? { after: action.after } : {}),
@@ -858,7 +881,12 @@ function resumePointOf(playing: Playing, at: number): ResumePoint {
 /** The play effect for an item, noting it as the last playback (@lastMedia, @lastChapter). `from`: start elsewhere than the item's own start. */
 function startItem(manifest: Manifest, s: NavState, item: PlayItem, from?: number): Effect {
   const effect = playEffect(manifest, item, s, from);
-  s.player = { ...s.player, "@lastMedia": item.media, "@lastChapter": chapterAt(manifest, item.media, effect.type === "play" ? effect.start : 0) };
+  s.player = {
+    ...s.player,
+    "@lastMedia": item.media,
+    "@lastNumber": manifest.media[item.media]?.number ?? 0,
+    "@lastChapter": chapterAt(manifest, item.media, effect.type === "play" ? effect.start : 0),
+  };
   return effect;
 }
 

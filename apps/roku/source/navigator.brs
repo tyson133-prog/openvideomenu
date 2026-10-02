@@ -125,6 +125,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         if s.mode = "playing" and s.playing <> invalid
             cue = msNavCueById(manifest, s.playing.item, event["id"])
             if cue <> invalid and cue["at"] <> invalid
+                msNavPlayedTo(manifest, s, cue["at"], true)
                 msNavRunCue(manifest, s, cue["action"], effects, cue["at"])
             else if cue <> invalid
                 ' A later overlay replaces one still showing.
@@ -173,6 +174,7 @@ function msNavStep(manifest as object, state as object, event as object) as obje
             s.navTimer = invalid
             if s.mode = "playing" and s.playing <> invalid
                 position = event["position"]
+                if position <> invalid then msNavPlayedTo(manifest, s, position, false)
                 if position = invalid then position = msNavStartTime(manifest, s.playing.item)
                 msNavRunCue(manifest, s, timer.action, effects, position)
             else
@@ -272,6 +274,7 @@ sub msNavMenuKey(manifest as object, s as object, key as string, position as dyn
         if action = invalid and media <> invalid then action = msNavKeyAction(media["keys"], key)
         if action = invalid then action = msNavKeyAction(manifest["keys"], key)
         if action = invalid then action = fallback
+        if position <> invalid then msNavPlayedTo(manifest, s, position, false)
         if position = invalid then position = msNavStartTime(manifest, item)
         if action <> invalid then msNavRunCue(manifest, s, action, effects, position)
     else if s.mode = "menu" and s.menu <> invalid
@@ -335,6 +338,7 @@ sub msNavActivateOverlay(manifest as object, s as object, buttonId as string, ef
     if button = invalid then return
     s.overlay = { cue: s.overlay.cue, focus: button["id"] }
     effects.push({ type: "activated", cue: s.overlay.cue, button: button["id"] })
+    msNavPlayedTo(manifest, s, overlay["to"], true)
     msNavRunCue(manifest, s, button["action"], effects, overlay["to"])
 end sub
 
@@ -614,7 +618,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             point = s.lastStop
             item = { media: point.media, start: point.position }
             if point.item <> invalid
-                for each key in ["end", "cues"]
+                for each key in ["end", "cues", "keys", "prohibits", "holds"]
                     if point.item[key] <> invalid then item[key] = point.item[key]
                 end for
             end if
@@ -685,10 +689,14 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
     else if t = "saveResume"
         ' Level 2: media from chapter or at; without media, the playback in progress ("here"), like a
         ' disc's CallSS naming its resume cell.
-        if action["media"] <> invalid
+        saved = action["media"]
+        if action["item"] <> invalid then saved = action["item"]["media"]
+        if saved <> invalid
             at = msOr(action["at"], 0)
-            if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: action["media"], chapter: action["chapter"] })
-            s.lastStop = { media: action["media"], position: at }
+            if action["chapter"] <> invalid then at = msNavStartTime(manifest, { media: saved, chapter: action["chapter"] })
+            s.lastStop = { media: saved, position: at }
+            ' A saved item keeps its own end, cues and holds.
+            if action["item"] <> invalid then s.lastStop.item = action["item"]
             ' What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
             if action["queue"] <> invalid and action["queue"].Count() > 0 then s.lastStop.queue = action["queue"]
             if action["after"] <> invalid then s.lastStop.after = action["after"]
@@ -791,10 +799,36 @@ function msNavPlaying(manifest as object, s as object, item as object, from = in
     if from <> invalid then effect.start = from
     player = msNavCopyVars(s.player)
     player["@lastMedia"] = item["media"]
+    player["@lastNumber"] = 0
+    media = manifest["media"][item["media"]]
+    if media <> invalid and media["number"] <> invalid then player["@lastNumber"] = media["number"]
     player["@lastChapter"] = msNavChapterAt(manifest, item["media"], effect.start)
     s.player = player
     return effect
 end function
+
+' Playback has reached a time: @lastChapter is the chapter it is in (a disc's SPRM 7), read by the logic
+' about to run. before: a cue's time, where playback arrives from before, so a cue at a chapter's start
+' still reads the chapter it ends.
+sub msNavPlayedTo(manifest as object, s as object, at as dynamic, before as boolean)
+    if s.playing = invalid then return
+    media = s.playing.item["media"]
+    chapter = msNavChapterAt(manifest, media, at)
+    if before and at > 0
+        ' Arriving from before: the chapters that start strictly before it (no tiny offset, which
+        ' single-precision numbers would lose).
+        chapter = 0
+        info = manifest["media"][media]
+        if info <> invalid and info["chapters"] <> invalid
+            for each c in info["chapters"]
+                if c["time"] < at then chapter = chapter + 1
+            end for
+        end if
+    end if
+    player = msNavCopyVars(s.player)
+    player["@lastChapter"] = chapter
+    s.player = player
+end sub
 
 ' The 1-based chapter a time falls in (0 when the media has no chapters).
 function msNavChapterAt(manifest as object, media as string, seconds as dynamic) as integer
@@ -1023,7 +1057,7 @@ end function
 
 ' What an unset player-state variable reads as.
 function msNavPlayerDefault(name as string) as dynamic
-    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "", "@navTimer": 0, "@karaoke": 0 }
+    defaults = { "@audio": 0, "@subtitle": 0, "@angle": 1, "@focus": "", "@audioLanguage": "", "@subtitleLanguage": "", "@menuLanguage": "", "@lastMedia": "", "@lastChapter": 0, "@region": 0, "@parentalLevel": 8, "@country": "", "@aspect": "16:9", "@resumeMedia": "", "@navTimer": 0, "@karaoke": 0, "@lastNumber": 0 }
     if defaults.DoesExist(name) then return defaults[name]
     return 0
 end function

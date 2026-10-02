@@ -27,6 +27,9 @@ sub init()
     m.navTimer = CreateObject("roSGNode", "Timer")
     m.navTimer.repeat = false
     m.navTimer.observeField("fire", "onNavTimer")
+    ' Level 2: just before a hold's time, where the cue clock stands while it holds: a hundredth of a
+    ' second, which single-precision numbers keep (a millionth would round away).
+    m.holdBefore = 0.01
     ' Level 2: how long a frame is held (spec 6.3).
     m.holdTimer = CreateObject("roSGNode", "Timer")
     m.holdTimer.repeat = false
@@ -1008,7 +1011,7 @@ sub onPlayerPosition()
     if played
         for each h in clock.holds
             if last < h["at"] and h["at"] <= position
-                cueClockAdvance(clock, last, h["at"] - 0.000001, true)
+                cueClockAdvance(clock, last, h["at"] - m.holdBefore, true)
                 startHold(h)
                 return
             end if
@@ -1088,7 +1091,7 @@ function endHold() as boolean
     at = clock.holding["at"]
     clock.holding = invalid
     m.holdTimer.control = "stop"
-    cueClockAdvance(clock, at - 0.000001, at, true)
+    cueClockAdvance(clock, at - m.holdBefore, at, true)
     if m.player = invalid then return true
     if clock.endAfterHold
         clock.endAfterHold = false
@@ -1119,7 +1122,7 @@ function holdBeforeEnd() as boolean
     end if
     for each h in clock.holds
         if h["at"] > clock.last
-            cueClockAdvance(clock, clock.last, h["at"] - 0.000001, true)
+            cueClockAdvance(clock, clock.last, h["at"] - m.holdBefore, true)
             clock.endAfterHold = true
             clock.holding = h
             if not msNavIsText(h["for"])

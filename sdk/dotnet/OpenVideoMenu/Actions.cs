@@ -177,6 +177,9 @@ public sealed class SaveResumeAction : MenuAction
 
     public string? Media { get; set; }
 
+    /// <summary>Instead of <see cref="Media"/>: the play item to resume, with its own end, cues and holds.</summary>
+    public PlayItem? Item { get; set; }
+
     public double? At { get; set; }
 
     public int? Chapter { get; set; }

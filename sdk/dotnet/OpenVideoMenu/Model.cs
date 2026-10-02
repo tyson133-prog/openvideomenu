@@ -152,6 +152,9 @@ public sealed class MediaEntry
     /// <summary>Level 2: frames held whenever this media plays (spec §6.3).</summary>
     public List<Hold>? Holds { get; set; }
 
+    /// <summary>A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number.</summary>
+    public int? Number { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

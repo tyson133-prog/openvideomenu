@@ -95,6 +95,7 @@ public static class PlayerState
         ["@menuLanguage"] = new(true, false, ""),
         ["@lastMedia"] = new(true, false, ""),
         ["@lastChapter"] = new(false, false, 0),
+        ["@lastNumber"] = new(false, false, 0),
         ["@region"] = new(false, false, 0),
         ["@parentalLevel"] = new(false, false, 8),
         ["@country"] = new(true, false, ""),

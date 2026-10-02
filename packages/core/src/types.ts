@@ -126,6 +126,8 @@ export interface Media {
   prohibits?: Prohibitions;
   /** Level 2: frames that stay up for a while or until the viewer goes on, whenever this media plays (spec §6.3). */
   holds?: Hold[];
+  /** A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number. */
+  number?: number;
 }
 
 /**
@@ -378,6 +380,8 @@ export type Action =
   | {
       type: "saveResume";
       media?: string;
+      /** Instead of media: the play item to resume, with its own end, cues, holds and tracks. */
+      item?: PlayItem;
       at?: number;
       chapter?: number;
       /** With `media`: what plays after it when resumed (the rest of a play-all), then `after`. */

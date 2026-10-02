@@ -22,7 +22,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds"],
+  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds", "number"],
   hold: ["at", "for"],
   segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
@@ -51,7 +51,7 @@ const ACTION_KEYS: Record<string, readonly string[]> = {
   resume: ["type", "otherwise"],
   activate: ["type", "button"],
   run: ["type", "action"],
-  saveResume: ["type", "media", "at", "chapter", "queue", "after"],
+  saveResume: ["type", "media", "item", "at", "chapter", "queue", "after"],
   seek: ["type", "at", "chapter"],
   timer: ["type", "after", "action"],
   cancelTimer: ["type"],
@@ -410,6 +410,7 @@ class Validator {
       this.angleCounts.set(id, angles);
       if (m.label !== undefined && typeof m.label !== "string") this.error(`${path}/label`, "Must be a string.");
       if (m.kind !== undefined && typeof m.kind !== "string") this.error(`${path}/kind`, "Must be a string.");
+      if (m.number !== undefined && !Number.isInteger(m.number)) this.error(`${path}/number`, "Must be an integer.");
       if (m.duration !== undefined && !(isFiniteNumber(m.duration) && m.duration >= 0))
         this.error(`${path}/duration`, "Must be a non-negative number of seconds.");
 
@@ -896,6 +897,16 @@ class Validator {
           this.error(`${path}/action`, `Action "${value.action}" starts playback with after; playback started during playback returns to it, so after is not allowed here.`);
         break;
       case "saveResume":
+        // The resumed play item, with its own end, cues and holds: checked as any play item, and its
+        // media is the saved one.
+        if (value.item !== undefined) {
+          if (value.media !== undefined) this.error(`${path}/item`, "Give media or item, not both.");
+          else if (!isObject(value.item)) this.error(`${path}/item`, "Must be a play item {media, end?, cues?, ...}.");
+          else {
+            this.unknownKeys(value.item, ACTION_KEYS.play!.filter((k) => k !== "type" && k !== "after"), `${path}/item`);
+            this.playItem(value.item, `${path}/item`, mediaIds, menus);
+          }
+        }
         if (value.media !== undefined) {
           if (!isNonEmptyString(value.media) || !mediaIds.has(value.media)) this.error(`${path}/media`, `No media "${String(value.media)}".`);
           else if (value.chapter !== undefined) {
@@ -908,7 +919,7 @@ class Validator {
         if (value.at !== undefined && !(isFiniteNumber(value.at) && value.at >= 0)) this.error(`${path}/at`, "Must be a non-negative number of seconds.");
         if (value.at !== undefined && value.chapter !== undefined) this.error(`${path}/at`, "Give at or chapter, not both.");
         // What follows the saved media when resumed: only with media (without it, "here" brings its own).
-        if ((value.queue !== undefined || value.after !== undefined) && value.media === undefined)
+        if ((value.queue !== undefined || value.after !== undefined) && value.media === undefined && value.item === undefined)
           this.error(`${path}/${value.queue !== undefined ? "queue" : "after"}`, "Only with media: saving \"here\" keeps what follows the playback in progress.");
         if (value.queue !== undefined) {
           if (!Array.isArray(value.queue) || value.queue.length === 0) this.error(`${path}/queue`, "Must be a list of at least one item {media, chapter?, start?}.");

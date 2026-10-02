@@ -17,7 +17,8 @@ export const PLAYER_VARS: Record<string, { type: "number" | "string"; writable: 
   "@subtitleLanguage": { type: "string", writable: false, default: "" },
   "@menuLanguage": { type: "string", writable: false, default: "" },
   "@lastMedia": { type: "string", writable: false, default: "" }, // media id of the last playback
-  "@lastChapter": { type: "number", writable: false, default: 0 }, // chapter it was in (0 = none)
+  "@lastChapter": { type: "number", writable: false, default: 0 }, // chapter playback is in, or was in when it stopped (0 = none)
+  "@lastNumber": { type: "number", writable: false, default: 0 }, // that media's number (0 = none)
   "@region": { type: "number", writable: false, default: 0 }, // 1-8; 0 = unknown
   "@parentalLevel": { type: "number", writable: false, default: 8 }, // 1-8; 8 = unrestricted
   "@country": { type: "string", writable: false, default: "" }, // ISO 3166-1 alpha-2

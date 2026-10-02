@@ -1,0 +1,322 @@
+{
+  "description": "@lastChapter is live during playback: logic run by a cue, an overlay's button, a key or the timer reads the chapter playback is in (a cue at a chapter's start still reads the chapter it ends, as a disc's cell command does). @lastNumber reads the playing (or last played) media's number. saveResume can save a whole play item, so the resumed title keeps its own end and cues.",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "title": {
+      "name": "Live State"
+    },
+    "media": {
+      "film": {
+        "ref": "Film.mkv",
+        "number": 7,
+        "chapters": [
+          {
+            "time": 0
+          },
+          {
+            "time": 100
+          },
+          {
+            "time": 200
+          }
+        ],
+        "cues": [
+          {
+            "at": 200,
+            "action": {
+              "type": "if",
+              "test": {
+                "var": "@lastChapter",
+                "eq": 2
+              },
+              "then": {
+                "type": "goto",
+                "menu": "ch2"
+              },
+              "else": {
+                "type": "goto",
+                "menu": "other"
+              }
+            }
+          }
+        ],
+        "keys": {
+          "menu": {
+            "type": "if",
+            "test": {
+              "var": "@lastChapter",
+              "eq": 3
+            },
+            "then": {
+              "type": "goto",
+              "menu": "ch3"
+            },
+            "else": {
+              "type": "goto",
+              "menu": "other"
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "save-film": {
+        "type": "saveResume",
+        "item": {
+          "media": "film",
+          "end": 250,
+          "cues": [
+            {
+              "at": 240,
+              "action": {
+                "type": "goto",
+                "menu": "done"
+              }
+            }
+          ],
+          "holds": [
+            {
+              "at": 230,
+              "for": 2
+            }
+          ]
+        },
+        "at": 150
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "play",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "later"
+            },
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          },
+          {
+            "id": "later",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "play",
+              "down": "number"
+            },
+            "action": {
+              "type": "do",
+              "steps": [
+                {
+                  "type": "run",
+                  "action": "save-film"
+                },
+                {
+                  "type": "goto",
+                  "menu": "resume"
+                }
+              ]
+            }
+          },
+          {
+            "id": "number",
+            "rect": [
+              100,
+              110,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "later"
+            },
+            "action": {
+              "type": "if",
+              "test": {
+                "var": "@lastNumber",
+                "eq": 7
+              },
+              "then": {
+                "type": "goto",
+                "menu": "seven"
+              }
+            }
+          }
+        ]
+      },
+      "ch2": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      },
+      "ch3": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      },
+      "other": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      },
+      "seven": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      },
+      "resume": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      },
+      "done": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "ok",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"main","button":"play"},{"type":"play","media":"film","start":0,"cues":[{"id":"media/0","at":200}]}]}},
+    {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"menu","menu":"ch2","focus":"ok","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"ch2","button":"ok"},{"type":"play","media":"film","start":200,"cues":[{"id":"media/0","at":200}]}]}},
+    {"event":{"type":"press","key":"menu","position":230},"expect":{"mode":"menu","menu":"ch3","focus":"ok","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[{"type":"activated","menu":"ch3","button":"ok"}]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"later","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"number","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"seven","focus":"ok","effects":[{"type":"activated","menu":"main","button":"number"}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[{"type":"activated","menu":"seven","button":"ok"}]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"later","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"resume","focus":"ok","effects":[{"type":"activated","menu":"main","button":"later"}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"resume","button":"ok"},{"type":"play","media":"film","start":150,"end":250,"cues":[{"id":"media/0","at":200},{"id":"item/0","at":240}],"holds":[{"at":230,"for":2}]}]}},
+    {"event":{"type":"cue","id":"item/0"},"expect":{"mode":"menu","menu":"done","focus":"ok","effects":[]}}
+  ]
+}

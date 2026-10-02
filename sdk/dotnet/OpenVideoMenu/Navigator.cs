@@ -446,6 +446,7 @@ public static class Navigator
                 switch (CueById(manifest, s.Playing.Item, cueEvent.Id))
                 {
                     case PointCue point:
+                        PlayedTo(manifest, s, point.At, before: true);
                         Run(manifest, s, point.Action, effects, pushHistory: false, cueAt: point.At);
                         break;
                     case Overlay overlay:
@@ -507,6 +508,11 @@ public static class Navigator
                 s.NavTimer = null;
                 if (s.Mode == NavMode.Playing && s.Playing is { } playing)
                 {
+                    if (navTimer.Position is { } timerAt)
+                    {
+                        PlayedTo(manifest, s, timerAt, before: false);
+                    }
+
                     Run(manifest, s, timer.Action, effects, pushHistory: false, cueAt: navTimer.Position ?? StartTime(manifest, playing.Item));
                 }
                 else
@@ -620,6 +626,11 @@ public static class Navigator
             var action = item.Keys?.For(key) ?? manifest.Media.GetValueOrDefault(item.Media)?.Keys?.For(key) ?? manifest.Keys?.For(key) ?? fallback;
             if (action is not null)
             {
+                if (position is { } keyAt)
+                {
+                    PlayedTo(manifest, s, keyAt, before: false);
+                }
+
                 Run(manifest, s, action, effects, pushHistory: false, cueAt: position ?? StartTime(manifest, item));
             }
         }
@@ -812,6 +823,7 @@ public static class Navigator
 
         s.Overlay = s.Overlay with { Focus = button.Id };
         effects.Add(new Effect.OverlayActivated(s.Overlay.Cue, button.Id));
+        PlayedTo(manifest, s, overlay.To, before: true);
         Run(manifest, s, button.Action, effects, pushHistory: false, cueAt: overlay.To);
     }
 
@@ -1054,7 +1066,17 @@ public static class Navigator
                         // The stopped playback continues: the item from where it stopped (with the tracks as
                         // they are now, which the viewer may have changed while watching), then what was
                         // queued after it, then its after-action. A disc's resume point is used up by resuming.
-                        var item = new PlayItem { Media = stop.Media, Start = stop.Position, End = stop.Item?.End, Cues = stop.Item?.Cues, Extensions = stop.Item?.Extensions };
+                        var item = new PlayItem
+                        {
+                            Media = stop.Media,
+                            Start = stop.Position,
+                            End = stop.Item?.End,
+                            Cues = stop.Item?.Cues,
+                            Keys = stop.Item?.Keys,
+                            Prohibits = stop.Item?.Prohibits,
+                            Holds = stop.Item?.Holds,
+                            Extensions = stop.Item?.Extensions,
+                        };
                         if (manifest.ResumePoint == "untilUsed")
                         {
                             s.LastStop = null;
@@ -1070,12 +1092,14 @@ public static class Navigator
 
                     break;
                 case SaveResumeAction save:
-                    if (save.Media is { } savedMedia)
+                    if ((save.Item?.Media ?? save.Media) is { } savedMedia)
                     {
-                        // What follows it when resumed, like a stopped playback's (a play-all's rest, its after).
+                        // What follows it when resumed, like a stopped playback's (a play-all's rest, its
+                        // after); a saved item keeps its own end, cues and holds.
                         s.LastStop = new LastStop(
                             savedMedia,
                             save.Chapter is { } c ? StartTime(manifest, new PlayItem { Media = savedMedia, Chapter = c }) : save.At ?? 0,
+                            Item: save.Item,
                             Queue: save.Queue is { Count: > 0 } queue ? queue : null,
                             After: save.After);
                     }
@@ -1326,8 +1350,26 @@ public static class Navigator
     {
         var effect = PlayEffect(manifest, item, s, from);
         s.Player["@lastMedia"] = item.Media;
+        s.Player["@lastNumber"] = manifest.Media.GetValueOrDefault(item.Media)?.Number ?? 0;
         s.Player["@lastChapter"] = ChapterAt(manifest, item.Media, effect.Start);
         return effect;
+    }
+
+    /// <summary>
+    /// Playback has reached <paramref name="at"/> seconds: @lastChapter is the chapter it is in (a disc's
+    /// SPRM 7), read by the logic about to run. <paramref name="before"/>: a cue's time, where playback
+    /// arrives from before, so a cue at a chapter's start still reads the chapter it ends.
+    /// </summary>
+    private static void PlayedTo(Manifest manifest, Working s, double at, bool before)
+    {
+        if (s.Playing is { } playing)
+        {
+            var media = playing.Item.Media;
+            // Arriving from before: the chapters that start strictly before it.
+            s.Player["@lastChapter"] = before && at > 0
+                ? manifest.Media.GetValueOrDefault(media)?.Chapters?.Count(c => c.Time < at) ?? 0
+                : ChapterAt(manifest, media, at);
+        }
     }
 
     /// <summary>
