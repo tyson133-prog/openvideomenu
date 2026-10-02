@@ -50,6 +50,8 @@ export interface LogicState {
   vars: Record<string, Scalar>;
   player: Record<string, Scalar>;
   focus?: string;
+  /** Level 2: the overlay showing during playback; while it shows, @focus is its highlighted button. */
+  overlay?: { focus: string };
   seed: number;
   /** The resume point, read as @resumeMedia. */
   lastStop?: { media: string };
@@ -62,7 +64,7 @@ export interface LogicState {
 }
 
 export function readVar(s: LogicState, name: string): Scalar {
-  if (name === "@focus") return s.focus ?? "";
+  if (name === "@focus") return s.overlay?.focus ?? s.focus ?? "";
   if (name === "@resumeMedia") return s.lastStop?.media ?? "";
   if (name === "@navTimer") return s.navTimer?.ends !== undefined && s.now !== undefined ? Math.max(0, Math.ceil(s.navTimer.ends - s.now)) : 0;
   // A counter counts whole seconds by itself since it was last set (a disc's register in counter mode).

@@ -1189,8 +1189,16 @@ public static class Navigator
                     {
                         if (set.Var == "@focus")
                         {
-                            // Highlight a button of the current menu (a DVD's SetHL_BTN).
-                            if (s.Menu is not null && FindButton(Shown(manifest, s).Buttons, value.ToString()) is not null)
+                            // Highlight a button: of the overlay showing during playback, else of the
+                            // current menu (a DVD's SetHL_BTN).
+                            if (s.Mode == NavMode.Playing && s.Overlay is { } shown && OverlayOf(manifest, s) is { } overlay)
+                            {
+                                if (FindButton(overlay.Buttons, value.ToString()) is not null)
+                                {
+                                    s.Overlay = shown with { Focus = value.ToString() };
+                                }
+                            }
+                            else if (s.Mode == NavMode.Menu && s.Menu is not null && FindButton(Shown(manifest, s).Buttons, value.ToString()) is not null)
                             {
                                 s.Focus = value.ToString();
                             }
@@ -1303,14 +1311,9 @@ public static class Navigator
         var current = cueAt is not null && s.Mode == NavMode.Playing ? s.Playing : null;
         if (current is not null && manifest.CuePlayback == "replace")
         {
-            // Level 2: it ends the title playing, as a disc's link does; that title is remembered for
-            // resume as when a cue opens a menu. The new playback returns where the old one would have.
-            // @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
-            if (!s.ResumeSet)
-            {
-                s.LastStop = ResumePointOf(current, cueAt!.Value, ChapterNow(s));
-            }
-
+            // Level 2: it ends the title playing, as a disc's link does, and like a link it leaves the resume
+            // point alone (a cue that wants the title resumable saves it first). The new playback returns
+            // where the old one would have; @lastChapter stays what the cue's logic read.
             s.Playing = new Playback(items[0], items.Skip(1).ToList(), after, current.ReturnTo);
         }
         else
@@ -1621,7 +1624,8 @@ public static class Navigator
                 return n + (int)Math.Floor(Math.Max(0, (Now ?? since) - since));
             }
 
-            return Logic.Read(Vars, Player, Focus, name);
+            // While an overlay shows, @focus is its highlighted button.
+            return Logic.Read(Vars, Player, Overlay?.Focus ?? Focus, name);
         }
 
         public NavState ToState() => new()

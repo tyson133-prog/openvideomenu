@@ -654,9 +654,16 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
         nextValue = msNavApplyOp(s, msNavRead(s, name), msOr(action["op"], "set"), msNavValueOf(s, action["value"]))
         if nextValue <> invalid
             if name = "@focus"
-                ' Highlight a button of the current menu (a DVD's SetHL_BTN).
+                ' Highlight a button: of the overlay showing during playback, else of the current menu
+                ' (a DVD's SetHL_BTN).
                 id = msNavText(nextValue)
-                if s.menu <> invalid and msNavFindButton(msNavShown(manifest, s), id) <> invalid then s.focus = id
+                overlay = invalid
+                if s.mode = "playing" and s.overlay <> invalid then overlay = msNavOverlayOf(manifest, s)
+                if overlay <> invalid
+                    if msNavFindButton(overlay, id) <> invalid then s.overlay = { cue: s.overlay.cue, focus: id }
+                else if s.mode = "menu" and s.menu <> invalid and msNavFindButton(msNavShown(manifest, s), id) <> invalid
+                    s.focus = id
+                end if
             else if Left(name, 1) = "@"
                 player = msNavCopyVars(s.player)
                 player[name] = nextValue
@@ -794,11 +801,10 @@ sub msNavStartPlayback(manifest as object, s as object, items as object, after a
     queue = msCopyArray(items)
     first = queue.shift()
     if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid and manifest["cuePlayback"] = "replace"
-        ' Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume as
-        ' when a cue opens a menu. The new playback returns where the old one would have.
+        ' Level 2: it ends the title playing, as a disc's link does, and like a link it leaves the resume
+        ' point alone (a cue that wants the title resumable saves it first). The new playback returns where
+        ' the old one would have; @lastChapter stays what the cue's logic read.
         current = s.playing
-        ' @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
-        if not s.resumeSet then s.lastStop = msNavResumePointOf(current, s.cueAt, s)
         s.playing = { item: first, queue: queue, after: after, returnTo: current.returnTo }
     else if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
         s.playing = { item: first, queue: queue, after: invalid, returnTo: s.playing.returnTo, resumeTo: { playing: s.playing, at: s.cueAt } }
@@ -1139,6 +1145,8 @@ function msNavPlayerDefault(name as string) as dynamic
 end function
 
 function msNavRead(s as object, name as string) as dynamic
+    ' While an overlay shows, @focus is its highlighted button.
+    if name = "@focus" and s.overlay <> invalid then return s.overlay.focus
     if name = "@focus" then return msOr(s.focus, "")
     if name = "@resumeMedia"
         if s.lastStop = invalid then return ""

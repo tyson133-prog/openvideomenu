@@ -1,11 +1,11 @@
 {
-  "description": "cuePlayback \"replace\": playback started during playback (a cue at an episode's end, an overlay's button) ends the title playing instead of returning to it, as a disc's links do, and may have an after. The title it ends is remembered for resume, as when a cue opens a menu; the new playback returns where the old one would have.",
-  "level": 2,
+  "description": "cuePlayback \"replace\": playback started during playback (a cue at an episode's end, an overlay's button) ends the title playing instead of returning to it, as a disc's links do, and may have an after. Like a disc's link it leaves the resume point alone: a cue that wants the title it ends resumable saves it first, and a later replace doesn't move it. The new playback returns where the old one would have.",
+  "level": 3,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
     "version": "0.1",
-    "level": 2,
+    "level": 3,
     "cuePlayback": "replace",
     "title": {
       "name": "Next Episode"
@@ -18,12 +18,20 @@
           {
             "at": 1500,
             "action": {
-              "type": "play",
-              "media": "e2",
-              "after": {
-                "type": "goto",
-                "menu": "extras"
-              }
+              "type": "do",
+              "steps": [
+                {
+                  "type": "saveResume"
+                },
+                {
+                  "type": "play",
+                  "media": "e2",
+                  "after": {
+                    "type": "goto",
+                    "menu": "extras"
+                  }
+                }
+              ]
             }
           }
         ]
@@ -77,9 +85,27 @@
               200,
               40
             ],
+            "nav": {
+              "down": "resume"
+            },
             "action": {
               "type": "play",
               "media": "e1"
+            }
+          },
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "play"
+            },
+            "action": {
+              "type": "resume"
             }
           }
         ]
@@ -133,6 +159,8 @@
     {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"play","media":"e2","start":0,"cues":[{"id":"media/0","from":100,"to":110}]}]}},
     {"event":{"type":"cue","id":"media/0"},"expect":{"mode":"playing","overlay":{"cue":"media/0","focus":"bonus"},"effects":[]}},
     {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","cue":"media/0","button":"bonus"},{"type":"play","media":"bonus","start":0}]}},
-    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}}
+    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"resume","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","overlay":null,"effects":[{"type":"activated","menu":"main","button":"resume"},{"type":"play","media":"e1","start":1500,"cues":[{"id":"media/0","at":1500}]}]}}
   ]
 }

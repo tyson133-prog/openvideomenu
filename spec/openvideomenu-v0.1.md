@@ -331,7 +331,7 @@ title starts.
 | `@audio` | integer | 0 (unknown) | Current audio track, 1-based. Writable. |
 | `@subtitle` | integer | 0 (off) | Current subtitle track, 1-based; 0 = off. Writable. |
 | `@angle` | integer | 1 | Current angle, 1-based. Writable. |
-| `@focus` | text | — | The highlighted button's id. Writable: setting it highlights that button of the current menu. |
+| `@focus` | text | — | The highlighted button's id: of the overlay showing during playback (§6.3), else of the menu. Writable: setting it highlights that button of the overlay or the menu. |
 | `@audioLanguage`, `@subtitleLanguage`, `@menuLanguage` | text | `""` | The viewer's preferred languages, ISO 639-1 (`"fr"`). |
 | `@lastMedia` | text | `""` | Media id of the playback in progress, or of the last one. |
 | `@lastNumber` | integer | 0 | That media's `number` (§4); 0 when it has none. |
@@ -441,9 +441,9 @@ icon some discs show in certain scenes that branches to a featurette and back.
     playback ends or the viewer stops it, the interrupted one continues from the cue's time. `after`
     is not allowed there.
   - **`cuePlayback: "replace"`** (top level) makes it **replace** the current one instead, as a disc's
-    links do: the title playing ends and nothing returns to it. It is remembered for `resume` at the
-    cue's time, as when a cue opens a menu (unless the cue saved or cleared the resume point itself),
-    and the new playback returns where the old one would have. `after` is allowed. This holds for
+    links do: the title playing ends and nothing returns to it. Like a disc's link, it leaves the resume
+    point as it is: a cue that wants the title it ends to be resumable saves it first (`saveResume`,
+    §6.5). The new playback returns where the old one would have. `after` is allowed. This holds for
     every way playback starts during playback: cues, overlays' buttons, keys (§6.6) and the timer (§6.7).
     A manifest uses one behaviour throughout; a single replacing jump in an interrupting manifest is a
     `goto` with `saveResume`, then `resume`.

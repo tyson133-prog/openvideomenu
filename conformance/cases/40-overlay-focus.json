@@ -1,0 +1,48 @@
+{
+  "description": "While an overlay's buttons show, @focus is the overlay's highlighted button (a disc's SPRM 8 over a title cell): a key or a cue reads it, and setting it moves the overlay's highlight. Without an overlay, a set on @focus during playback changes nothing.",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "title": { "name": "Green Nose" },
+    "keys": { "title": { "type": "if", "test": { "var": "@focus", "eq": "b2" }, "then": { "type": "goto", "menu": "main", "button": "m2" }, "else": { "type": "goto", "menu": "main", "button": "m1" } } },
+    "media": {
+      "cell": { "ref": "Cell.mkv", "holds": [{ "at": 2, "for": "input" }], "cues": [
+        { "from": 0, "to": 2, "canvas": { "width": 720, "height": 480 }, "defaultButton": "b2", "buttons": [
+          { "id": "b1", "rect": [100, 300, 200, 60], "nav": { "right": "b2" }, "action": { "type": "goto", "menu": "main" } },
+          { "id": "b2", "rect": [400, 300, 200, 60], "nav": { "left": "b1" }, "action": { "type": "goto", "menu": "main" } }
+        ] },
+        { "at": 5, "action": { "type": "set", "var": "@focus", "value": "b1" } }
+      ] }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          { "id": "m1", "rect": [100, 100, 200, 40], "nav": { "down": "m2" }, "action": { "type": "play", "media": "cell" } },
+          { "id": "m2", "rect": [100, 160, 200, 40], "nav": { "up": "m1" }, "action": { "type": "play", "media": "cell" } }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Cell", "items": [{ "label": "Play", "action": { "type": "play", "media": "cell" } }] }]
+  },
+  "steps": [
+    { "event": { "type": "start" }, "expect": { "mode": "menu", "menu": "main", "focus": "m1" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "overlay": { "cue": "media/0", "focus": "b2" } } },
+    { "event": { "type": "press", "key": "title", "position": 1 }, "expect": { "mode": "menu", "menu": "main", "focus": "m2" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "overlay": { "cue": "media/0", "focus": "b2" } } },
+    { "event": { "type": "press", "key": "left" }, "expect": { "overlay": { "cue": "media/0", "focus": "b1" } } },
+    { "event": { "type": "press", "key": "title", "position": 1 }, "expect": { "mode": "menu", "menu": "main", "focus": "m1" } },
+    { "event": { "type": "press", "key": "enter" }, "expect": { "mode": "playing" } },
+    { "event": { "type": "cue", "id": "media/0" }, "expect": { "overlay": { "cue": "media/0", "focus": "b2" } } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "overlay": { "cue": "media/0", "focus": "b1" } } },
+    { "event": { "type": "cueEnd", "id": "media/0" }, "expect": { "overlay": null } },
+    { "event": { "type": "cue", "id": "media/1" }, "expect": { "mode": "playing", "overlay": null } },
+    { "event": { "type": "press", "key": "title", "position": 6 }, "expect": { "mode": "menu", "menu": "main", "focus": "m1" } }
+  ]
+}

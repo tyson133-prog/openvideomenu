@@ -762,8 +762,12 @@ function run(manifest: Manifest, s: NavState, first: Action, effects: Effect[], 
         const value = applyOp(s, readVar(s, action.var), action.op ?? "set", valueOf(s, action.value));
         if (value !== undefined) {
           if (action.var === "@focus") {
-            // Highlight a button of the current menu (a DVD's SetHL_BTN).
-            if (s.menu && findButton(buttonsShown(manifest, s), String(value))) s.focus = String(value);
+            // Highlight a button: of the overlay showing during playback, else of the current menu (a
+            // DVD's SetHL_BTN).
+            const overlay = s.mode === "playing" && s.overlay ? overlayOf(manifest, s) : undefined;
+            if (overlay) {
+              if (findButton(overlay, String(value))) s.overlay = { ...s.overlay!, focus: String(value) };
+            } else if (s.menu && s.mode === "menu" && findButton(buttonsShown(manifest, s), String(value))) s.focus = String(value);
           } else if (action.var.startsWith("@")) {
             s.player = { ...s.player, [action.var]: value };
             if (duringPlayback) liveTrack(manifest, s, action.var, value, opts.cueAt!, effects);
@@ -859,10 +863,9 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
   const current = cueAt !== undefined && s.mode === "playing" ? s.playing : undefined;
   if (current && manifest.cuePlayback === "replace") {
-    // Level 2: it ends the title playing, as a disc's link does; that title is remembered for resume
-    // as when a cue opens a menu. The new playback returns where the old one would have.
-    // @lastChapter stays what the cue's logic read (the chapter it ends, at a boundary).
-    if (!resumeSet) s.lastStop = resumePointOf(current, cueAt!, chapterNow(s));
+    // Level 2: it ends the title playing, as a disc's link does, and like a link it leaves the resume
+    // point alone (a cue that wants the title resumable saves it first). The new playback returns where
+    // the old one would have; @lastChapter stays what the cue's logic read.
     s.playing = { item: first, queue, after, returnTo: current.returnTo };
   } else
     s.playing = current
