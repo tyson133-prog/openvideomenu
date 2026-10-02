@@ -34,7 +34,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   overlay: ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
   canvas: ["width", "height", "aspect"],
   background: ["image", "color", "video", "audio"],
-  loopingMedia: ["src", "loopStart"],
+  loopingMedia: ["src", "loopStart", "loop"],
   button: ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action", "altRects"],
   state: ["image", "rect", "textColor", "fill"],
   fallbackGroup: ["label", "hidden", "items"],
@@ -530,7 +530,8 @@ class Validator {
     if (value.buttonsAt !== undefined && !(isFiniteNumber(value.buttonsAt) && value.buttonsAt >= 0))
       this.error(`${path}/buttonsAt`, "Must be a non-negative number of seconds.");
 
-    const own = this.buttons(value, path, canvas, mediaIds, menus, "this menu");
+    // A menu may have no buttons: it shows its background, then its timeout decides (a disc's clip).
+    const own = Array.isArray(value.buttons) && value.buttons.length === 0 ? new Set<string>() : this.buttons(value, path, canvas, mediaIds, menus, "this menu");
     if (!own) return;
     if (value.defaultButton !== undefined) this.buttonRef(value.defaultButton, `${path}/defaultButton`, own, "this menu");
     // Level 2: buttons that change while the menu plays. back, timeout and keys may press any of them.
@@ -741,6 +742,7 @@ class Validator {
     if (!isNonEmptyString(value.src)) this.error(`${path}/src`, "Required: a path or URL.");
     if (value.loopStart !== undefined && !(isFiniteNumber(value.loopStart) && value.loopStart >= 0))
       this.error(`${path}/loopStart`, "Must be a non-negative number of seconds.");
+    if (value.loop !== undefined && typeof value.loop !== "boolean") this.error(`${path}/loop`, "Must be true or false.");
   }
 
   private rect(value: unknown, path: string, canvas?: { width: number; height: number }) {

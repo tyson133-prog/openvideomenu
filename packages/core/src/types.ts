@@ -184,6 +184,8 @@ export interface LoopingMedia {
   src: string;
   /** Seconds; after reaching the end, playback continues from here. Default 0 (loop the whole clip). */
   loopStart?: number;
+  /** Level 2: false plays it once and stays on its last frame (a disc's clip and its still time). Default true. */
+  loop?: boolean;
 }
 
 /** [x, y, width, height] in canvas pixels. */
@@ -230,6 +232,7 @@ export interface Menu {
   defaultButton?: string | { var: string };
   /** When true, a missing nav direction moves to the nearest button in that direction. */
   autoNav?: boolean;
+  /** The menu's buttons. Empty: a menu that only shows its background, then its timeout decides (spec §5). */
   buttons: Button[];
   /**
    * Seconds into the menu's intro before buttons appear and respond (DVD menus often animate in).

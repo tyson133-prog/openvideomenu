@@ -369,9 +369,9 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
       if (wanted) s.focusWanted = undefined;
       s.focus =
         wanted ??
-        (findButton(now, s.focus!) ? s.focus! : place >= 0 ? now.buttons[Math.min(place, now.buttons.length - 1)]!.id : undefined) ??
+        (s.focus !== undefined && findButton(now, s.focus) ? s.focus : place >= 0 ? now.buttons[Math.min(place, now.buttons.length - 1)]?.id : undefined) ??
         buttonRef(s, now, now.defaultButton) ??
-        now.buttons[0]!.id;
+        now.buttons[0]?.id;
       break;
     }
   }
@@ -401,7 +401,10 @@ function handleInput(
         break;
       }
       if (s.mode !== "menu") break;
-      if (event.key === "enter") activate(manifest, s, s.focus!, effects);
+      if (event.key === "enter") {
+        // A menu without buttons (a clip or a still) has nothing to press.
+        if (s.focus !== undefined) activate(manifest, s, s.focus, effects);
+      }
       else if (event.key === "back") remoteBack(manifest, s, effects);
       else move(manifest, s, event.key, effects);
       break;
@@ -554,7 +557,8 @@ function enterMenu(manifest: Manifest, s: NavState, menuId: string, buttonId: st
   s.menu = menuId;
   s.seq += 1;
   s.buttonSet = undefined;
-  s.focus = buttonRef(s, menu, buttonId) ?? buttonRef(s, menu, menu.defaultButton) ?? menu.buttons[0]!.id;
+  // A menu without buttons has no focus (spec §5).
+  s.focus = buttonRef(s, menu, buttonId) ?? buttonRef(s, menu, menu.defaultButton) ?? menu.buttons[0]?.id;
   // Level 2: a button only a button set has is focused when its set shows (the player reports it).
   const asked = typeof buttonId === "object" ? String(readVar(s, buttonId.var)) : buttonId;
   s.focusWanted = asked !== undefined && asked !== s.focus && menu.buttonSets?.some((set) => findButton(set, asked)) ? asked : undefined;
@@ -577,7 +581,8 @@ function focusButton(manifest: Manifest, s: NavState, button: Button, effects: E
 
 function move(manifest: Manifest, s: NavState, dir: Direction, effects: Effect[]) {
   const menu = buttonsShown(manifest, s);
-  const current = findButton(menu, s.focus!)!;
+  const current = s.focus !== undefined ? findButton(menu, s.focus) : undefined;
+  if (!current) return;
   let targetId = current.nav?.[dir];
   if (!targetId && menu.autoNav) targetId = nearestButton(menu, current, dir)?.id;
   if (!targetId || targetId === current.id) return;

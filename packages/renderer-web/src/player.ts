@@ -666,11 +666,13 @@ export class MenuPlayer {
       bg.src = this.asset(menu.background.image);
       this.stage.appendChild(bg);
     }
-    const looping = <T extends HTMLMediaElement>(el: T, spec: { src: string; loopStart?: number }): T => {
+    const looping = <T extends HTMLMediaElement>(el: T, spec: { src: string; loopStart?: number; loop?: boolean }): T => {
       el.src = this.asset(spec.src);
       el.preload = "auto";
-      // Plays once from 0 (the intro), then loops from loopStart.
+      // Plays once from 0 (the intro), then loops from loopStart; with loop: false (Level 2) it stays
+      // on its last frame (a disc's clip and its still time).
       el.addEventListener("ended", () => {
+        if (spec.loop === false) return;
         el.currentTime = spec.loopStart ?? 0;
         void el.play().catch(() => {});
       });

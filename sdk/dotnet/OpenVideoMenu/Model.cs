@@ -409,6 +409,9 @@ public sealed class LoopingMedia
     /// <summary>Seconds; after the end, playback continues from here. Default 0.</summary>
     public double? LoopStart { get; set; }
 
+    /// <summary>Level 2: false plays it once and stays on its last frame (a disc's clip and its still time). Default true.</summary>
+    public bool? Loop { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extensions { get; set; }
 }

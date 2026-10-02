@@ -212,7 +212,8 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
         end if
         if s.mode <> "menu" then return
         if key = "enter"
-            msNavActivate(manifest, s, s.focus, effects)
+            ' A menu without buttons (a clip or a still) has nothing to press.
+            if s.focus <> invalid then msNavActivate(manifest, s, s.focus, effects)
         else if key = "back"
             msNavRemoteBack(manifest, s, effects)
         else
@@ -400,7 +401,8 @@ sub msNavEnterMenu(manifest as object, s as object, menuId as string, buttonId a
     s.seq = s.seq + 1
     s.focus = msNavButtonRef(s, menu, buttonId)
     if s.focus = invalid then s.focus = msNavButtonRef(s, menu, menu["defaultButton"])
-    if s.focus = invalid then s.focus = menu["buttons"][0]["id"]
+    ' A menu without buttons has no focus (spec 5).
+    if s.focus = invalid and menu["buttons"].Count() > 0 then s.focus = menu["buttons"][0]["id"]
     ' Level 2: a button only a button set has is focused when its set shows (the player reports it).
     s.buttonSet = invalid
     s.focusWanted = invalid
@@ -464,10 +466,10 @@ sub msNavButtonSet(manifest as object, s as object, index as dynamic)
     if focus = invalid and msNavFindButton(now, s.focus) <> invalid then focus = s.focus
     if focus = invalid and place >= 0
         if place > buttons.Count() - 1 then place = buttons.Count() - 1
-        focus = buttons[place]["id"]
+        if place >= 0 then focus = buttons[place]["id"]
     end if
     if focus = invalid then focus = msNavButtonRef(s, now, now["defaultButton"])
-    if focus = invalid then focus = buttons[0]["id"]
+    if focus = invalid and buttons.Count() > 0 then focus = buttons[0]["id"]
     s.focus = focus
 end sub
 
@@ -483,7 +485,9 @@ end sub
 
 sub msNavMove(manifest as object, s as object, dir as string, effects as object)
     menu = msNavShown(manifest, s)
+    if s.focus = invalid then return
     current = msNavFindButton(menu, s.focus)
+    if current = invalid then return
     targetId = invalid
     if current["nav"] <> invalid then targetId = current["nav"][dir]
     if targetId = invalid and menu["autoNav"] = true

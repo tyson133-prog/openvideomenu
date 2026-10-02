@@ -17,7 +17,7 @@ public static class Levels
     private static readonly HashSet<string> Level2Fields =
     [
         "video", "audio", "buttonsAt", "timeout", "buttonSets", "transition", "angles", "angleTracks", "segments",
-        "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback", "prohibitsAt",
+        "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback", "prohibitsAt", "loop",
     ];
 
     private static readonly HashSet<string> Level2Actions = ["seek", "exit"];

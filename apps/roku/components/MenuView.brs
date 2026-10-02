@@ -260,7 +260,11 @@ sub showMenu(menu as object)
     m.motion.height = dh
     video = bg["video"]
     m.motionShown = false
-    if video <> invalid
+    ' Level 2: loop false plays the clip once and stays on its last frame (a disc's clip and its still).
+    m.holdLast = video <> invalid and video["loop"] = false
+    if video <> invalid and m.holdLast
+        playVideo(video["src"], 0, "background")
+    else if video <> invalid
         start = 0
         if not m.nav.intro then start = msOr(video["loopStart"], 0)
         playVideo(video["src"], start, "background", msOr(video["loopStart"], 0))
@@ -273,6 +277,7 @@ sub showMenu(menu as object)
     music = bg["audio"]
     if music <> invalid and video = invalid
         m.musicLoop = msOr(music["loopStart"], 0)
+        m.musicOnce = music["loop"] = false
         start = 0
         if not m.nav.intro then start = m.musicLoop
         content = CreateObject("roSGNode", "ContentNode")
@@ -610,6 +615,8 @@ sub onMotionState()
     if state = "finished"
         if m.videoRole = "transition"
             stepWith({ type: "transitionEnded" })
+        else if m.videoRole = "background" and m.nav.mode = "menu" and m.holdLast = true
+            ' Played once: it stays where it ended.
         else if m.videoRole = "background" and m.nav.mode = "menu"
             ' Loop from loopStart for as long as the menu is shown.
             menu = m.manifest["menus"][m.nav.menu]
@@ -628,6 +635,11 @@ sub onMotionPosition()
     if m.videoRole = "background" and m.loopFrom <> invalid and m.loopFrom > 0
         duration = m.motion.duration
         if duration > 0 and m.motion.position >= duration - 0.3 then m.motion.seek = m.loopFrom
+    end if
+    ' Played once: pause on the last frame rather than let the stream close (it would go black).
+    if m.videoRole = "background" and m.holdLast = true
+        duration = m.motion.duration
+        if duration > 0 and m.motion.position >= duration - 0.15 and m.motion.state = "playing" then m.motion.control = "pause"
     end if
     if m.videoRole <> "background" or m.nav.mode <> "menu" then return
     menu = m.manifest["menus"][m.nav.menu]
@@ -655,7 +667,7 @@ sub onButtonsTimer()
 end sub
 
 sub onMusicState()
-    if m.music.state = "finished" and m.nav.mode = "menu"
+    if m.music.state = "finished" and m.nav.mode = "menu" and m.musicOnce <> true
         content = m.music.content
         content.PlayStart = m.musicLoop
         m.music.content = content

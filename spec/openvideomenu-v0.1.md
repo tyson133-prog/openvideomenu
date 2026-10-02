@@ -155,6 +155,10 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 - **`background.image`** is stretched to the whole canvas. `background.color` fills anything not covered.
 - **`buttonsAt`**: see §5.1.
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
+- **`buttons`** MAY be empty: a menu that only shows its background, a clip or a still, like a disc's
+  menu cell without buttons. Its `timeout` (§5.2) decides what follows, as a step up, so a sequence of
+  clips, or one that loops by going to itself, adds nothing to Back's history. Without a timeout it waits:
+  Enter has nothing to press, and Back and the menu keys (§6.6) work as on any menu.
 - **`back`**: what the remote's Back key does on this menu (§6.2).
 - **`timeout`**: what happens when the menu is left alone (§5.2).
 - **`buttonSets`**: buttons that change while the menu plays (§5.3).
@@ -192,6 +196,9 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 
 - **`background.video`** is a motion background stretched to the canvas like `image`. It plays once from 0, which is the menu's *intro*, then loops from `loopStart` (default 0) for as long as the menu is shown. It MAY carry its own audio.
 - **`background.audio`** is menu music. It loops the same way and plays alongside the video.
+- *(Level 2)* **`loop: false`** on `background.video` or `background.audio` plays it once and leaves it
+  on its last frame (the video) or silent (the audio), as a disc's clip followed by its still time. A
+  `timeout` after the clip's length plus the still time then moves on.
 - **Music that plays with a motion background SHOULD be in the video itself**, not in `background.audio`. Some players can play only one stream at a time (Roku is one), so they would drop a separate audio track. Use `background.audio` for menus with a still image, or for music that deliberately loops independently of the video. A player that can't play both plays the video.
 - **`image`** remains the poster: shown while the video loads, and by players without motion support. Those players still work, because they simply show the still.
 - **`buttonsAt`** is the number of seconds into the intro before buttons appear and respond. It's measured on the background video's clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.

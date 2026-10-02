@@ -28,7 +28,7 @@ internal sealed class Validator
         ["overlay"] = ["from", "to", "canvas", "buttons", "defaultButton", "autoNav"],
         ["canvas"] = ["width", "height", "aspect"],
         ["background"] = ["image", "color", "video", "audio"],
-        ["loopingMedia"] = ["src", "loopStart"],
+        ["loopingMedia"] = ["src", "loopStart", "loop"],
         ["button"] = ["id", "rect", "label", "a11yLabel", "showLabel", "states", "nav", "autoAction", "action", "altRects"],
         ["state"] = ["image", "rect", "textColor", "fill"],
         ["fallbackGroup"] = ["label", "hidden", "items"],
@@ -961,7 +961,9 @@ internal sealed class Validator
             Error($"{path}/buttonsAt", "Must be a non-negative number of seconds.");
         }
 
-        if (Buttons(menu, path, canvas, mediaIds, menus, "this menu") is not { } own)
+        // A menu may have no buttons: it shows its background, then its timeout decides (a disc's clip).
+        var noButtons = menu["buttons"] is { ValueKind: JsonValueKind.Array } list && list.GetArrayLength() == 0;
+        if ((noButtons ? new HashSet<string>(StringComparer.Ordinal) : Buttons(menu, path, canvas, mediaIds, menus, "this menu")) is not { } own)
         {
             return;
         }
@@ -1382,6 +1384,11 @@ internal sealed class Validator
         if (m["loopStart"] is { } loopStart && !(IsFiniteNumber(loopStart) && loopStart.GetDouble() >= 0))
         {
             Error($"{path}/loopStart", "Must be a non-negative number of seconds.");
+        }
+
+        if (m["loop"] is { } loop && !IsBoolean(loop))
+        {
+            Error($"{path}/loop", "Must be true or false.");
         }
     }
 

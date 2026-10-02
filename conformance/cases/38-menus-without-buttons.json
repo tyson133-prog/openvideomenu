@@ -1,0 +1,127 @@
+{
+  "description": "Menus without buttons, a disc's button-less menu cells: the background shows (a clip with loop: false plays once and stays on its last frame) and the timeout decides what follows, as a step up, so a clip that loops by going to itself adds no history. Without a timeout the menu waits: Enter has nothing to press, while Back and the menu keys work as on any menu.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Clips"
+    },
+    "media": {
+      "film": {
+        "ref": "Film.mkv"
+      }
+    },
+    "firstPlay": {
+      "type": "goto",
+      "menu": "intro"
+    },
+    "menus": {
+      "intro": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "background": {
+          "video": {
+            "src": "menus/intro.mp4",
+            "loop": false
+          }
+        },
+        "buttons": [],
+        "timeout": {
+          "after": 4,
+          "restartOnInput": false,
+          "action": {
+            "type": "goto",
+            "menu": "logo"
+          }
+        }
+      },
+      "logo": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "background": {
+          "video": {
+            "src": "menus/logo.mp4",
+            "loop": false
+          }
+        },
+        "buttons": [],
+        "timeout": {
+          "after": 2,
+          "restartOnInput": false,
+          "action": {
+            "type": "goto",
+            "menu": "logo"
+          }
+        }
+      },
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "buttons": [
+          {
+            "id": "trap",
+            "rect": [
+              100,
+              100,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "trap"
+            }
+          }
+        ]
+      },
+      "trap": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "background": {
+          "color": "#000"
+        },
+        "buttons": []
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"intro","effects":[{"type":"startTimer","menu":"intro","after":4}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"intro","effects":[]}},
+    {"event":{"type":"timeout","menu":"intro"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
+    {"event":{"type":"timeout","menu":"logo"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
+    {"event":{"type":"press","key":"menu"},"expect":{"mode":"menu","menu":"main","focus":"trap","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"trap","effects":[{"type":"activated","menu":"main","button":"trap"}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"trap","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"trap","effects":[]}},
+    {"event":{"type":"press","key":"back"},"expect":{"mode":"menu","menu":"main","focus":"trap","effects":[]}}
+  ]
+}

@@ -551,9 +551,9 @@ public static class Navigator
                 }
 
                 s.Focus = wanted
-                    ?? (FindButton(now.Buttons, s.Focus!) is not null ? s.Focus : place >= 0 ? now.Buttons[Math.Min(place, now.Buttons.Count - 1)].Id : null)
+                    ?? (s.Focus is not null && FindButton(now.Buttons, s.Focus) is not null ? s.Focus : place >= 0 && now.Buttons.Count > 0 ? now.Buttons[Math.Min(place, now.Buttons.Count - 1)].Id : null)
                     ?? ResolveButton(s, now.Buttons, now.DefaultButton)
-                    ?? now.Buttons[0].Id;
+                    ?? now.Buttons.FirstOrDefault()?.Id;
                 break;
             }
         }
@@ -689,7 +689,12 @@ public static class Navigator
                 switch (press.Key)
                 {
                     case Key.Enter:
-                        Activate(manifest, s, s.Focus!, effects);
+                        // A menu without buttons (a clip or a still) has nothing to press.
+                        if (s.Focus is not null)
+                        {
+                            Activate(manifest, s, s.Focus, effects);
+                        }
+
                         break;
                     case Key.Back:
                         RemoteBack(manifest, s, effects);
@@ -862,7 +867,8 @@ public static class Navigator
         s.Menu = menuId;
         s.Seq++;
         s.ButtonSet = null;
-        s.Focus = ResolveButton(s, menu, buttonId) ?? ResolveButton(s, menu, menu.DefaultButton) ?? menu.Buttons[0].Id;
+        // A menu without buttons has no focus (spec §5).
+        s.Focus = ResolveButton(s, menu, buttonId) ?? ResolveButton(s, menu, menu.DefaultButton) ?? menu.Buttons.FirstOrDefault()?.Id;
         // Level 2: a button only a button set has is focused when its set shows (the player reports it).
         var asked = buttonId is null ? null : buttonId.Var is { } v ? s.Read(v).ToString() : buttonId.Id;
         s.FocusWanted = asked is not null && asked != s.Focus && menu.ButtonSets?.Any(set => FindButton(set.Buttons, asked) is not null) == true ? asked : null;
@@ -895,7 +901,11 @@ public static class Navigator
     private static void Move(Manifest manifest, Working s, Direction dir, List<Effect> effects)
     {
         var shown = Shown(manifest, s);
-        var current = FindButton(shown.Buttons, s.Focus!)!;
+        if (s.Focus is null || FindButton(shown.Buttons, s.Focus) is not { } current)
+        {
+            return;
+        }
+
         var targetId = current.Nav?[dir];
         if (string.IsNullOrEmpty(targetId) && shown.AutoNav == true)
         {

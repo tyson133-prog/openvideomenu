@@ -516,10 +516,10 @@
         },
         "buttons": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "$ref": "#/$defs/button"
-          }
+          },
+          "description": "Empty: a menu that only shows its background, then its timeout decides (spec 5)."
         },
         "buttonsAt": {
           "$ref": "#/$defs/seconds",
@@ -1213,6 +1213,10 @@
         },
         "loopStart": {
           "$ref": "#/$defs/seconds"
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "Level 2: false plays it once and stays on its last frame. Default true."
         }
       }
     },
