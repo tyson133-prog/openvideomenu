@@ -618,7 +618,7 @@ function msNavRunOne(manifest as object, s as object, action as object, effects 
             point = s.lastStop
             item = { media: point.media, start: point.position }
             if point.item <> invalid
-                for each key in ["end", "cues", "keys", "prohibits", "holds"]
+                for each key in ["end", "cues", "keys", "prohibits", "prohibitsAt", "holds"]
                     if point.item[key] <> invalid then item[key] = point.item[key]
                 end for
             end if
@@ -970,6 +970,25 @@ function msNavPlayEffect(manifest as object, item as object, s as object) as obj
         end for
     end for
     if holds.Count() > 0 then effect.holds = holds
+    ' What it forbids during parts of it (the media's windows and the item's, by start), spec 6.6.
+    windows = []
+    for each list in [msOr(media["prohibitsAt"], []), msOr(item["prohibitsAt"], [])]
+        for each w in list
+            i = windows.Count()
+            while i > 0 and windows[i - 1]["from"] > w["from"]
+                i = i - 1
+            end while
+            windows.push(invalid)
+            j = windows.Count() - 1
+            while j > i
+                windows[j] = windows[j - 1]
+                j = j - 1
+            end while
+            windows[i] = w
+        end for
+    end for
+    ' Bracket access keeps the key's case (dot access lowercases it).
+    if windows.Count() > 0 then effect["prohibitsAt"] = windows
     return effect
 end function
 

@@ -68,6 +68,16 @@ export type MenuKeys = Partial<Record<MenuKey, Action>>;
  */
 export type Prohibitions = string[];
 
+/**
+ * Level 2, information (spec §6.6): what the source forbids from `from` to `to` seconds (to the end
+ * without `to`), beside the plain list: a disc's navigation packs, which change from cell to cell.
+ */
+export interface ProhibitWindow {
+  from: number;
+  to?: number;
+  ops: string[];
+}
+
 export interface Title {
   name: string;
   year?: number;
@@ -124,6 +134,8 @@ export interface Media {
   keys?: MenuKeys;
   /** Level 2: what the source forbids while this media plays, as information (spec §6.6). */
   prohibits?: Prohibitions;
+  /** Level 2: what it forbids during parts of it, on its timeline, as information (spec §6.6). */
+  prohibitsAt?: ProhibitWindow[];
   /** Level 2: frames that stay up for a while or until the viewer goes on, whenever this media plays (spec §6.3). */
   holds?: Hold[];
   /** A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number. */
@@ -330,6 +342,8 @@ export interface PlayItem {
   keys?: MenuKeys;
   /** Level 2: what the source forbids while this item plays, beside the media's, as information (spec §6.6). */
   prohibits?: Prohibitions;
+  /** Level 2: what it forbids during parts of this item, beside the media's windows (spec §6.6). */
+  prohibitsAt?: ProhibitWindow[];
   /** Level 2: holds for this way of playing the media, beside the media's own (spec §6.3). */
   holds?: Hold[];
 }

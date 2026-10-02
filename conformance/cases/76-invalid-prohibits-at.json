@@ -1,0 +1,22 @@
+{
+  "description": "prohibitsAt is a list of windows {from, to?, ops}: from in seconds from 0, to after from, ops a list of prohibitions (unknown ones are warned about).",
+  "level": 2,
+  "valid": false,
+  "errors": ["/media/a/prohibitsAt/0/from", "/media/a/prohibitsAt/1/to", "/media/a/prohibitsAt/2/ops", "/media/b/prohibitsAt"],
+  "warnings": ["/media/a/prohibitsAt/3/ops/0"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Broken Windows" },
+    "media": {
+      "a": { "ref": "a.mp4", "prohibitsAt": [
+        { "from": -1, "ops": ["next"] },
+        { "from": 5, "to": 4, "ops": ["next"] },
+        { "from": 6, "ops": "next" },
+        { "from": 7, "ops": ["teleport"] }
+      ] },
+      "b": { "ref": "b.mp4", "prohibitsAt": { "from": 0, "ops": ["next"] } }
+    },
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "a" } }] }]
+  }
+}

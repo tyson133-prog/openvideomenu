@@ -188,6 +188,14 @@ public sealed class ConformanceTests
                 e.TryGetProperty("prohibits", out var prohibits) ? [.. prohibits.EnumerateArray().Select(p => p.GetString()!)] : null,
                 e.TryGetProperty("holds", out var holds)
                     ? [.. holds.EnumerateArray().Select(h => new Hold { At = h.GetProperty("at").GetDouble(), For = h.GetProperty("for").ValueKind == JsonValueKind.String ? HoldTime.Input : h.GetProperty("for").GetDouble() })]
+                    : null,
+                e.TryGetProperty("prohibitsAt", out var windows)
+                    ? [.. windows.EnumerateArray().Select(w => new ProhibitWindow
+                    {
+                        From = w.GetProperty("from").GetDouble(),
+                        To = w.TryGetProperty("to", out var to) ? to.GetDouble() : null,
+                        Ops = [.. w.GetProperty("ops").EnumerateArray().Select(o => o.GetString()!)],
+                    })]
                     : null),
             "activated" when e.TryGetProperty("cue", out var cue) => new Effect.OverlayActivated(cue.GetString()!, e.GetProperty("button").GetString()!),
             "activated" => new Effect.Activated(e.GetProperty("menu").GetString()!, e.GetProperty("button").GetString()!),

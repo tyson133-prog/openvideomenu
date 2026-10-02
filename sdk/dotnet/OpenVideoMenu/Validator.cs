@@ -16,7 +16,8 @@ internal sealed class Validator
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
         ["title"] = ["name", "year", "ids"],
         ["source"] = ["kind", "generator"],
-        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds", "number"],
+        ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "prohibitsAt", "holds", "number"],
+        ["prohibitWindow"] = ["from", "to", "ops"],
         ["hold"] = ["at", "for"],
         ["segment"] = ["media", "start", "end"],
         ["chapter"] = ["time", "label", "thumbnail"],
@@ -37,7 +38,7 @@ internal sealed class Validator
     // Insertion order matters: it's the order "Expected …" lists the types in.
     private static readonly (string Type, string[] Keys)[] ActionKeys =
     [
-        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"]),
+        ("play", ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "prohibitsAt", "holds"]),
         ("playAll", ["type", "items", "after", "order", "count"]),
         ("set", ["type", "var", "value", "op", "then"]),
         ("if", ["type", "test", "then", "else"]),
@@ -186,6 +187,11 @@ internal sealed class Validator
                 if (me["prohibits"] is { } mediaProhibits)
                 {
                     Prohibits(mediaProhibits, $"/media/{id}/prohibits");
+                }
+
+                if (me["prohibitsAt"] is { } mediaWindows)
+                {
+                    ProhibitsAt(mediaWindows, $"/media/{id}/prohibitsAt");
                 }
 
                 if (me["holds"] is { } mediaHolds)
@@ -1470,9 +1476,56 @@ internal sealed class Validator
             Prohibits(prohibits, $"{path}/prohibits");
         }
 
+        if (value["prohibitsAt"] is { } windows)
+        {
+            ProhibitsAt(windows, $"{path}/prohibitsAt");
+        }
+
         if (value["holds"] is { } holds)
         {
             Holds(holds, $"{path}/holds");
+        }
+    }
+
+    /// <summary>Level 2: what a source forbids during parts of a title (spec 6.6): windows {from, to?, ops}, which may overlap.</summary>
+    private void ProhibitsAt(JsonElement value, string path)
+    {
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            Error(path, "Must be a list of windows {from, to?, ops}, e.g. [{\"from\": 0.5, \"ops\": [\"next\"]}].");
+            return;
+        }
+
+        var i = 0;
+        foreach (var windowEl in value.EnumerateArray())
+        {
+            var wp = $"{path}/{i++}";
+            if (!Obj.TryFrom(windowEl, out var w))
+            {
+                Error(wp, "Must be a window {from, to?, ops}.");
+                continue;
+            }
+
+            UnknownKeys(w, KnownKeys["prohibitWindow"], wp);
+            var okFrom = w["from"] is { } f && IsFiniteNumber(f) && f.GetDouble() >= 0;
+            if (!okFrom)
+            {
+                Error($"{wp}/from", "Must be a non-negative number of seconds.");
+            }
+
+            if (w["to"] is { } to && !(okFrom && IsFiniteNumber(to) && to.GetDouble() > w["from"]!.Value.GetDouble()))
+            {
+                Error($"{wp}/to", "Must be a number of seconds after from.");
+            }
+
+            if (w["ops"] is { } ops)
+            {
+                Prohibits(ops, $"{wp}/ops");
+            }
+            else
+            {
+                Error($"{wp}/ops", "Required: a list of prohibitions.");
+            }
         }
     }
 

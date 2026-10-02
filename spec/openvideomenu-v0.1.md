@@ -580,10 +580,14 @@ film.
   `buttons`, `endHold`, `audioChange`, `subtitleChange`, `angleChange`, `karaokeChange`,
   `displayModeChange` (a DVD's user operations), and `skipIntro` (skipping a menu's intro or a
   transition). Other values are allowed.
+- **`prohibitsAt`** `[{ from, to?, ops }]` on a media entry or a play item records what is forbidden
+  during parts of it, on its timeline (to its end without `to`): a disc forbids things cell by cell and
+  even within a cell. Windows may overlap. What's forbidden at a moment is the plain `prohibits` plus the
+  `ops` of every window covering it.
 - **Prohibitions are information, never a requirement.** The viewer can skip anything, any time, unless
   the player chooses otherwise: a player MAY honour any of them and MUST NOT be required to. Recording a
   prohibition never obliges a player to enforce it. The play effect lists the prohibitions of what plays
-  (the media's and the item's) for players that do honour them.
+  (the media's and the item's, and their `prohibitsAt` windows by start) for players that do honour them.
 - **Enforcement belongs to players, never to the spec.** Where this document gives the viewer a way out
   (skipping intros and transitions, §5.1 and §6; Back never trapping, §6.2; ending holds, §6.3), a
   player that chooses to honour the matching prohibition MAY withhold it and still conforms. The

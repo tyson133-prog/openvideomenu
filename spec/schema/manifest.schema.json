@@ -278,6 +278,9 @@
         "number": {
           "type": "integer",
           "description": "A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number."
+        },
+        "prohibitsAt": {
+          "$ref": "#/$defs/prohibitsAt"
         }
       },
       "not": {
@@ -661,6 +664,9 @@
         },
         "holds": {
           "$ref": "#/$defs/holds"
+        },
+        "prohibitsAt": {
+          "$ref": "#/$defs/prohibitsAt"
         }
       }
     },
@@ -1490,6 +1496,30 @@
         },
         "autoNav": {
           "type": "boolean"
+        }
+      }
+    },
+    "prohibitsAt": {
+      "description": "Level 2: what the source forbids during parts of a title, on its timeline, beside prohibits (spec 6.6). Windows may overlap; what's forbidden at a moment is the plain list plus every window covering it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "ops"
+        ],
+        "properties": {
+          "from": {
+            "type": "number",
+            "minimum": 0
+          },
+          "to": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "ops": {
+            "$ref": "#/$defs/prohibits"
+          }
         }
       }
     }

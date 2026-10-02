@@ -22,7 +22,8 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
   title: ["name", "year", "ids"],
   source: ["kind", "generator"],
-  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "holds", "number"],
+  media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "prohibitsAt", "holds", "number"],
+  prohibitWindow: ["from", "to", "ops"],
   hold: ["at", "for"],
   segment: ["media", "start", "end"],
   chapter: ["time", "label", "thumbnail"],
@@ -41,7 +42,7 @@ const KNOWN_KEYS: Record<string, readonly string[]> = {
 };
 
 const ACTION_KEYS: Record<string, readonly string[]> = {
-  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "holds"],
+  play: ["type", "media", "chapter", "start", "end", "after", "audio", "subtitle", "angle", "cues", "keys", "prohibits", "prohibitsAt", "holds"],
   playAll: ["type", "items", "after", "order", "count"],
   set: ["type", "var", "value", "op", "then"],
   if: ["type", "test", "then", "else"],
@@ -141,6 +142,7 @@ class Validator {
           if (m.cues !== undefined) this.cues(m.cues, `/media/${id}/cues`, mediaIds, menus);
           if (m.keys !== undefined) this.keys(m.keys, `/media/${id}/keys`, mediaIds, menus, true);
           if (m.prohibits !== undefined) this.prohibits(m.prohibits, `/media/${id}/prohibits`);
+          if (m.prohibitsAt !== undefined) this.prohibitsAt(m.prohibitsAt, `/media/${id}/prohibitsAt`);
           if (m.holds !== undefined) this.holds(m.holds, `/media/${id}/holds`);
         }
     if (data.keys !== undefined) this.keys(data.keys, "/keys", mediaIds, menus, true);
@@ -779,7 +781,28 @@ class Validator {
     if (value.cues !== undefined) this.cues(value.cues, `${path}/cues`, mediaIds, menus);
     if (value.keys !== undefined) this.keys(value.keys, `${path}/keys`, mediaIds, menus, true);
     if (value.prohibits !== undefined) this.prohibits(value.prohibits, `${path}/prohibits`);
+    if (value.prohibitsAt !== undefined) this.prohibitsAt(value.prohibitsAt, `${path}/prohibitsAt`);
     if (value.holds !== undefined) this.holds(value.holds, `${path}/holds`);
+  }
+
+  /** Level 2: what a source forbids during parts of a title (spec 6.6): windows {from, to?, ops}, which may overlap. */
+  private prohibitsAt(value: unknown, path: string) {
+    if (!Array.isArray(value)) {
+      this.error(path, 'Must be a list of windows {from, to?, ops}, e.g. [{"from": 0.5, "ops": ["next"]}].');
+      return;
+    }
+    value.forEach((w, i) => {
+      const wp = `${path}/${i}`;
+      if (!isObject(w)) {
+        this.error(wp, "Must be a window {from, to?, ops}.");
+        return;
+      }
+      this.unknownKeys(w, KNOWN_KEYS.prohibitWindow!, wp);
+      const okFrom = isFiniteNumber(w.from) && w.from >= 0;
+      if (!okFrom) this.error(`${wp}/from`, "Must be a non-negative number of seconds.");
+      if (w.to !== undefined && !(okFrom && isFiniteNumber(w.to) && w.to > (w.from as number))) this.error(`${wp}/to`, "Must be a number of seconds after from.");
+      this.prohibits(w.ops, `${wp}/ops`);
+    });
   }
 
   /** Level 2: frames held for a time or until the viewer goes on (spec 6.3). */

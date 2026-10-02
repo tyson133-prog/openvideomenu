@@ -1,0 +1,107 @@
+{
+  "description": "Prohibitions that change during a title, as information: prohibitsAt windows {from, to?, ops} on a media entry and a play item, beside the plain lists (a disc's navigation packs, which change from cell to cell). The play effect lists the media's and the item's windows by start for players that honour them; a resumed item keeps its own. Nothing is enforced.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Changing Rules"
+    },
+    "media": {
+      "film": {
+        "ref": "Film.mkv",
+        "prohibits": [
+          "menuKey"
+        ],
+        "prohibitsAt": [
+          {
+            "from": 0,
+            "to": 0.5,
+            "ops": []
+          },
+          {
+            "from": 0.5,
+            "ops": [
+              "next"
+            ]
+          }
+        ]
+      }
+    },
+    "menus": {
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480
+        },
+        "buttons": [
+          {
+            "id": "play",
+            "rect": [
+              100,
+              10,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "resume"
+            },
+            "action": {
+              "type": "play",
+              "media": "film",
+              "prohibitsAt": [
+                {
+                  "from": 2710,
+                  "to": 2710.2,
+                  "ops": [
+                    "fastForward",
+                    "stop"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "resume",
+            "rect": [
+              100,
+              60,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "play"
+            },
+            "action": {
+              "type": "resume"
+            }
+          }
+        ]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"main","button":"play"},{"type":"play","media":"film","start":0,"prohibits":["menuKey"],"prohibitsAt":[{"from":0,"to":0.5,"ops":[]},{"from":0.5,"ops":["next"]},{"from":2710,"to":2710.2,"ops":["fastForward","stop"]}]}]}},
+    {"event":{"type":"stopped","position":50},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"resume","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"activated","menu":"main","button":"resume"},{"type":"play","media":"film","start":50,"prohibits":["menuKey"],"prohibitsAt":[{"from":0,"to":0.5,"ops":[]},{"from":0.5,"ops":["next"]},{"from":2710,"to":2710.2,"ops":["fastForward","stop"]}]}]}}
+  ]
+}

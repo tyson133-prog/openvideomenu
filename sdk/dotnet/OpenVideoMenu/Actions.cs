@@ -56,6 +56,9 @@ public sealed class PlayAction : MenuAction
     /// <summary>Level 2: what the source forbids while this plays, as information (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
 
+    /// <summary>Level 2: what it forbids during parts of it (spec §6.6).</summary>
+    public List<ProhibitWindow>? ProhibitsAt { get; set; }
+
     /// <summary>Level 2: frames held while this plays (spec §6.3).</summary>
     public List<Hold>? Holds { get; set; }
 
@@ -63,7 +66,7 @@ public sealed class PlayAction : MenuAction
     public MenuAction? After { get; set; }
 
     /// <summary>What this plays, as a play item.</summary>
-    public PlayItem ToItem() => new() { Media = Media, Chapter = Chapter, Start = Start, Audio = Audio, Subtitle = Subtitle, Angle = Angle, End = End, Cues = Cues, Keys = Keys, Prohibits = Prohibits, Holds = Holds };
+    public PlayItem ToItem() => new() { Media = Media, Chapter = Chapter, Start = Start, Audio = Audio, Subtitle = Subtitle, Angle = Angle, End = End, Cues = Cues, Keys = Keys, Prohibits = Prohibits, ProhibitsAt = ProhibitsAt, Holds = Holds };
 }
 
 /// <summary>Play several items in order (a "play all"), then run <see cref="After"/>.</summary>

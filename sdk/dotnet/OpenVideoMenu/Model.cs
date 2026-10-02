@@ -149,6 +149,9 @@ public sealed class MediaEntry
     /// <summary>Level 2: what the source forbids while this media plays, as information (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
 
+    /// <summary>Level 2: what it forbids during parts of it, on its timeline, as information (spec §6.6).</summary>
+    public List<ProhibitWindow>? ProhibitsAt { get; set; }
+
     /// <summary>Level 2: frames held whenever this media plays (spec §6.3).</summary>
     public List<Hold>? Holds { get; set; }
 
@@ -411,6 +414,24 @@ public sealed class LoopingMedia
 }
 
 /// <summary>[x, y, width, height] in canvas pixels.</summary>
+/// <summary>
+/// Level 2, information (spec §6.6): what the source forbids from <see cref="From"/> to <see cref="To"/>
+/// seconds (to the end without it), beside the plain list: a disc's navigation packs.
+/// </summary>
+public sealed class ProhibitWindow
+{
+    public double From { get; set; }
+
+    public double? To { get; set; }
+
+    public List<string> Ops { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; }
+
+    public override string ToString() => $"[{From}..{To}): {string.Join(", ", Ops)}";
+}
+
 /// <summary>Level 2, information: a button's place in the source's letterbox and pan-scan layouts.</summary>
 public sealed class AltRects
 {
@@ -621,6 +642,9 @@ public sealed class PlayItem
 
     /// <summary>Level 2: what the source forbids while this item plays, beside the media's (spec §6.6).</summary>
     public List<string>? Prohibits { get; set; }
+
+    /// <summary>Level 2: what it forbids during parts of this item, beside the media's windows (spec §6.6).</summary>
+    public List<ProhibitWindow>? ProhibitsAt { get; set; }
 
     /// <summary>Level 2: holds for this way of playing the media, beside the media's own (spec §6.3).</summary>
     public List<Hold>? Holds { get; set; }

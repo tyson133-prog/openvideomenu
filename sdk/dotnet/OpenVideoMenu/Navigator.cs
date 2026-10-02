@@ -122,17 +122,19 @@ public abstract record Effect
         double? End = null,
         IReadOnlyList<CueWatch>? Cues = null,
         IReadOnlyList<string>? Prohibits = null,
-        IReadOnlyList<Hold>? Holds = null) : Effect
+        IReadOnlyList<Hold>? Holds = null,
+        IReadOnlyList<ProhibitWindow>? ProhibitsAt = null) : Effect
     {
         public bool Equals(Play? other) =>
             other is not null && Media == other.Media && Start == other.Start && Audio == other.Audio && Subtitle == other.Subtitle &&
             Angle == other.Angle && End == other.End && (Cues ?? []).SequenceEqual(other.Cues ?? []) &&
-            (Prohibits ?? []).SequenceEqual(other.Prohibits ?? []) && (Holds ?? []).SequenceEqual(other.Holds ?? []);
+            (Prohibits ?? []).SequenceEqual(other.Prohibits ?? []) && (Holds ?? []).SequenceEqual(other.Holds ?? []) &&
+            (ProhibitsAt ?? []).Select(w => w.ToString()).SequenceEqual((other.ProhibitsAt ?? []).Select(w => w.ToString()));
 
         public override int GetHashCode() => HashCode.Combine(Media, Start, Audio, Subtitle, Angle, End, Cues?.Count ?? 0);
 
         public override string ToString() =>
-            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}], Prohibits = [{string.Join(", ", Prohibits ?? [])}], Holds = [{string.Join(", ", Holds ?? [])}] }}";
+            $"Play {{ Media = {Media}, Start = {Start}, Audio = {Audio}, Subtitle = {Subtitle}, Angle = {Angle}, End = {End}, Cues = [{string.Join(", ", Cues ?? [])}], Prohibits = [{string.Join(", ", Prohibits ?? [])}], Holds = [{string.Join(", ", Holds ?? [])}], ProhibitsAt = [{string.Join("; ", ProhibitsAt ?? [])}] }}";
     }
 
     /// <summary>Briefly show the button's activated state.</summary>
@@ -1074,6 +1076,7 @@ public static class Navigator
                             Cues = stop.Item?.Cues,
                             Keys = stop.Item?.Keys,
                             Prohibits = stop.Item?.Prohibits,
+                            ProhibitsAt = stop.Item?.ProhibitsAt,
                             Holds = stop.Item?.Holds,
                             Extensions = stop.Item?.Extensions,
                         };
@@ -1479,8 +1482,9 @@ public static class Navigator
             .ToList();
         var prohibits = (manifest.Media.GetValueOrDefault(item.Media)?.Prohibits ?? []).Concat(item.Prohibits ?? []).Distinct().ToList();
         var holds = (manifest.Media.GetValueOrDefault(item.Media)?.Holds ?? []).Concat(item.Holds ?? []).OrderBy(h => h.At).ToList();
+        var prohibitsAt = (manifest.Media.GetValueOrDefault(item.Media)?.ProhibitsAt ?? []).Concat(item.ProhibitsAt ?? []).OrderBy(w => w.From).ToList();
         return new(item.Media, from ?? StartTime(manifest, item), audio, subtitle, angle, item.End, cues.Count > 0 ? cues : null,
-            prohibits.Count > 0 ? prohibits : null, holds.Count > 0 ? holds : null);
+            prohibits.Count > 0 ? prohibits : null, holds.Count > 0 ? holds : null, prohibitsAt.Count > 0 ? prohibitsAt : null);
     }
 
     /// <summary>A mutable copy of the state while a step runs.</summary>

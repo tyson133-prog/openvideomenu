@@ -13,7 +13,7 @@ export type Level = 0 | 1 | 2 | 3;
  */
 const LEVEL2_FIELDS = new Set([
   "video", "audio", "buttonsAt", "timeout", "buttonSets", "transition", "angles", "angleTracks", "segments",
-  "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback",
+  "subtitle", "angle", "end", "cues", "holds", "keys", "prohibits", "altRects", "order", "count", "cuePlayback", "prohibitsAt",
 ]);
 
 /** Level 2 actions. */
