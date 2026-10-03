@@ -163,6 +163,8 @@ sub onAssetServersFound()
         buttons.Push("Enter an address")
         dialog.buttons = buttons
         dialog.observeField("buttonSelected", "onAssetServerChosen")
+        dialog.observeField("wasClosed", "onAssetServerDialogClosed")
+        m.askingAssetServer = true
         m.top.dialog = dialog
     else
         askAssetServer()
@@ -170,6 +172,7 @@ sub onAssetServersFound()
 end sub
 
 sub onAssetServerChosen()
+    m.askingAssetServer = false
     i = m.top.dialog.buttonSelected
     m.top.dialog.close = true
     if i < m.assetServers.Count() then useAssetServer(m.assetServers[i].url) else askAssetServer()
@@ -187,17 +190,35 @@ sub askAssetServer()
     dialog.message = ["The computer running the Open Video Menu asset server, e.g. 192.168.1.20:8790"]
     dialog.buttons = ["Connect", "Titles without menus"]
     dialog.observeField("buttonSelected", "onAssetServerEntered")
+    dialog.observeField("wasClosed", "onAssetServerDialogClosed")
+    m.askingAssetServer = true
     m.top.dialog = dialog
 end sub
 
+' Back on either question closes it without an answer: carry on without menus, as "Titles without
+' menus" does, or the library would never load.
+sub onAssetServerDialogClosed()
+    if m.askingAssetServer <> true then return
+    m.askingAssetServer = false
+    setStatus("")
+    withoutMenus()
+end sub
+
+' No menu server for now: the library browses and plays without menus (the saved address is kept).
+sub withoutMenus()
+    m.menuBase = invalid
+    m.catalog = []
+    plexLibraries()
+end sub
+
 sub onAssetServerEntered()
+    m.askingAssetServer = false
     dialog = m.top.dialog
     text = dialog.text.Trim()
     ok = dialog.buttonSelected = 0
     dialog.close = true
     if not ok or text = ""
-        m.catalog = []
-        plexLibraries()
+        withoutMenus()
         return
     end if
     if Left(text, 4) <> "http" then text = "http://" + text
