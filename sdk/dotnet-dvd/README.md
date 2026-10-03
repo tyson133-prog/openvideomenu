@@ -34,7 +34,13 @@ var result = await DvdExport.ToBundleAsync(builder, disc, @"D:\Rips\Heat\Heat (1
 foreach (var w in result.Warnings) Console.WriteLine($"[{w.Code}] {w.Message}");
 ```
 
-Or from the command line: `ovm-dvd export Heat.iso "Heat (1995).ovmz" --files "Heat - title {n}.mkv"`.
+Or from the command line: `ovm-dvd export Heat.iso "Heat (1995).ovmz" --files "Heat - title {n}.mkv"`. For a
+library's layout, name the feature on its own and give a pattern for each extras folder; the first file that
+exists wins:
+
+```
+ovm-dvd export Heat.iso "Heat (1995).ovmz" --file "1=Heat (1995).mkv" --files "Featurettes/Title {n}.mkv" --files "Other/Title {n}.mkv"
+```
 
 ## The layers
 

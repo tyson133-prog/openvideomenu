@@ -10,10 +10,12 @@ internal static class Program
           nav <disc> vmgm|vtsm|title <vtsn> <pgcn> <cell>
                                             a cell's navigation packs and highlight status
           disasm <hex>...                   8-byte commands as text (e.g. 3002000000050000)
-          export <disc> <bundle.ovmz> --files <pattern> [--ffmpeg <path>|none] [--no-tracks] [--title <name>]
-                                            a bundle from files ripped one per DVD title; the pattern names each
+          export <disc> <bundle.ovmz> --files <pattern>... [--file <n>=<path>]... [--ffmpeg <path>|none]
+                 [--no-tracks] [--title <name>]
+                                            a bundle from files ripped one per DVD title; a pattern names each
                                             title's file relative to the bundle, {n} = the title number
-                                            ("Title {n}.mkv")
+                                            ("Title {n}.mkv"); with several, the first whose file exists wins;
+                                            --file names one title's file (the feature as "Heat (1995).mkv")
           verify <disc> [--walks n] [--depth n] [--seed n] [--lang xx] [--json <out>] [--quiet]
                                             export the whole disc and play it against the disc; one VERIFY line
           verify-all <folder>... [--out <dir>] [--parallel n] [--timeout s] [--walks n] [--depth n]
@@ -70,6 +72,10 @@ internal static class Program
     /// <summary>The value after an option (--walks 200), or null.</summary>
     public static string? Option(string[] args, string name) =>
         Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+
+    /// <summary>Every value of an option given several times (--files a --files b), in order.</summary>
+    public static List<string> Options(string[] args, string name) =>
+        [.. args.Select((a, i) => (a, i)).Where(x => x.a == name && x.i + 1 < args.Length).Select(x => args[x.i + 1])];
 
     public static int Option(string[] args, string name, int fallback) =>
         int.TryParse(Option(args, name), out var v) ? v : fallback;

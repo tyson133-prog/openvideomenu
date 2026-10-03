@@ -2,25 +2,39 @@ namespace OvmDvd;
 
 /// <summary>
 /// export: a bundle from files ripped one per DVD title (MakeMKV, HandBrake), the whole disc's logic, with menu
-/// art from ffmpeg. Titles whose file isn't there are left out (their buttons stay but do nothing).
+/// art from ffmpeg. Titles whose file isn't there are left out (their buttons stay but do nothing). Libraries keep
+/// the feature apart from the extras (Plex: "Heat (1995).mkv" beside "Featurettes/"), so one title's file can be
+/// named on its own (--file 1=...), and several patterns are tried in turn.
 /// </summary>
 internal static class ExportCommand
 {
     public static async Task<int> Run(string source, string bundle, string[] args)
     {
-        var pattern = Program.Option(args, "--files") ?? throw new ArgumentException("export needs --files <pattern>, e.g. \"Title {n}.mkv\".");
-        if (!pattern.Contains("{n}")) throw new ArgumentException("The --files pattern needs {n} for the title number.");
+        var patterns = Program.Options(args, "--files");
+        var named = new Dictionary<int, string>();
+        foreach (var f in Program.Options(args, "--file"))
+        {
+            var eq = f.IndexOf('=');
+            if (eq <= 0 || !int.TryParse(f[..eq], out var n))
+                throw new ArgumentException($"--file needs <title>=<path>, e.g. \"1=Heat (1995).mkv\"; got \"{f}\".");
+            named[n] = f[(eq + 1)..];
+        }
+        if (patterns.Count == 0 && named.Count == 0)
+            throw new ArgumentException("export needs --files <pattern> (e.g. \"Title {n}.mkv\") or --file <title>=<path>.");
+        if (patterns.FirstOrDefault(p => !p.Contains("{n}")) is { } bad)
+            throw new ArgumentException($"The --files pattern \"{bad}\" needs {{n}} for the title number.");
         var folder = Path.GetDirectoryName(Path.GetFullPath(bundle))!;
 
         using var disc = DvdDisc.Open(source);
         var map = DiscMapBuilder.Build(disc);
         string? FileOf(int title)
         {
-            var rel = pattern.Replace("{n}", title.ToString());
-            return File.Exists(Path.Combine(folder, rel)) ? rel.Replace('\\', '/') : null;
+            IEnumerable<string> candidates = named.TryGetValue(title, out var file) ? [file] : patterns.Select(p => p.Replace("{n}", title.ToString()));
+            return candidates.FirstOrDefault(rel => File.Exists(Path.Combine(folder, rel)))?.Replace('\\', '/');
         }
         var set = DvdMedia.OneFilePerTitle(disc, FileOf);
-        if (set.Media.Count == 0) throw new ArgumentException($"No title's file was found next to the bundle ({pattern} in {folder}).");
+        if (set.Media.Count == 0)
+            throw new ArgumentException($"No title's file was found next to the bundle ({string.Join(", ", patterns.Concat(named.Values))} in {folder}).");
 
         var builder = new MenuManifestBuilder(disc, map, set.Media, set.Index, new DvdManifestOptions
         {
