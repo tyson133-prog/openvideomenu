@@ -427,9 +427,11 @@ public sealed class DvdMenuCompiler
 
     /// <summary>
     /// Gives each saveResume that names its media the resumed title's whole play item (spec §6.5 <c>item</c>):
-    /// its end, cues and holds go with it. Items hold actions too, so this repeats until none is left.
+    /// its end, cues and holds go with it. Items hold actions too, so this repeats until none is left. The saved
+    /// time was on the media played; when the item plays another (a composite of pieces of it), the time moves
+    /// onto that one's clock, or the point would be past its end.
     /// </summary>
-    public void FillResumeItems(Func<IEnumerable<MenuAction>> all)
+    public void FillResumeItems(Func<IEnumerable<MenuAction>> all, IReadOnlyDictionary<string, MediaEntry>? media = null)
     {
         var rounds = 0;
         for (var changed = true; changed;)
@@ -445,10 +447,30 @@ public sealed class DvdMenuCompiler
                 if (save.Media is not null && save.After is RunAction { Action: { } name } && _resumeItems.TryGetValue(name, out var item))
                 {
                     save.Item = CloneItem(item);
+                    if (save.At is { } at && media is not null && OnClockOf(media, item.Media, save.Media, at) is { } moved) save.At = moved;
                     save.Media = null;
                     changed = true;
                 }
         }
+    }
+
+    /// <summary>
+    /// A time on <paramref name="from"/>'s clock as a time on <paramref name="to"/>'s, when <paramref name="to"/> is
+    /// a composite whose pieces include it there; null when it's the same clock or no piece holds that time.
+    /// </summary>
+    private static double? OnClockOf(IReadOnlyDictionary<string, MediaEntry> media, string to, string from, double at)
+    {
+        if (to == from || !media.TryGetValue(to, out var composite) || composite.Segments is not { } pieces) return null;
+        var clock = 0.0;
+        foreach (var piece in pieces)
+        {
+            var start = piece.Start ?? 0;
+            var end = piece.End ?? (media.TryGetValue(piece.Media, out var file) ? file.Duration : null);
+            if (end is null) return null;
+            if (piece.Media == from && at >= start - 0.001 && at < end.Value - 0.001) return Math.Round(clock + Math.Max(0, at - start), 3);
+            clock += end.Value - start;
+        }
+        return null;
     }
 
     private static PlayItem CloneItem(PlayItem item) =>

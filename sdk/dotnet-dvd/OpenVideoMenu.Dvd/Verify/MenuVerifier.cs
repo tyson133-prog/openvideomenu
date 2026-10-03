@@ -142,7 +142,7 @@ public static class MenuVerifier
                     (nav, playing) = PlayToEnd(manifest, nav, playing);
 
                 if (dvd.Kind == VmStopKind.Menu && dvd.State.Domain == DvdDomain.Title && nav.Mode == NavMode.Playing && playing is not null &&
-                    HoldTime(disc, dvd.State, playing, index) is { } holdAt)
+                    HoldTime(disc, dvd.State, playing, cellsOf, index) is { } holdAt)
                     (nav, playing) = Advance(manifest, nav, playing, holdAt);
 
                 report.Steps++;
@@ -185,7 +185,9 @@ public static class MenuVerifier
                     if (dvd.Kind == VmStopKind.NoNavigation) dvd = new VmResult { Kind = VmStopKind.Menu, State = dvd.State, Highlight = held.Highlight };
                     (nav, effects) = Step(manifest, nav, new NavEvent.Activate($"b{b.Number}"));
                     if (_walkTrace is { } walkTrace3) walkTrace3($"    activate b{b.Number}: {string.Join(", ", effects)}");
-                    playing = Last(effects) ?? (nav.Mode == NavMode.Playing ? Seeked(playing, effects) : null);
+                    if (Last(effects) is { } started) playing = started;
+                    else if (nav.Mode == NavMode.Playing) (nav, playing) = AfterSeek(manifest, nav, playing, effects);
+                    else playing = null;
                     (nav, playing) = Settle(manifest, nav, playing);
                     continue;
                 }
@@ -305,6 +307,20 @@ public static class MenuVerifier
     }
 
     /// <summary>The playback goes on from where a seek put it (a disc's link within the title playing).</summary>
+    /// <summary>
+    /// A seek moved the playback: overlays follow the position (spec §6.3), so one whose window the seek lands
+    /// in shows again, as a player reports it. A held cell that loops by linking to its own start lands on its
+    /// overlay's <c>from</c>.
+    /// </summary>
+    private static (NavState, Play?) AfterSeek(Manifest manifest, NavState nav, Play? playing, IReadOnlyList<Effect> effects)
+    {
+        playing = Seeked(playing, effects);
+        if (playing is not null && nav.Overlay is null && effects.OfType<Effect.Seek>().LastOrDefault() is { } seek &&
+            playing.Cues.LastOrDefault(c => c.From is { } from && from <= seek.Position + 0.0005 && (c.To is not { } to || to > seek.Position)) is { } overlay)
+            (nav, _) = Step(manifest, nav, new NavEvent.Cue(overlay.Id));
+        return (nav, playing);
+    }
+
     private static Play? Seeked(Play? playing, IReadOnlyList<Effect> effects)
     {
         if (playing is not null && effects.OfType<Effect.Seek>().LastOrDefault() is { } seek)
@@ -319,11 +335,20 @@ public static class MenuVerifier
     }
 
     /// <summary>Where on the play's media the disc's held cell holds (its last frame).</summary>
-    private static double? HoldTime(DvdDisc disc, VmState s, Play playing, CellMediaIndex index)
+    private static double? HoldTime(DvdDisc disc, VmState s, Play playing, IReadOnlyDictionary<string, MediaCells> cellsOf, CellMediaIndex index)
     {
         var cell = disc.GetPgc(DvdDomain.Title, s.Vtsn, s.Pgcn)?.Cells.ElementAtOrDefault(s.Cell - 1);
-        if (cell is null || index.StartOf(playing.Media, s.Vtsn, cell.FirstSector, cell.LastSector) is not { } start) return null;
-        return start + Math.Max(0, cell.Duration.TotalSeconds - 0.04);
+        if (cell is null) return null;
+        // A file can hold the same cell more than once (two PGCs of a title share it): the one in this play.
+        double? start = null;
+        if (cellsOf.TryGetValue(playing.Media, out var file) && file.Vtsn == s.Vtsn)
+        {
+            var copies = file.Cells.Select((c, i) => (c, i)).Where(x => x.c == (cell.FirstSector, cell.LastSector)).Select(x => file.Starts[x.i]).ToList();
+            start = copies.Cast<double?>().FirstOrDefault(t => t >= playing.Start - 0.001 && (playing.End is not { } end || t < end - 0.001))
+                    ?? copies.Cast<double?>().FirstOrDefault();
+        }
+        start ??= index.StartOf(playing.Media, s.Vtsn, cell.FirstSector, cell.LastSector);
+        return start is { } t0 ? t0 + Math.Max(0, cell.Duration.TotalSeconds - 0.04) : null;
     }
 
     /// <summary>
@@ -338,7 +363,7 @@ public static class MenuVerifier
             nav = next;
             if (Last(effects) is { } p) return Settle(manifest, nav, p);
             if (nav.Mode != NavMode.Playing) return Settle(manifest, nav, null);
-            if (effects.OfType<Effect.Seek>().Any()) return (nav, Seeked(playing, effects));
+            if (effects.OfType<Effect.Seek>().Any()) return AfterSeek(manifest, nav, playing, effects);
         }
         playing.CuesTo = until;
         if (playing.Cues.LastOrDefault(c => c.From is { } from && from <= until + 0.0005 && (c.To is not { } to || to > until)) is { } overlay)

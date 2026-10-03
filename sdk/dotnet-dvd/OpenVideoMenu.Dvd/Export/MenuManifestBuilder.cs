@@ -244,7 +244,7 @@ public sealed class MenuManifestBuilder
                         windows.Add(new ProhibitWindow { From = w.From, To = w.To, Ops = w.Ops });
                 if (windows.Count > 0) entry.ProhibitsAt = windows;
             }
-        _compiler.FillResumeItems(() => ActionTidy.AllActions(manifest));
+        _compiler.FillResumeItems(() => ActionTidy.AllActions(manifest), manifest.Media);
         ActionTidy.TrackHighlightId(manifest);
         var passes = _options.Passes;
         if (passes.HasFlag(ManifestPasses.HoistToMedia)) ActionTidy.HoistToMedia(manifest);
