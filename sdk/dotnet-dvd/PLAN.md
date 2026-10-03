@@ -225,6 +225,28 @@ Findings from step 4:
 - **Partial exports** need no code. Titles the caller gives no file for are already buttons that do nothing,
   counted in `UnrippedButtons` and `MissingTitles`. "Choose titles" means "give files for those titles".
 
+The 2026-09-29 audit, rechecked 2026-10-03 against whole-disc exports (all 89 discs it names verify OK). The
+audit's reader was static: it counted every command and every branch, where the disc's machine runs them.
+- **3 button-count differences** (Maverick, Return to Blue Lagoon, The Incredibles D1): those menu PGCs have
+  several cells with different buttons, and the two readers counted different cells. The export has every cell
+  (Maverick `vts1-pgc1-c2` has the 10 buttons, `-c83` the 5).
+- **5 discs where UDF and ISO 9660 disagree:** all open with UDF, as players read them (ISO 9660 is only the
+  fallback when UDF fails to open).
+- **297 menus on untaken branches:** 292 are in the export, with links to them. The other 5 never show on the
+  disc:
+  - Little House Deluxe Season Five D1 (PGCs 11-13) and Season Two D5 (PGC 12): the dispatcher reaching them
+    tests g1, and g1 is only ever set to 0.
+  - Once (`Disc menu PGC 1`): its pre-commands always link away, so it's an action.
+- **46 menus that "start a title when left alone":** 24 do, and the export's timeout plays (sometimes through
+  several cells' timeouts). The other 22 don't on the disc either:
+  - 16 loop or hold: a cell command links back into the PGC (`LinkTopPG`, `LinkCN`, `LinkPGN`), or a cell holds
+    forever (still 255), so the post command that jumps to the title never runs. Dallas S1-2 (7), Bob the
+    Builder (3), Barney Farm, Land Before Time, Cedarmont Bible Songs, Roots Bonus, Incredibles 2 (2).
+  - 2 reach a menu: Star Wars Trilogy D4 and Revenge of the Sith D2 time out after 10.5 s (0.5 s of video plus
+    a 10 s still), and the title they jump to calls a menu from its pre-commands.
+  - 4 are dead: The Munsters D12 VMG PGCs 12, 21, 24 and 25. Nothing on the disc links to 12 or 21, and only
+    21 links to 24 and 25.
+
 ## Steps
 
 Each step ends with DVD Tamer's tests passing and five of the hardest discs verifying with 0 differences, their
