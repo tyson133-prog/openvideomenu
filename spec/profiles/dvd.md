@@ -96,6 +96,11 @@ records it in `prohibits`, and players decide whether to honour it.
 - **Menu audio** (Level 2): AAC or Opus.
 - Keep a menu's assets small (a few MB at most) so menus open instantly on TVs over Wi-Fi.
 
+## Reference importer
+
+[`sdk/dotnet-dvd`](../../sdk/dotnet-dvd) (`OpenVideoMenu.Dvd`, .NET) imports discs as this profile describes.
+It also verifies an export against the disc it came from, by playing both side by side.
+
 ## Worked example
 
 [`examples/dvd-shaped`](../../examples/dvd-shaped) is a synthetic title built the way this profile describes. Conformance case [`07-dvd-shaped.json`](../../conformance/cases/07-dvd-shaped.json) checks the same shape.

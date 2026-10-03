@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="../dotnet/OpenVideoMenu/OpenVideoMenu.csproj" />
+  <Project Path="OpenVideoMenu.Dvd.Tests/OpenVideoMenu.Dvd.Tests.csproj" />
+  <Project Path="OpenVideoMenu.Dvd/OpenVideoMenu.Dvd.csproj" />
+  <Project Path="ovm-dvd/ovm-dvd.csproj" />
+</Solution>

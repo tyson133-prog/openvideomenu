@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OvmDvd</RootNamespace>
+    <AssemblyName>ovm-dvd</AssemblyName>
+    <Version>0.1.0</Version>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>ovm-dvd</ToolCommandName>
+    <PackageId>OpenVideoMenu.Dvd.Tool</PackageId>
+    <Authors>Tyson Treasure</Authors>
+    <Description>ovm-dvd: map a DVD's menus, export them as an Open Video Menu bundle, and verify exports against the disc (one disc or a whole collection).</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenVideoMenu.Dvd\OpenVideoMenu.Dvd.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="OpenVideoMenu" />
+    <Using Include="OpenVideoMenu.Dvd" />
+    <Using Include="OpenVideoMenu.Dvd.IO" />
+    <Using Include="OpenVideoMenu.Dvd.Structure" />
+    <Using Include="OpenVideoMenu.Dvd.Commands" />
+    <Using Include="OpenVideoMenu.Dvd.Machine" />
+    <Using Include="OpenVideoMenu.Dvd.Export" />
+    <Using Include="OpenVideoMenu.Dvd.Art" />
+    <Using Include="OpenVideoMenu.Dvd.Verify" />
+  </ItemGroup>
+</Project>

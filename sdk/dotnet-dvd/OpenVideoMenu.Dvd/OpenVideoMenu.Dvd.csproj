@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>OpenVideoMenu.Dvd</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Self-describing members (Label, Width, Vtsn…) carry no comment of their own. -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+    <Version>0.1.0</Version>
+    <PackageId>OpenVideoMenu.Dvd</PackageId>
+    <Authors>Tyson Treasure</Authors>
+    <Description>DVD to Open Video Menu: read a DVD (ISO or VIDEO_TS), run its menus and programs, translate them into a faithful Open Video Menu manifest over the ripped files, make the menu art, and verify the result against the disc.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageTags>openvideomenu;dvd;menu;video;import</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The core SDK; packed, this becomes a dependency on the same OpenVideoMenu version. -->
+    <ProjectReference Include="..\..\dotnet\OpenVideoMenu\OpenVideoMenu.csproj" />
+    <PackageReference Include="DiscUtils.Core" Version="0.16.13" />
+    <PackageReference Include="DiscUtils.Iso9660" Version="0.16.13" />
+    <PackageReference Include="DiscUtils.Udf" Version="0.16.13" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Using Include="OpenVideoMenu.Dvd" />
+    <Using Include="OpenVideoMenu.Dvd.IO" />
+    <Using Include="OpenVideoMenu.Dvd.Structure" />
+    <Using Include="OpenVideoMenu.Dvd.Commands" />
+    <Using Include="OpenVideoMenu.Dvd.Machine" />
+    <Using Include="OpenVideoMenu.Dvd.Export" />
+    <Using Include="OpenVideoMenu.Dvd.Art" />
+    <Using Include="OpenVideoMenu.Dvd.Verify" />
+  </ItemGroup>
+</Project>

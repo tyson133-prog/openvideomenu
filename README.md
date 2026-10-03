@@ -77,6 +77,7 @@ node packages/cli/dist/main.js validate <file-or-folder>
 | [`packages/cli`](packages/cli) | `openvideomenu validate`, `preview`, `pack` and `unpack` (bundles) |
 | [`packages/asset-server`](packages/asset-server) | A small read-only server that hands menus to TV apps next to Plex or Jellyfin (proof of concept) |
 | [`sdk/dotnet`](sdk/dotnet) | .NET library: read, write and validate manifests, and the same navigator, for C# tools such as importers |
+| [`sdk/dotnet-dvd`](sdk/dotnet-dvd) | .NET DVD importer (`OpenVideoMenu.Dvd`) and the `ovm-dvd` tool: reads a disc, translates its menus and programs into a manifest, makes the art, and verifies the result against the disc |
 | [`plugins/jellyfin`](plugins/jellyfin) | Jellyfin plugin that serves menus from the media server itself (proof of concept) |
 | [`apps/androidtv`](apps/androidtv), [`apps/roku`](apps/roku) | ovmplayer, TV apps that play menus from your Plex or Jellyfin library (proofs of concept) |
 | [`docker/`](docker), [`packaging/`](packaging) | Ways to run the asset server |

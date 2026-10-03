@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Tests only: an independent PNG decoder to check the package's own PNG writer. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenVideoMenu.Dvd\OpenVideoMenu.Dvd.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="OpenVideoMenu.Dvd" />
+    <Using Include="OpenVideoMenu.Dvd.IO" />
+    <Using Include="OpenVideoMenu.Dvd.Structure" />
+    <Using Include="OpenVideoMenu.Dvd.Commands" />
+    <Using Include="OpenVideoMenu.Dvd.Machine" />
+    <Using Include="OpenVideoMenu.Dvd.Export" />
+    <Using Include="OpenVideoMenu.Dvd.Art" />
+    <Using Include="OpenVideoMenu.Dvd.Verify" />
+  </ItemGroup>
+</Project>
