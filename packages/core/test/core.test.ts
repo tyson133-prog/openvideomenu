@@ -31,6 +31,15 @@ describe("resolve", () => {
     expect(resolvePath("https://cdn.example/a.m3u8", manifestUrl)).toBe("https://cdn.example/a.m3u8");
   });
 
+  it("resolves a bundle's media beside the bundle, and its assets inside it", () => {
+    const bundled = "http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).ovmz/manifest.json";
+    expect(resolveMedia("Other/Title 6.mp4", bundled)).toBe("http://localhost:8080/library/Sintel%20(2010)/Other/Title%206.mp4");
+    expect(resolveMedia("Sintel (2010).mkv", bundled)).toBe("http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).mkv");
+    expect(resolvePath("menus/bg.jpg", bundled)).toBe("http://localhost:8080/library/Sintel%20(2010)/Sintel%20(2010).ovmz/menus/bg.jpg");
+    expect(resolveMedia("Other/a.mp4", manifestUrl)).toBe("http://localhost:8080/library/Sintel%20(2010)/Other/a.mp4");
+    expect(resolveMedia("a.mp4", "http://h/x/Sintel.OVMZ/manifest.json")).toBe("http://h/x/a.mp4");
+  });
+
   it("hands scheme refs to the host resolver", () => {
     const resolvers = { jellyfin: (r: { id: string }) => `/Videos/${r.id}/stream` };
     expect(resolveMedia({ scheme: "jellyfin", id: "abc" }, manifestUrl, resolvers)).toBe("/Videos/abc/stream");
