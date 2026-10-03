@@ -695,10 +695,21 @@ public static class Navigator
                     break;
                 }
 
+                // A menu without buttons (a clip or a still): any key but Back skips it, running its timeout
+                // now, as an intro is skipped. Without a timeout it waits; there is nothing to press.
+                if (press.Key != Key.Back && IsClip(MenuOf(manifest, s.Menu!)))
+                {
+                    if (MenuOf(manifest, s.Menu!).Timeout is { } skip)
+                    {
+                        Run(manifest, s, skip.Action, effects, pushHistory: false, up: true);
+                    }
+
+                    break;
+                }
+
                 switch (press.Key)
                 {
                     case Key.Enter:
-                        // A menu without buttons (a clip or a still) has nothing to press.
                         if (s.Focus is not null)
                         {
                             Activate(manifest, s, s.Focus, effects);
@@ -982,6 +993,25 @@ public static class Navigator
         var previous = s.History[^1];
         s.History.RemoveAt(s.History.Count - 1);
         EnterMenu(manifest, s, previous.Menu, previous.Focus, intro: false, effects);
+    }
+
+    /// <summary>A menu without buttons (spec §5): a clip or a still, which its timeout moves on from.</summary>
+    public static bool IsClip(Menu menu) => menu.Buttons.Count == 0 && menu.ButtonSets is not { Count: > 0 };
+
+    /// <summary>
+    /// Playback a menu without buttons started returns where Back from it goes: clips add nothing to Back's
+    /// history, so that's the menu the clips were reached from, taken off the history (spec §6, rule 3).
+    /// </summary>
+    private static MenuPosition? ClipReturn(Manifest manifest, Working s)
+    {
+        if (s.Mode != NavMode.Menu || s.Menu is null || !IsClip(MenuOf(manifest, s.Menu)) || s.History.Count == 0)
+        {
+            return null;
+        }
+
+        var previous = s.History[^1];
+        s.History.RemoveAt(s.History.Count - 1);
+        return previous;
     }
 
     private static MenuPosition? CurrentPosition(Working s) =>
@@ -1320,7 +1350,7 @@ public static class Navigator
         {
             s.Playing = current is not null
                 ? new Playback(items[0], items.Skip(1).ToList(), null, current.ReturnTo, new Interrupted(current, cueAt!.Value))
-                : new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s));
+                : new Playback(items[0], items.Skip(1).ToList(), after, CurrentPosition(s) ?? ClipReturn(manifest, s));
         }
         s.Mode = NavMode.Playing;
         s.Overlay = null;

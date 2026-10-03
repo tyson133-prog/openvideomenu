@@ -1,5 +1,5 @@
 {
-  "description": "Menus without buttons, a disc's button-less menu cells: the background shows (a clip with loop: false plays once and stays on its last frame) and the timeout decides what follows, as a step up, so a clip that loops by going to itself adds no history. Without a timeout the menu waits: Enter has nothing to press, while Back and the menu keys work as on any menu.",
+  "description": "Menus without buttons, a disc's button-less menu cells: the background shows (a clip with loop: false plays once and stays on its last frame) and the timeout decides what follows, as a step up, so a clip that loops by going to itself adds no history. Any key but Back skips a clip: its timeout runs now, as an intro is skipped. Without a timeout the menu waits: there is nothing to press, while Back and the menu keys work as on any menu.",
   "level": 2,
   "valid": true,
   "manifest": {
@@ -115,9 +115,10 @@
   },
   "steps": [
     {"event":{"type":"start"},"expect":{"mode":"menu","menu":"intro","effects":[{"type":"startTimer","menu":"intro","after":4}]}},
-    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"intro","effects":[]}},
-    {"event":{"type":"timeout","menu":"intro"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
+    {"event":{"type":"timeout","menu":"intro"},"expect":{"mode":"menu","menu":"logo","effects":[]}},
     {"event":{"type":"timeout","menu":"logo"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
+    {"event":{"type":"press","key":"left"},"expect":{"mode":"menu","menu":"logo","effects":[{"type":"startTimer","menu":"logo","after":2}]}},
     {"event":{"type":"press","key":"menu"},"expect":{"mode":"menu","menu":"main","focus":"trap","effects":[]}},
     {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"trap","effects":[{"type":"activated","menu":"main","button":"trap"}]}},
     {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"trap","effects":[]}},

@@ -408,8 +408,13 @@ function handleInput(
         break;
       }
       if (s.mode !== "menu") break;
-      if (event.key === "enter") {
-        // A menu without buttons (a clip or a still) has nothing to press.
+      if (event.key !== "back" && isClip(menuOf(manifest, s.menu!))) {
+        // A menu without buttons (a clip or a still): any key skips it, running its timeout now, as an
+        // intro is skipped. Without a timeout it waits; there is nothing to press.
+        const timeout = menuOf(manifest, s.menu!).timeout;
+        if (timeout) run(manifest, s, timeout.action, effects, { pushHistory: false, up: true });
+      }
+      else if (event.key === "enter") {
         if (s.focus !== undefined) activate(manifest, s, s.focus, effects);
       }
       else if (event.key === "back") remoteBack(manifest, s, effects);
@@ -645,6 +650,11 @@ function goBack(manifest: Manifest, s: NavState, effects: Effect[]) {
   enterMenu(manifest, s, previous.menu, previous.focus, "return", effects);
 }
 
+/** A menu without buttons (spec §5): a clip or a still, which its timeout moves on from. */
+export function isClip(menu: Menu): boolean {
+  return menu.buttons.length === 0 && !menu.buttonSets?.length;
+}
+
 function currentPosition(s: NavState): MenuPosition | undefined {
   return s.mode === "menu" && s.menu && s.focus ? { menu: s.menu, focus: s.focus } : undefined;
 }
@@ -858,6 +868,14 @@ function playOrder(s: NavState, action: Extract<Action, { type: "playAll" }>): P
   return items;
 }
 
+/**
+ * Playback a menu without buttons started returns where Back from it goes: clips add nothing to Back's
+ * history, so that's the menu the clips were reached from, taken off the history (spec §6, rule 3).
+ */
+function clipReturn(manifest: Manifest, s: NavState): MenuPosition | undefined {
+  return s.mode === "menu" && s.menu && isClip(menuOf(manifest, s.menu)) ? s.history.pop() : undefined;
+}
+
 /** `cueAt`: started by a cue during playback, which it interrupts and returns to (Level 2). */
 function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after: Action | undefined, effects: Effect[], cueAt?: number) {
   const [first, ...queue] = items as [PlayItem, ...PlayItem[]];
@@ -870,7 +888,7 @@ function startPlayback(manifest: Manifest, s: NavState, items: PlayItem[], after
   } else
     s.playing = current
       ? { item: first, queue, returnTo: current.returnTo, resumeTo: { playing: current, at: cueAt! } }
-      : { item: first, queue, after, returnTo: currentPosition(s) };
+      : { item: first, queue, after, returnTo: currentPosition(s) ?? clipReturn(manifest, s) };
   s.mode = "playing";
   s.overlay = undefined;
   s.seq += 1;

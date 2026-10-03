@@ -1,0 +1,179 @@
+{
+  "description": "Playback a menu without buttons starts (a lead-in clip's timeout, as a disc's menu cell that jumps to its title) returns where Back from the clip goes: clips add nothing to Back's history, so it's the menu they were reached from, on the button that led there, taken off the history. Completed or stopped, the same. Any key but Back skips each clip.",
+  "level": 2,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 2,
+    "title": {
+      "name": "Lead-in clips"
+    },
+    "media": {
+      "film": {
+        "ref": "Film.mkv"
+      }
+    },
+    "menus": {
+      "root": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "buttons": [
+          {
+            "id": "main",
+            "rect": [
+              100,
+              100,
+              200,
+              40
+            ],
+            "action": {
+              "type": "goto",
+              "menu": "main"
+            }
+          }
+        ]
+      },
+      "main": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "buttons": [
+          {
+            "id": "extras",
+            "rect": [
+              100,
+              100,
+              200,
+              40
+            ],
+            "nav": {
+              "down": "play"
+            },
+            "action": {
+              "type": "goto",
+              "menu": "extras"
+            }
+          },
+          {
+            "id": "play",
+            "rect": [
+              100,
+              200,
+              200,
+              40
+            ],
+            "nav": {
+              "up": "extras"
+            },
+            "action": {
+              "type": "goto",
+              "menu": "lead"
+            }
+          }
+        ]
+      },
+      "extras": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "buttons": [
+          {
+            "id": "x",
+            "rect": [
+              100,
+              100,
+              200,
+              40
+            ],
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          }
+        ]
+      },
+      "lead": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "background": {
+          "video": {
+            "src": "menus/lead.mp4",
+            "loop": false
+          }
+        },
+        "buttons": [],
+        "timeout": {
+          "after": 3,
+          "restartOnInput": false,
+          "action": {
+            "type": "goto",
+            "menu": "lead2"
+          }
+        }
+      },
+      "lead2": {
+        "canvas": {
+          "width": 720,
+          "height": 480,
+          "aspect": "4:3"
+        },
+        "background": {
+          "video": {
+            "src": "menus/lead2.mp4",
+            "loop": false
+          }
+        },
+        "buttons": [],
+        "timeout": {
+          "after": 2,
+          "restartOnInput": false,
+          "action": {
+            "type": "play",
+            "media": "film"
+          }
+        }
+      }
+    },
+    "rootMenu": "root",
+    "fallback": [
+      {
+        "label": "Movie",
+        "items": [
+          {
+            "label": "Play",
+            "action": {
+              "type": "play",
+              "media": "film"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {"event":{"type":"start"},"expect":{"mode":"menu","menu":"root","focus":"main","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"main","focus":"extras","effects":[{"type":"activated","menu":"root","button":"main"}]}},
+    {"event":{"type":"press","key":"down"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"lead","effects":[{"type":"activated","menu":"main","button":"play"},{"type":"startTimer","menu":"lead","after":3}]}},
+    {"event":{"type":"timeout","menu":"lead"},"expect":{"mode":"menu","menu":"lead2","effects":[{"type":"startTimer","menu":"lead2","after":2}]}},
+    {"event":{"type":"timeout","menu":"lead2"},"expect":{"mode":"playing","effects":[{"type":"play","media":"film","start":0}]}},
+    {"event":{"type":"stopped","position":42},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"menu","menu":"lead","effects":[{"type":"activated","menu":"main","button":"play"},{"type":"startTimer","menu":"lead","after":3}]}},
+    {"event":{"type":"press","key":"right"},"expect":{"mode":"menu","menu":"lead2","effects":[{"type":"startTimer","menu":"lead2","after":2}]}},
+    {"event":{"type":"press","key":"enter"},"expect":{"mode":"playing","effects":[{"type":"play","media":"film","start":0}]}},
+    {"event":{"type":"ended"},"expect":{"mode":"menu","menu":"main","focus":"play","effects":[]}},
+    {"event":{"type":"press","key":"back"},"expect":{"mode":"menu","menu":"root","focus":"main","effects":[]}},
+    {"event":{"type":"press","key":"back"},"expect":{"mode":"menu","menu":"root","focus":"main","effects":[{"type":"exit"}]}}
+  ]
+}

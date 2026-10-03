@@ -157,8 +157,10 @@ plays a concert's songs in another order. Such a media entry has `segments` inst
 - **`defaultButton`** gets focus when the menu opens. It defaults to the first button.
 - **`buttons`** MAY be empty: a menu that only shows its background, a clip or a still, like a disc's
   menu cell without buttons. Its `timeout` (§5.2) decides what follows, as a step up, so a sequence of
-  clips, or one that loops by going to itself, adds nothing to Back's history. Without a timeout it waits:
-  Enter has nothing to press, and Back and the menu keys (§6.6) work as on any menu.
+  clips, or one that loops by going to itself, adds nothing to Back's history. **Any key or click but Back
+  skips it:** its timeout runs at once, as an intro is skipped (§5.1), unless the player honours a `skipIntro`
+  prohibition (§6.6). Without a timeout it waits: there is nothing to press, and Back and the menu keys
+  (§6.6) work as on any menu.
 - **`back`**: what the remote's Back key does on this menu (§6.2).
 - **`timeout`**: what happens when the menu is left alone (§5.2).
 - **`buttonSets`**: buttons that change while the menu plays (§5.3).
@@ -285,7 +287,7 @@ Every action is an object with a `type`:
 **Navigation semantics** (normative; the conformance suite checks them):
 1. **Start:** if `firstPlay` exists, run it. Otherwise open `rootMenu`. A manifest without menus shows the fallback list.
 2. **`goto` from a button** pushes the current menu and focused button onto the history (unless it says `history: "replace"`). `back` pops it.
-3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
+3. **When playback completes on its own**, the player returns to the menu and button it was started from, then runs `after` if present. Playback a menu without buttons started (a clip's timeout) returns where Back from that menu goes: the last menu in Back's history, which it takes off the history, since clips add nothing to it. Playback started with no menu, for example from `firstPlay`, returns to `rootMenu`.
 4. **When the viewer stops playback early** (the Back key), the player returns to the same place and does not run `after`. It remembers the playback for `resume`: the media, the position, and what was to follow. That is the *resume point* (§6.5). Completing that media's playback forgets it.
 5. **During playback**, direction keys and Enter belong to the video player. Only Back (and, at Level 2, the menu keys of §6.6) is handled by the menu logic, except while an overlay's buttons show (§6.3).
 6. **`after`** MUST NOT be `play` or `playAll`, and neither may the `otherwise` of a `resume` used as `after`. Use `playAll` for sequences.
@@ -590,8 +592,8 @@ film.
   `chapterJump`, `titleJump`, `stop`, `back`, `previous`, `next`, `fastForward`, `rewind`, `pause`,
   `menuKey`, `titleKey`, `audioMenuKey`, `subtitleMenuKey`, `angleMenuKey`, `chapterMenuKey`, `resume`,
   `buttons`, `endHold`, `audioChange`, `subtitleChange`, `angleChange`, `karaokeChange`,
-  `displayModeChange` (a DVD's user operations), and `skipIntro` (skipping a menu's intro or a
-  transition). Other values are allowed.
+  `displayModeChange` (a DVD's user operations), and `skipIntro` (skipping a menu's intro, a menu
+  without buttons, or a transition). Other values are allowed.
 - **`prohibitsAt`** `[{ from, to?, ops }]` on a media entry or a play item records what is forbidden
   during parts of it, on its timeline (to its end without `to`): a disc forbids things cell by cell and
   even within a cell. Windows may overlap. What's forbidden at a moment is the plain `prohibits` plus the

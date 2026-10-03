@@ -2,6 +2,7 @@ import {
   buttonsShown,
   canvasAspect,
   initialState,
+  isClip,
   MENU_KEYS,
   overlayOf,
   resolveMedia,
@@ -128,6 +129,11 @@ export class MenuPlayer {
     this.root.setAttribute("aria-label", options.manifest.title.name);
     this.stage = document.createElement("div");
     this.stage.className = "ms-stage";
+    // A click skips a menu without buttons (a clip), as a key does; other menus' clicks are their buttons'.
+    this.stage.addEventListener("click", () => {
+      const menu = this.currentMenu();
+      if (this.state.mode === "menu" && menu && isClip(menu)) this.dispatch({ type: "press", key: "enter" });
+    });
     this.root.appendChild(this.stage);
     this.transitionVideo = document.createElement("video");
     this.transitionVideo.className = "ms-transition";

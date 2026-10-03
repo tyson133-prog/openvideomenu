@@ -211,8 +211,12 @@ sub msNavHandleInput(manifest as object, s as object, event as object, effects a
             return
         end if
         if s.mode <> "menu" then return
-        if key = "enter"
-            ' A menu without buttons (a clip or a still) has nothing to press.
+        if key <> "back" and msNavIsClip(msNavMenu(manifest, s.menu))
+            ' A menu without buttons (a clip or a still): any key but Back skips it, running its timeout
+            ' now, as an intro is skipped. Without a timeout it waits; there is nothing to press.
+            timeout = msNavMenu(manifest, s.menu)["timeout"]
+            if timeout <> invalid then msNavRunOpts(manifest, s, timeout["action"], effects, false, true)
+        else if key = "enter"
             if s.focus <> invalid then msNavActivate(manifest, s, s.focus, effects)
         else if key = "back"
             msNavRemoteBack(manifest, s, effects)
@@ -535,6 +539,21 @@ sub msNavGoBack(manifest as object, s as object, effects as object)
     msNavEnterMenu(manifest, s, previous.menu, previous.focus, false, effects)
 end sub
 
+' A menu without buttons (spec 5): a clip or a still, which its timeout moves on from.
+function msNavIsClip(menu as object) as boolean
+    buttons = menu["buttons"]
+    sets = menu["buttonSets"]
+    return (buttons = invalid or buttons.Count() = 0) and (sets = invalid or sets.Count() = 0)
+end function
+
+' Playback a menu without buttons started returns where Back from it goes: clips add nothing to Back's
+' history, so that's the menu the clips were reached from, taken off the history (spec 6, rule 3).
+function msNavClipReturn(manifest as object, s as object) as dynamic
+    if s.mode <> "menu" or s.menu = invalid then return invalid
+    if not msNavIsClip(msNavMenu(manifest, s.menu)) or s.history.Count() = 0 then return invalid
+    return s.history.Pop()
+end function
+
 function msNavCurrentPosition(s as object) as dynamic
     if s.mode = "menu" and s.menu <> invalid and s.focus <> invalid then return { menu: s.menu, focus: s.focus }
     return invalid
@@ -809,7 +828,9 @@ sub msNavStartPlayback(manifest as object, s as object, items as object, after a
     else if s.cueAt <> invalid and s.mode = "playing" and s.playing <> invalid
         s.playing = { item: first, queue: queue, after: invalid, returnTo: s.playing.returnTo, resumeTo: { playing: s.playing, at: s.cueAt } }
     else
-        s.playing = { item: first, queue: queue, after: after, returnTo: msNavCurrentPosition(s) }
+        returnTo = msNavCurrentPosition(s)
+        if returnTo = invalid then returnTo = msNavClipReturn(manifest, s)
+        s.playing = { item: first, queue: queue, after: after, returnTo: returnTo }
     end if
     s.mode = "playing"
     s.overlay = invalid
