@@ -113,7 +113,7 @@ Plex removed third-party plugins, so a Plex integration is up to Plex. The forma
 
 **Open Video Menu** ([openvideomenu.org](https://openvideomenu.org)) was created and is edited by Tyson Treasure.
 
-- **Code:** [Apache-2.0](LICENSE)
+- **Code:** [Apache-2.0](LICENSE). Software that includes or builds on it carries the [NOTICE](NOTICE), as the license asks.
 - **Specification:** [CC BY 4.0](spec/LICENSE.md), with a royalty-free patent pledge (OWFa 1.0). Free to implement.
 - **Governance:** how the format changes and who decides, in [GOVERNANCE.md](GOVERNANCE.md).
 - **The name:** using "Open Video Menu" and claiming compatibility, in [NAMING.md](NAMING.md).

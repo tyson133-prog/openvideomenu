@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="/" />
+    <!-- Apache-2.0 section 4(d): the project's NOTICE travels with the package. -->
+    <None Include="../../../NOTICE" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

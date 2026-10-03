@@ -15,12 +15,15 @@
     "./host.html": "./dist/host.html"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "@openvideomenu/core": "0.1.0"
   },
   "scripts": {
-    "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=OpenVideoMenuPlayer --target=es2020 --outfile=dist/openvideomenu-player.js --sourcemap && node -e \"require('fs').copyFileSync('src/host.html','dist/host.html')\""
+    "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=OpenVideoMenuPlayer --target=es2020 --outfile=dist/openvideomenu-player.js --sourcemap && node -e \"require('fs').copyFileSync('src/host.html','dist/host.html')\"",
+    "prepack": "node ../../scripts/copy-legal.mjs"
   }
 }

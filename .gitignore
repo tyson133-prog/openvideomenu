@@ -28,3 +28,7 @@ sdk/dotnet/**/obj/
 sdk/dotnet-dvd/**/bin/
 sdk/dotnet-dvd/**/obj/
 plugins/jellyfin/dist/
+
+# Copied in by scripts/copy-legal.mjs when packing
+packages/*/LICENSE
+packages/*/NOTICE

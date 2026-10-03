@@ -10,7 +10,9 @@
     "ovm": "dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "dependencies": {
     "@openvideomenu/core": "0.1.0",
@@ -18,6 +20,7 @@
     "@openvideomenu/asset-server": "0.1.0"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepack": "node ../../scripts/copy-legal.mjs"
   }
 }
