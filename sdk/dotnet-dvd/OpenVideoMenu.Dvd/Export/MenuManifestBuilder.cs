@@ -43,6 +43,16 @@ public sealed class MenuManifestBuilder
     public Func<IReadOnlyList<MenuCellRef>, string?> Transition { get; set; } = _ => null;
 
     /// <summary>
+    /// The pictures of an overlay's buttons (title set, title PGC, cell, highlight), as <see cref="MenuArtMaker.TitleHighlights"/>
+    /// draws them; null: overlays get none.
+    /// </summary>
+    public Func<int, int, int, HighlightInfo, Dictionary<int, (string? Selected, string? Activated)>>? OverlayArt { get; set; }
+
+    /// <summary>The highlights of the button sets a menu changes to while its video plays (for their art).</summary>
+    public IReadOnlyList<HighlightInfo> ButtonSetHighlights(MenuNode node) =>
+        _nodes.TryGetValue(node, out var m) ? m.Windows.Select(w => w.Highlight).ToList() : Array.Empty<HighlightInfo>();
+
+    /// <summary>
     /// A manifest of the disc over the given media: <paramref name="index"/> says which file holds each disc cell
     /// (and where in it); <paramref name="options"/> names, labels and what the files can carry.
     /// </summary>
@@ -234,6 +244,10 @@ public sealed class MenuManifestBuilder
             if (manifest.Media.TryGetValue(mediaId, out var entry))
             {
                 if (set.Overlays.Count > 0) entry.Cues = set.Overlays.Values.Cast<Cue>().ToList();
+                if (OverlayArt is { } draw)
+                    foreach (var overlay in set.Overlays.Values)
+                        if (_compiler.OverlaySources.TryGetValue(overlay, out var src))
+                            AttachStates(overlay.Buttons, draw(src.Vtsn, src.Pgcn, src.Cell, src.Highlight));
                 if (set.Holds.Count > 0) entry.Holds = set.Holds.Values.ToList();
                 // What the cells' navigation packs forbid, over time: neighbouring windows that forbid the same merged.
                 var windows = new List<ProhibitWindow>();
@@ -404,7 +418,7 @@ public sealed class MenuManifestBuilder
 
         var numbers = m.Highlight.Buttons.Select(b => b.Number).ToHashSet();
         var reachable = ArrowReachable(m);
-        menu.Buttons = Buttons(m, m.Highlight, m.Buttons, node, art, reachable);
+        menu.Buttons = Buttons(m, m.Highlight, m.Buttons, node, art?.Buttons, reachable);
 
         // Other buttons while the menu video plays (the disc's highlight changes): button sets on its clock.
         if (m.Windows.Count > 0)
@@ -412,7 +426,7 @@ public sealed class MenuManifestBuilder
             {
                 From = w.From,
                 To = w.To,
-                Buttons = Buttons(m, w.Highlight, w.Buttons, node, art: null, reachable: null),
+                Buttons = Buttons(m, w.Highlight, w.Buttons, node, art?.SetButtons.ElementAtOrDefault(m.Windows.IndexOf(w)), reachable: null),
                 DefaultButton = w.Highlight.ForcedSelect > 0 && w.Highlight.Get(w.Highlight.ForcedSelect) is not null ? ButtonId(w.Highlight.ForcedSelect) : null,
             }).ToList();
 
@@ -452,7 +466,7 @@ public sealed class MenuManifestBuilder
     /// selected and activated pictures. <paramref name="reachable"/> null: every button counts as reachable.
     /// </summary>
     private List<Button> Buttons(CompiledMenu m, HighlightInfo highlight, Dictionary<int, MenuAction> actions, MenuNode node,
-        MenuArtSet? art, HashSet<int>? reachable)
+        IReadOnlyDictionary<int, (string? Selected, string? Activated)>? art, HashSet<int>? reachable)
     {
         var numbers = highlight.Buttons.Select(b => b.Number).ToHashSet();
         var list = new List<Button>();
@@ -474,12 +488,7 @@ public sealed class MenuManifestBuilder
                 Action = action,
                 A11yLabel = ButtonText(node, b.Number) ?? LabelOfAction(action),
             };
-            if (art is not null && art.Buttons.TryGetValue(b.Number, out var states))
-                button.States = new ButtonStates
-                {
-                    Selected = states.Selected is { } s ? new ButtonState { Image = s } : null,
-                    Activated = states.Activated is { } ac ? new ButtonState { Image = ac } : null,
-                };
+            if (art is not null && art.TryGetValue(b.Number, out var states)) button.States = StatesOf(states);
             button.Extensions = XDvd(new Dictionary<string, object?>
             {
                 ["button"] = b.Number,
@@ -493,6 +502,19 @@ public sealed class MenuManifestBuilder
     }
 
     private static string ButtonId(int n) => $"b{n}";
+
+    private static ButtonStates StatesOf((string? Selected, string? Activated) states) => new()
+    {
+        Selected = states.Selected is { } s ? new ButtonState { Image = s } : null,
+        Activated = states.Activated is { } ac ? new ButtonState { Image = ac } : null,
+    };
+
+    /// <summary>Highlight pictures onto buttons whose ids are "b" + the disc's button number.</summary>
+    private static void AttachStates(IEnumerable<Button> buttons, IReadOnlyDictionary<int, (string? Selected, string? Activated)> art)
+    {
+        foreach (var button in buttons)
+            if (int.TryParse(button.Id.AsSpan(1), out var n) && art.TryGetValue(n, out var states)) button.States = StatesOf(states);
+    }
 
     private static Nav? Nav(DvdButton b, HashSet<int> numbers)
     {

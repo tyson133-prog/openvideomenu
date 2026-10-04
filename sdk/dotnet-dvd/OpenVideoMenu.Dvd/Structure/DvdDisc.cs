@@ -243,6 +243,34 @@ public sealed class DvdDisc : IDisposable
     }
 
     /// <summary>
+    /// The raw sectors <paramref name="first"/> to <paramref name="last"/> of a title set's video (its VOB files
+    /// read as one), or null when they're missing or too many. Decrypted discs only: scrambled sectors come back
+    /// as they are on the disc.
+    /// </summary>
+    public byte[]? ReadTitleSectors(int vtsn, uint first, uint last)
+    {
+        lock (_highlightCache)
+        {
+            if (last < first || TitleVob(vtsn) is not { } vob) return null;
+            var start = (long)first * 2048;
+            var length = ((long)last - first + 1) * 2048;
+            if (length > MaxMenuCellBytes || start + length > vob.Length) return null;
+            try
+            {
+                var buf = new byte[length];
+                vob.Position = start;
+                vob.ReadExactly(buf);
+                return buf;
+            }
+            catch (IOException ex)
+            {
+                Warnings.Add(DvdWarningCode.DiscRead, $"Reading title set {vtsn}'s video: {ex.Message}");
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
     /// Buttons a title cell's navigation packs carry (shown over the film), from its first VOBUs; null when
     /// none within <paramref name="maxVobus"/>.
     /// </summary>

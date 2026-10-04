@@ -1717,6 +1717,9 @@ public sealed class DvdMenuCompiler
 
     public Dictionary<string, MediaCueSet> MediaCues { get; } = new();
 
+    /// <summary>Where each overlay's buttons come from on the disc: the title cell and the highlight (for its art).</summary>
+    public Dictionary<Overlay, (int Vtsn, int Pgcn, int Cell, HighlightInfo Highlight)> OverlaySources { get; } = new(ReferenceEqualityComparer.Instance);
+
     /// <summary>Where on a media's timeline each disc title, PGC and cell plays: the disc's title and chapter numbers there.</summary>
     public sealed record TitlePosition(int Ttn, int VtsTtn, int Vtsn, int Pgcn, int Cell);
 
@@ -2793,7 +2796,7 @@ public sealed class DvdMenuCompiler
                     Nav = OverlayNav(b, numbers),
                     Action = OverlayButton(cell, hl, b, plan.Media, plan.End),
                 }).ToList();
-                overlays.Add(new Overlay
+                var overlay = new Overlay
                 {
                     From = Math.Round(from, 3),
                     To = Math.Round(to, 3),
@@ -2801,7 +2804,9 @@ public sealed class DvdMenuCompiler
                     Buttons = buttons,
                     // Without a forced select the disc keeps the button SPRM 8 names (when it's one of these): _hl, its id.
                     DefaultButton = hl.ForcedSelect > 0 && numbers.Contains(hl.ForcedSelect) ? $"b{hl.ForcedSelect}" : ButtonRef.FromVar(HighlightIdVar),
-                });
+                };
+                OverlaySources[overlay] = (cell.Vtsn, cell.Pgcn, cell.Cell, hl);
+                overlays.Add(overlay);
             }
         }
         return overlays;

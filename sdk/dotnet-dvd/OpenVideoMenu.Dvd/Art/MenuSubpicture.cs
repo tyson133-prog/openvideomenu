@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace OpenVideoMenu.Dvd.Art;
 
@@ -13,8 +14,8 @@ public static class MenuStreams
 {
     private const int Sector = 2048;
 
-    /// <summary>One PES packet: stream id, substream (private streams), and payload.</summary>
-    private readonly record struct Packet(int Id, int Sub, int Offset, int Length);
+    /// <summary>One PES packet: stream id, substream (private streams), payload, and the sector it's in.</summary>
+    private readonly record struct Packet(int Id, int Sub, int Offset, int Length, int Sector = 0);
 
     private static IEnumerable<Packet> Packets(byte[] b)
     {
@@ -29,14 +30,14 @@ public static class MenuStreams
                 var body = o + 6;
                 if (body + len > p + Sector) break;
                 if (id is 0xBF or 0xBB)
-                    yield return new Packet(id, b[body], body + 1, len - 1);
+                    yield return new Packet(id, b[body], body + 1, len - 1, p / Sector);
                 else if (id == 0xBD)
                 {
                     var hdr = body + 3 + b[body + 2];
-                    if (hdr < body + len) yield return new Packet(id, b[hdr], hdr + 1, body + len - hdr - 1);
+                    if (hdr < body + len) yield return new Packet(id, b[hdr], hdr + 1, body + len - hdr - 1, p / Sector);
                 }
                 else if (id is >= 0xC0 and <= 0xDF)
-                    yield return new Packet(id, 0, body, len);
+                    yield return new Packet(id, 0, body, len, p / Sector);
                 o = body + len;
             }
         }
@@ -72,6 +73,48 @@ public static class MenuStreams
             if (have >= need) return data;
         }
         return null;
+    }
+
+    /// <summary>
+    /// The subpicture a highlight applies to: the last unit complete within the video unit the highlight's
+    /// navigation pack starts (<paramref name="navSector"/>, counted from the first sector of
+    /// <paramref name="bytes"/>; the unit runs to the next navigation pack), else the first one after it. Of the subpicture streams, the first whose picture covers every button's rectangle
+    /// (a title has its subtitles there too), else stream 0x20, else the first present. Null when there's none.
+    /// </summary>
+    public static Subpicture? SubpictureAt(byte[] bytes, int navSector, IReadOnlyList<(int X0, int Y0, int X1, int Y1)> buttons)
+    {
+        // Every complete unit of each stream, with the sector its last packet is in.
+        var units = new SortedDictionary<int, List<(int Done, byte[] Data)>>();
+        var partial = new Dictionary<int, (byte[] Data, int Have)>();
+        var unitEnd = int.MaxValue;
+        foreach (var pk in Packets(bytes))
+        {
+            // The next navigation pack (its PCI, private stream 2, substream 0) ends the highlight's video unit.
+            if (pk.Id == 0xBF && pk.Sub == 0 && pk.Sector > navSector && pk.Sector < unitEnd) unitEnd = pk.Sector;
+            if (pk.Id != 0xBD || pk.Sub is < 0x20 or > 0x3F || pk.Length <= 0) continue;
+            if (!partial.TryGetValue(pk.Sub, out var u))
+            {
+                if (pk.Length < 2) continue;
+                var need = bytes[pk.Offset] << 8 | bytes[pk.Offset + 1];
+                if (need < 4) continue;
+                u = (new byte[need], 0);
+            }
+            var n = Math.Min(pk.Length, u.Data.Length - u.Have);
+            Array.Copy(bytes, pk.Offset, u.Data, u.Have, n);
+            u.Have += n;
+            if (u.Have < u.Data.Length) { partial[pk.Sub] = u; continue; }
+            partial.Remove(pk.Sub);
+            if (!units.TryGetValue(pk.Sub, out var list)) units[pk.Sub] = list = new();
+            list.Add((pk.Sector, u.Data));
+        }
+
+        Subpicture? Pick(List<(int Done, byte[] Data)> list) =>
+            Subpicture.Decode((list.LastOrDefault(x => x.Done < unitEnd).Data ?? list[0].Data));
+        bool Covers(Subpicture s) => buttons.All(b => b.X0 >= s.X && b.Y0 >= s.Y && b.X1 < s.X + s.Width && b.Y1 < s.Y + s.Height);
+
+        var picked = units.Values.Select(Pick).Where(s => s is not null).ToList();
+        if (buttons.Count > 0 && picked.FirstOrDefault(s => Covers(s!)) is { } covering) return covering;
+        return units.TryGetValue(0x20, out var main) ? Pick(main) : picked.FirstOrDefault();
     }
 
     /// <summary>

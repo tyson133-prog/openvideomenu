@@ -54,8 +54,11 @@ public static class DvdExport
                 {
                     ct.ThrowIfCancellationRequested();
                     progress?.Report($"Menu art {++n} of {menus.Count}");
-                    builder.Art[m] = await maker.MakeAsync(m, builder.IdOf(m), art.Kinds, ct, loop: motion ? builder.LoopContinuation(m) : null);
+                    builder.Art[m] = await maker.MakeAsync(m, builder.IdOf(m), art.Kinds, ct, loop: motion ? builder.LoopContinuation(m) : null,
+                        sets: builder.ButtonSetHighlights(m));
                 }
+                // Buttons over the films: drawn while building, from the titles' video.
+                if (art.Kinds.HasFlag(MenuArtKinds.Highlights)) builder.OverlayArt = maker.TitleHighlights;
                 if (motion)
                 {
                     // Transitions are made on demand while building; the decoder runs synchronously there.

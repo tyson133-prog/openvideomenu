@@ -19,6 +19,12 @@ public sealed class MenuArtSet
     /// <summary>Seconds into <see cref="Video"/> where the loop starts (after an intro cell).</summary>
     public double? LoopStart { get; set; }
     public Dictionary<int, (string? Selected, string? Activated)> Buttons { get; } = new();
+
+    /// <summary>
+    /// The highlights of each set of buttons the menu changes to while its video plays, in the order of the
+    /// highlights <see cref="MenuArtMaker.MakeAsync"/> was given.
+    /// </summary>
+    public List<Dictionary<int, (string? Selected, string? Activated)>> SetButtons { get; } = new();
 }
 
 /// <summary>Which kinds of menu art to make.</summary>
@@ -169,7 +175,10 @@ public sealed class MenuArtMaker
     /// A menu cell this one runs on into by itself, with the same buttons (a motion menu's intro, then
     /// its loop): the clip is both, looping from the second.
     /// </param>
-    public async Task<MenuArtSet> MakeAsync(MenuNode menu, string id, MenuArtKinds kinds, CancellationToken ct, MenuNode? loop = null)
+    /// <param name="sets">The highlights of the button sets the menu changes to while its video plays (their
+    /// pictures come from the subpicture showing then); null: none.</param>
+    public async Task<MenuArtSet> MakeAsync(MenuNode menu, string id, MenuArtKinds kinds, CancellationToken ct, MenuNode? loop = null,
+        IReadOnlyList<HighlightInfo>? sets = null)
     {
         var decoder = _decoder;
         if (decoder is null && (kinds & (MenuArtKinds.Stills | MenuArtKinds.Motion | MenuArtKinds.Music)) != 0 && !_toldNoDecoder)
@@ -232,7 +241,16 @@ public sealed class MenuArtMaker
             }
         }
 
-        if (kinds.HasFlag(MenuArtKinds.Highlights) && pgc is not null) Highlights(menu, id, cellBytes, pgc.Palette, art);
+        if (kinds.HasFlag(MenuArtKinds.Highlights) && pgc is not null)
+        {
+            Highlights(menu, id, cellBytes, pgc.Palette, art);
+            for (var i = 0; i < (sets?.Count ?? 0); i++)
+            {
+                var hl = sets![i];
+                var spu = cell is null ? null : MenuStreams.SubpictureAt(cellBytes, (int)(hl.NavSector - cell.FirstSector), Rects(hl.Buttons));
+                art.SetButtons.Add(spu is null ? new() : Draw(hl, hl.Buttons, spu, pgc.Palette, $"{id}-s{i + 1}"));
+            }
+        }
         ArtProcess.TryDelete(vob);
         return art;
     }
@@ -240,23 +258,63 @@ public sealed class MenuArtMaker
     private void Highlights(MenuNode menu, string id, byte[] cell, IReadOnlyList<uint> palette, MenuArtSet art)
     {
         var spu = MenuStreams.ReadSubpicture(cell);
-        if (spu is null || menu.Highlight.ColorTables.Count < 3) return;
-        foreach (var bn in menu.Buttons)
+        if (spu is null) return;
+        foreach (var (n, states) in Draw(menu.Highlight, menu.Buttons.Select(bn => bn.Button), spu, palette, id))
+            art.Buttons[n] = states;
+    }
+
+    private static List<(int X0, int Y0, int X1, int Y1)> Rects(IEnumerable<DvdButton> buttons) =>
+        buttons.Where(b => b.HasArea).Select(b => (b.X0, b.Y0, b.X1, b.Y1)).ToList();
+
+    /// <summary>
+    /// Each button's selected and activated pictures, as a player draws them: the subpicture's pixels under the
+    /// button in the highlight's colours. Files are <c>{prefix}-b{n}-{state}.png</c>.
+    /// </summary>
+    private Dictionary<int, (string? Selected, string? Activated)> Draw(HighlightInfo hl, IEnumerable<DvdButton> buttons, Subpicture spu,
+        IReadOnlyList<uint> palette, string prefix)
+    {
+        var drawn = new Dictionary<int, (string?, string?)>();
+        if (hl.ColorTables.Count < 3) return drawn;
+        foreach (var b in buttons)
         {
-            var b = bn.Button;
-            var table = menu.Highlight.ColorTables[Math.Clamp(b.ColorTable - 1, 0, 2)];
+            var table = hl.ColorTables[Math.Clamp(b.ColorTable - 1, 0, 2)];
             string? Save(uint word, string state)
             {
                 using var img = HighlightRenderer.Render(spu, b, word, palette);
                 if (img is null) return null;
-                var rel = $"{Folder}/{id}-b{b.Number}-{state}.png";
+                var rel = $"{Folder}/{prefix}-b{b.Number}-{state}.png";
                 HighlightRenderer.SavePng(img, Path.Combine(_assetRoot, rel));
                 return rel;
             }
             var selected = Save(table.Select, "selected");
             var activated = Save(table.Action, "activated");
-            if (selected is not null || activated is not null) art.Buttons[b.Number] = (selected, activated);
+            if (selected is not null || activated is not null) drawn[b.Number] = (selected, activated);
         }
+        return drawn;
+    }
+
+    private readonly Dictionary<(int Vtsn, uint Nav), Dictionary<int, (string? Selected, string? Activated)>> _titleHighlights = new();
+
+    /// <summary>
+    /// The pictures of buttons shown over a title's video (an overlay), drawn from the title's subpicture at the
+    /// navigation pack that carries them, with the title's palette. Made once per highlight.
+    /// </summary>
+    public Dictionary<int, (string? Selected, string? Activated)> TitleHighlights(int vtsn, int pgcn, int cellNumber, HighlightInfo hl)
+    {
+        if (_titleHighlights.TryGetValue((vtsn, hl.NavSector), out var done)) return done;
+        var drawn = new Dictionary<int, (string?, string?)>();
+        var pgc = _disc.GetPgc(DvdDomain.Title, vtsn, pgcn);
+        var cell = pgc?.Cells.ElementAtOrDefault(cellNumber - 1);
+        if (pgc is not null && cell is not null)
+        {
+            // The subpicture is sent near its buttons' navigation pack, before it or in the video unit it starts.
+            var first = Math.Max(cell.FirstSector, hl.NavSector > 1024 ? hl.NavSector - 1024 : 0);
+            var last = Math.Min(cell.LastSector, hl.NavSector + 1024);
+            if (_disc.ReadTitleSectors(vtsn, first, last) is { } bytes &&
+                MenuStreams.SubpictureAt(bytes, (int)(hl.NavSector - first), Rects(hl.Buttons)) is { } spu)
+                drawn = Draw(hl, hl.Buttons, spu, pgc.Palette, $"vts{vtsn}-nav{hl.NavSector}");
+        }
+        return _titleHighlights[(vtsn, hl.NavSector)] = drawn;
     }
 
     /// <summary>A clip of the button-less cells that play before a menu (a page transition), made once per cell run.</summary>
