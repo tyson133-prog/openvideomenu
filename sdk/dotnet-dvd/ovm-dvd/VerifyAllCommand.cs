@@ -15,7 +15,7 @@ internal static class VerifyAllCommand
         if (folders.Count == 0) throw new ArgumentException("verify-all needs a folder.");
         var parallel = Math.Max(1, Program.Option(args, "--parallel", 3));
         var timeout = TimeSpan.FromSeconds(Program.Option(args, "--timeout", 600));
-        var walks = Program.Option(args, "--walks", 200);
+        var walks = Program.Option(args, "--walks", 300); // as verify: 200 missed Matrix Revolutions D2's resume bug
         var depth = Program.Option(args, "--depth", 25);
         var outDir = Program.Option(args, "--out") ?? Path.Combine(Path.GetTempPath(), "ovm-dvd-verify-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         Directory.CreateDirectory(Path.Combine(outDir, "discs"));
