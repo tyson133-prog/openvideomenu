@@ -6,7 +6,8 @@
 #   OVM_KEYSTORE_PASSWORD, OVM_KEY_ALIAS, OVM_KEY_PASSWORD
 # Without them the Android builds are unsigned (fine for a dry run, not for users).
 #
-# The .NET packages go to nuget.org when the draft is published (publish-nuget.yml), not before.
+# The .NET and npm packages go to nuget.org and npm when the draft is published (publish-packages.yml),
+# not before.
 #
 # The Roku package is attached unsigned: signing needs a Roku in developer mode with the channel's
 # key (apps/roku/tools/package.mjs --sign), so it's done by hand.
@@ -123,6 +124,23 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: dotnet, path: dist/ }
 
+  npm:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: npm packages
+        run: |
+          node scripts/set-npm-version.mjs "${VERSION#v}"
+          npm run build
+          mkdir -p dist
+          npm pack --workspaces --pack-destination dist
+      - uses: actions/upload-artifact@v4
+        with: { name: npm, path: dist/ }
+
   examples:
     needs: test
     # Windows draws the menus in Georgia, like the demo server's (Linux has no Georgia).
@@ -143,7 +161,7 @@ jobs:
 
   release:
     if: github.event_name == 'push'
-    needs: [android, roku, dotnet, examples]
+    needs: [android, roku, dotnet, npm, examples]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -154,4 +172,4 @@ jobs:
         run: |
           gh release create "$VERSION" dist/* --repo "${{ github.repository }}" --draft \
             --title "Open Video Menu $VERSION" \
-            --notes "Draft: players, Jellyfin plugin, .NET packages and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
+            --notes "Draft: players, Jellyfin plugin, .NET and npm packages, and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."

@@ -11,7 +11,7 @@ work;** nothing here publishes anything by itself.
 | [`store-art/`](store-art) | Play icon (512), feature graphic (1024×500), TV banner (1280×720), TV screenshots (1920×1080). `store-art/src/` has the HTML they're rendered from. |
 | [`../site/`](../site) | The website, including the privacy policy both stores require |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Builds every artifact from a version tag into a **draft** GitHub release |
-| [`../.github/workflows/publish-nuget.yml`](../.github/workflows/publish-nuget.yml) | Pushes the .NET packages to nuget.org when that release is published |
+| [`../.github/workflows/publish-packages.yml`](../.github/workflows/publish-packages.yml) | Publishes the .NET packages to nuget.org and the npm packages to npm when that release is published |
 | [`../deploy/demo-server/`](../deploy/demo-server) | The demo server (https://demo.openvideomenu.org) that store reviewers sign in to |
 
 ## Checklist
@@ -32,6 +32,8 @@ work;** nothing here publishes anything by itself.
 - [ ] **Contact email** for listings and the privacy page.
 - [ ] **nuget.org account**, an API key for the `OpenVideoMenu*` packages as the `NUGET_API_KEY` secret,
   and a request to reserve the `OpenVideoMenu.*` ID prefix.
+- [ ] **npm:** an account, the `openvideomenu` organisation (free for public packages, so the
+  `@openvideomenu` scope is yours), and an automation token as the `NPM_TOKEN` secret.
 - [x] **Demo server for store reviewers:** https://demo.openvideomenu.org (`deploy/demo-server`), account
   `review`.
 
@@ -39,7 +41,8 @@ work;** nothing here publishes anything by itself.
 
 1. Tag the version: `git tag v0.1.2 && git push origin v0.1.2`. The workflow tests everything and
    drafts a release with the APK, App Bundle (AAB), unsigned Roku zip, Jellyfin plugin zip and
-   repository manifest, the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool), and
+   repository manifest, the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool), the npm
+   packages (`@openvideomenu/core`, `renderer-web`, `asset-server`, `cli`), and
    `openvideomenu-examples.zip` (Sintel and the Example Show, which the website links to).
 2. **Roku:** sign on the TV: `cd apps/roku && npm run package -- --version 0.1.2 --sign`, then upload
    the `.pkg` to the beta channel, or to the public channel's certification (see [`roku.md`](roku.md):
@@ -47,8 +50,9 @@ work;** nothing here publishes anything by itself.
 3. **Google Play:** upload the `.aab` to the closed-testing track.
 4. **Jellyfin repository:** host `jellyfin-repository.json` (e.g. on the website) where testers add it;
    its download URL points at the release's plugin zip, which must be public by then.
-5. **Publish the draft release** when the testers should get it. Publishing it also pushes the NuGet
-   packages to nuget.org (permanent: versions can be unlisted, never deleted).
+5. **Publish the draft release** when the testers should get it. Publishing it also publishes the NuGet
+   packages to nuget.org and the npm packages to npm (permanent: versions can be unlisted or deprecated,
+   never replaced).
 
 ## Before inviting testers
 

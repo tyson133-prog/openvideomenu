@@ -1,0 +1,53 @@
+# Publishes the packages when a release is published: the draft release.yml made, published by hand.
+# Registry versions can be deprecated or unlisted but never replaced, so this never runs before that.
+#   - .NET (nuget.org): OpenVideoMenu, OpenVideoMenu.Dvd, OpenVideoMenu.Dvd.Tool
+#   - npm: @openvideomenu/core, renderer-web, asset-server, cli
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   NUGET_API_KEY   a nuget.org API key allowed to push these package ids
+#   NPM_TOKEN       an npm automation token with publish rights to the @openvideomenu scope
+
+name: Publish packages
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  nuget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+      - name: The release's packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "*.nupkg" --dir nupkg
+      - name: Push
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then echo "NUGET_API_KEY isn't set: nothing published." >&2; exit 1; fi
+          dotnet nuget push "nupkg/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, registry-url: "https://registry.npmjs.org" }
+      - name: The release's packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "openvideomenu-*.tgz" --dir npm
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "NPM_TOKEN isn't set: nothing published." >&2; exit 1; fi
+          # core first: the others depend on it. "latest" also for a preview: it's what plain npm install takes.
+          for f in npm/openvideomenu-core-*.tgz $(ls npm/*.tgz | grep -v openvideomenu-core-); do
+            npm publish "$f" --access public --tag latest
+          done
