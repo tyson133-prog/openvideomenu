@@ -324,8 +324,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         passwordJob?.cancel()
         pendingJellyfin = null
         signInJob = viewModelScope.launch {
+            // A home server's address gets Jellyfin's port; an https one (a server published on the internet,
+            // e.g. https://demo.openvideomenu.org) is used as typed.
             val url = address.trim().trimEnd('/').let { if (it.startsWith("http")) it else "http://$it" }
-                .let { if (Regex(":\\d+$").containsMatchIn(it.substringAfter("//"))) it else "$it:8096" }
+                .let { if (it.startsWith("https:", ignoreCase = true) || Regex(":\\d+$").containsMatchIn(it.substringAfter("//"))) it else "$it:8096" }
             val jf = JellyfinAccount(url, settings.clientId)
             _screen.value = Screen.JellyfinSignIn(url, connecting = true)
             val info = attempt { jf.publicInfo() }.getOrElse {
