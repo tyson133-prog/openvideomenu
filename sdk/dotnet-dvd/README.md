@@ -88,5 +88,5 @@ Tracing: `DvdVm.Observer`, `DvdManifestOptions.CompileTrace` and the verifier's 
 
 ## Status
 
-Split out of DVD Tamer (see [PLAN.md](PLAN.md)). DVD Tamer uses this package, packed into its `local-packages/` by
-its `scripts/pack-openvideomenu.ps1`.
+See [PLAN.md](PLAN.md). Until the package is on nuget.org, `scripts/pack-nuget.ps1` packs it (with
+`OpenVideoMenu` and the `ovm-dvd` tool) into a local package folder for apps that use it.

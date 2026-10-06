@@ -13,9 +13,10 @@ disc. The plan and its progress are in `PLAN.md`; what the package offers is in 
   spec.
 - **Faithful by default.** Exports are the whole disc's logic. Anything less (fewer titles, no art) is an option
   the caller asks for, never something dropped silently.
-- **DVD Tamer** (`L:\DVD Tamer Build\DVDTamer`) is one user of the package. It packs it with
-  `scripts/pack-openvideomenu.ps1` (which also clears NuGet's cached copy of the version). After a change here,
-  re-pack, rebuild DVD Tamer, and check:
+- **DVD Tamer** (`L:\DVD Tamer Build\DVDTamer`) is one user of the package. This repo packs it:
+  `scripts/pack-nuget.ps1` writes the packages to `L:\nuget-local` (DVD Tamer's local package source until they're
+  on nuget.org) and clears NuGet's cached copy of each version. After a change here, re-pack, rebuild DVD Tamer
+  (a new version number is DVD Tamer's change to make: leave it a note), and check:
   - five hard discs byte for byte (Matrix Revolutions D2, Return of the King D3, Lion King D2, Green Nose,
     Baby Genius Baby Animals);
   - the whole collection at the end of the work.

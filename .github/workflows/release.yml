@@ -6,6 +6,8 @@
 #   OVM_KEYSTORE_PASSWORD, OVM_KEY_ALIAS, OVM_KEY_PASSWORD
 # Without them the Android builds are unsigned (fine for a dry run, not for users).
 #
+# The .NET packages go to nuget.org when the draft is published (publish-nuget.yml), not before.
+#
 # The Roku package is attached unsigned: signing needs a Roku in developer mode with the channel's
 # key (apps/roku/tools/package.mjs --sign), so it's done by hand.
 
@@ -105,10 +107,13 @@ jobs:
         with: { dotnet-version: "8.0.x\n10.0.x" }
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - name: NuGet package
+      - name: NuGet packages
         run: |
           V="${VERSION#v}"
+          # OpenVideoMenu.Dvd depends on OpenVideoMenu at the same version; the tool on both.
           dotnet pack sdk/dotnet/OpenVideoMenu/OpenVideoMenu.csproj -c Release -p:Version="$V" -o dist
+          dotnet pack sdk/dotnet-dvd/OpenVideoMenu.Dvd/OpenVideoMenu.Dvd.csproj -c Release -p:Version="$V" -o dist
+          dotnet pack sdk/dotnet-dvd/ovm-dvd/ovm-dvd.csproj -c Release -p:Version="$V" -o dist
       - name: Jellyfin plugin
         run: |
           V="${VERSION#v}"
@@ -131,4 +136,4 @@ jobs:
         run: |
           gh release create "$VERSION" dist/* --repo "${{ github.repository }}" --draft \
             --title "Open Video Menu $VERSION" \
-            --notes "Draft: players, Jellyfin plugin and .NET library for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
+            --notes "Draft: players, Jellyfin plugin and .NET packages for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
