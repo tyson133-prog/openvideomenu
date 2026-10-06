@@ -656,8 +656,37 @@ sub onDeepLink()
         return
     end if
     m.deepLink = link
-    ' Already browsing: open it now. Still loading: startLibraries opens it.
-    if m.launched = true and m.libraries <> invalid and m.player = invalid and m.menu = invalid then openDeepLink()
+    ' Already running: leave whatever is open and open it now. Still loading: startLibraries opens it.
+    if m.launched = true and m.libraries <> invalid
+        leaveForDeepLink()
+        openDeepLink()
+    end if
+end sub
+
+' Back to the library from anywhere: a title playing stops (its resume point kept, as Back does),
+' and an open menu or question closes.
+sub leaveForDeepLink()
+    m.holdTimer.control = "stop"
+    m.navTimer.control = "stop"
+    position = 0
+    if m.player <> invalid
+        position = playerPosition()
+        if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), position, m.playing.req)
+        report("/Sessions/Playing/Stopped")
+        closePlayer()
+        m.playing = invalid
+    end if
+    m.segPlay = invalid
+    if m.menu <> invalid
+        m.top.removeChild(m.menu)
+        m.menu = invalid
+    else if m.direct <> invalid
+        backFromTitle(position, false)
+    end if
+    if m.top.dialog <> invalid then m.top.dialog.close = true
+    m.opening = invalid
+    show("browse")
+    m.rows.setFocus(true)
 end sub
 
 sub openDeepLink()

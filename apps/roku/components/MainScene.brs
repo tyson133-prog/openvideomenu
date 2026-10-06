@@ -267,7 +267,11 @@ sub onAddressEntered()
     if not ok or text = "" then return
     url = text.Trim()
     if Left(url, 4) <> "http" then url = "http://" + url
-    if CreateObject("roRegex", ":\d+/?$", "").IsMatch(url) = false then url = url + ":8096"
+    ' A home server's address gets Jellyfin's port; an https one (a server published on the
+    ' internet, e.g. https://demo.openvideomenu.org) is used as typed.
+    if Right(url, 1) = "/" then url = Left(url, Len(url) - 1)
+    https = LCase(Left(url, 6)) = "https:"
+    if not https and CreateObject("roRegex", ":\d+$", "").IsMatch(url) = false then url = url + ":8096"
     useServer(url)
 end sub
 
