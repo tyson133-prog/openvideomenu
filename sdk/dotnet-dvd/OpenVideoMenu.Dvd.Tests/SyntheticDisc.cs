@@ -21,13 +21,16 @@ public static class SyntheticDisc
     private const string CallMenu = "3008000101C00000";          // CallSS VMGM PGC 1, resume cell 1
 
     /// <summary>The disc, opened. Dispose it when done.</summary>
-    public static DvdDisc Open() => DvdDisc.Open("synthetic", new MemoryFileSystem(Files()));
+    /// <param name="pal">The title set's video is PAL (default NTSC).</param>
+    /// <param name="repeatCell">Title 2 lists its one cell twice (5 min each), as discs do for cell commands to pick from.</param>
+    public static DvdDisc Open(bool pal = false, bool repeatCell = false) =>
+        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell)));
 
-    public static Dictionary<string, byte[]> Files() => new(StringComparer.OrdinalIgnoreCase)
+    public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false) => new(StringComparer.OrdinalIgnoreCase)
     {
         [@"\VIDEO_TS\VIDEO_TS.IFO"] = Vmg(),
         [@"\VIDEO_TS\VIDEO_TS.VOB"] = MenuVob(),
-        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(),
+        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell),
         [@"\VIDEO_TS\VTS_01_1.VOB"] = new byte[2 * 2048],
     };
 
@@ -72,14 +75,14 @@ public static class SyntheticDisc
         return b;
     }
 
-    private static byte[] Vts()
+    private static byte[] Vts(bool pal, bool repeatCell)
     {
         var b = new byte[4 * 2048];
         Ascii(b, 0, "DVDVIDEO-VTS");
         U32(b, 0xC8, 1);                     // chapter table, sector
         U32(b, 0xCC, 2);                     // title PGC table, sector
         b[0x100] = 0x0C;
-        b[0x200] = 0x0C;                     // title video: NTSC 16:9
+        b[0x200] = (byte)(pal ? 0x1C : 0x0C); // title video: NTSC (or PAL) 16:9
 
         // Chapter table: each title is one chapter, program 1 of its PGC.
         var ptt = 2048;
@@ -99,8 +102,10 @@ public static class SyntheticDisc
             var e = pgcit + 8 + i * 8;
             b[e] = (byte)(0x80 | (i + 1));   // entry PGC of title set title i+1
             U32(b, e + 4, at);
-            at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { CallMenu },
-                cells: new[] { new Cell(Seconds: 600 * (i + 1), Still: 0, First: (uint)i, Last: (uint)i) });
+            var cells = repeatCell && i == 1
+                ? new[] { new Cell(Seconds: 300, Still: 0, First: 1, Last: 1), new Cell(Seconds: 300, Still: 0, First: 1, Last: 1) }
+                : new[] { new Cell(Seconds: 600 * (i + 1), Still: 0, First: (uint)i, Last: (uint)i) };
+            at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { CallMenu }, cells: cells);
         }
         return b;
     }

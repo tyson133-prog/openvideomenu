@@ -58,6 +58,13 @@ Each is public and usable on its own.
 
 Warnings carry a code (`DvdWarning.Code`) as well as a sentence.
 
+**Times.** The disc's own times (`CellPlayback.Duration`, `Pgc.Duration`) are as the IFO states them. On NTSC
+they count 30 frames a second, so the video really runs 1001/1000 as long: 8 s more by the end of a film.
+`CellMediaIndex.CellsOf` and `CellsOfPgc` place cells on a rip's real clock (`CellMediaIndex.ClockScale`), so
+chapters, cues and durations land where they are in the file. A title that lists the same cell more than once
+(a clip listed many times for cell commands to pick from) is laid out once per listing, as MakeMKV and
+HandBrake rip it; a ripper that keeps each distinct cell once passes `onceEach: true`.
+
 Tracing: `DvdVm.Observer`, `DvdManifestOptions.CompileTrace` and the verifier's `WalkTrace` / `VmTrace` /
 `CompileTrace`. In `ovm-dvd`, set `OVM_DVD_TRACE=walks,vm,compile`.
 

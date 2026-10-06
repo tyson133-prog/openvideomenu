@@ -68,12 +68,28 @@ public sealed class CellMediaIndex : IPlaybackMapper
             }
     }
 
-    /// <summary>The cells a title plays from <paramref name="firstChapter"/> through <paramref name="lastChapter"/>, in order (first angle only).</summary>
-    public static MediaCells CellsOf(DvdDisc disc, string id, int order, int ttn, int firstChapter, int? lastChapter)
+    /// <summary>
+    /// How much longer a title set's video really plays than the disc's stated times: 1001/1000 on NTSC, whose
+    /// times count 30 frames a second while the video runs at 29.97; 1 on PAL. A rip runs on the real clock.
+    /// </summary>
+    public static double ClockScale(DvdDisc disc, int vtsn) =>
+        disc.TitleSets.TryGetValue(vtsn, out var vts) && !vts.TitleVideo.IsPal ? 1.001 : 1.0;
+
+    /// <summary>
+    /// The cells a title plays from <paramref name="firstChapter"/> through <paramref name="lastChapter"/>, in order
+    /// (first angle only), timed on the rip's real clock (<see cref="ClockScale"/>).
+    /// </summary>
+    /// <param name="onceEach">
+    /// The file holds each distinct cell once, though the title lists some again (a clip listed many times for cell
+    /// commands to pick from): every listing then maps to that one copy. Default: the file holds every listing,
+    /// in play order, as MakeMKV and HandBrake rip a title.
+    /// </param>
+    public static MediaCells CellsOf(DvdDisc disc, string id, int order, int ttn, int firstChapter, int? lastChapter, bool onceEach = false)
     {
         var t = disc.GetTitle(ttn);
         var file = new MediaCells { Id = id, Order = order, Vtsn = t?.Vtsn ?? 0 };
         if (t is null || !disc.TitleSets.TryGetValue(t.Vtsn, out var vts) || t.VtsTtn < 1 || t.VtsTtn > vts.Ptts.Count) return file;
+        var scale = ClockScale(disc, t.Vtsn);
         var ptts = vts.Ptts[t.VtsTtn - 1];
         if (ptts.Count == 0) return file;
         var from = Math.Clamp(firstChapter, 1, ptts.Count);
@@ -100,12 +116,13 @@ public sealed class CellMediaIndex : IPlaybackMapper
                 if (!inRange) continue;
                 var cell = pgc.Cells[c - 1];
                 if (cell.IsAngleBlock && cell.BlockMode != 1) continue;
+                if (onceEach && file.Cells.Contains((cell.FirstSector, cell.LastSector))) continue;
                 // A chapter starts here (any PTT pointing at this program's entry cell).
                 if (ProgramEntry(pgc, pg) == c && ptts.Any(p => p.Pgcn == pgcn && p.Pgn == pg) && (chapterTimes.Count == 0 || time > chapterTimes[^1]))
                     chapterTimes.Add(Math.Round(time, 3));
                 file.Cells.Add((cell.FirstSector, cell.LastSector));
                 file.Starts.Add(Math.Round(time, 3));
-                time += cell.Duration.TotalSeconds;
+                time += cell.Duration.TotalSeconds * scale;
             }
         }
         return Done();
@@ -120,20 +137,23 @@ public sealed class CellMediaIndex : IPlaybackMapper
 
     /// <summary>
     /// The cells of a title-domain PGC no title lists (an "orphan" only links reach: a clip between screens,
-    /// an easter egg), in order (first angle only).
+    /// an easter egg), in order (first angle only), timed on the rip's real clock (<see cref="ClockScale"/>).
     /// </summary>
-    public static MediaCells CellsOfPgc(DvdDisc disc, string id, int order, int vtsn, int pgcn)
+    /// <param name="onceEach">The file holds each distinct cell once (see <see cref="CellsOf"/>).</param>
+    public static MediaCells CellsOfPgc(DvdDisc disc, string id, int order, int vtsn, int pgcn, bool onceEach = false)
     {
         var file = new MediaCells { Id = id, Order = order, Vtsn = vtsn };
         var pgc = disc.GetPgc(DvdDomain.Title, vtsn, pgcn);
         if (pgc is null) return file;
+        var scale = ClockScale(disc, vtsn);
         var time = 0.0;
         foreach (var cell in pgc.Cells)
         {
             if (cell.IsAngleBlock && cell.BlockMode != 1) continue;
+            if (onceEach && file.Cells.Contains((cell.FirstSector, cell.LastSector))) continue;
             file.Cells.Add((cell.FirstSector, cell.LastSector));
             file.Starts.Add(Math.Round(time, 3));
-            time += cell.Duration.TotalSeconds;
+            time += cell.Duration.TotalSeconds * scale;
         }
         file.Duration = Math.Round(time, 3);
         return file;

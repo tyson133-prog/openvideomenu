@@ -348,7 +348,7 @@ public static class MenuVerifier
                     ?? copies.Cast<double?>().FirstOrDefault();
         }
         start ??= index.StartOf(playing.Media, s.Vtsn, cell.FirstSector, cell.LastSector);
-        return start is { } t0 ? t0 + Math.Max(0, cell.Duration.TotalSeconds - 0.04) : null;
+        return start is { } t0 ? t0 + Math.Max(0, cell.Duration.TotalSeconds * CellMediaIndex.ClockScale(disc, s.Vtsn) - 0.04) : null;
     }
 
     /// <summary>

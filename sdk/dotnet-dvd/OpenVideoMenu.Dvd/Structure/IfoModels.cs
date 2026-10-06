@@ -68,6 +68,10 @@ public sealed class CellPlayback
     /// <summary>1-based index into the PGC's cell command list; 0 = none.</summary>
     public int CellCommandNumber { get; init; }
 
+    /// <summary>
+    /// The cell's playback time as the disc states it. On NTSC that counts 30 frames a second, so the video really
+    /// runs 1001/1000 as long (<see cref="Export.CellMediaIndex.ClockScale"/>); PAL times are exact.
+    /// </summary>
     public TimeSpan Duration { get; init; }
     public uint FirstSector { get; init; }
     public uint LastVobuStartSector { get; init; }
@@ -81,6 +85,7 @@ public sealed class Pgc
 {
     public int ProgramCount { get; init; }
     public int CellCount { get; init; }
+    /// <summary>The PGC's playback time as the disc states it (on NTSC, 0.1% short: see <see cref="CellPlayback.Duration"/>).</summary>
     public TimeSpan Duration { get; init; }
     public uint ProhibitedUserOps { get; init; }
     public int NextPgc { get; init; }
