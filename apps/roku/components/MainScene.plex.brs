@@ -165,6 +165,7 @@ sub onAssetServersFound()
         dialog.observeField("buttonSelected", "onAssetServerChosen")
         dialog.observeField("wasClosed", "onAssetServerDialogClosed")
         m.askingAssetServer = true
+        launchDialog()
         m.top.dialog = dialog
     else
         askAssetServer()
@@ -192,6 +193,7 @@ sub askAssetServer()
     dialog.observeField("buttonSelected", "onAssetServerEntered")
     dialog.observeField("wasClosed", "onAssetServerDialogClosed")
     m.askingAssetServer = true
+    launchDialog()
     m.top.dialog = dialog
 end sub
 

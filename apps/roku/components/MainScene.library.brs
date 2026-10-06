@@ -57,6 +57,8 @@ sub startLibraries()
     showBrowseStatus()
     if m.libraries.Count() = 0 then setStatus("No movie or TV libraries on " + m.login.name + ".")
     librariesProgress()
+    launchComplete()
+    if m.deepLink <> invalid then openDeepLink()
 end sub
 
 ' "Media Center (Plex) · 3 menus from http://…" — which server, which kind, where menus come from.
@@ -639,4 +641,60 @@ sub backFromTitle(position as float, watched as boolean)
     end if
     show(d.screen)
     d.list.setFocus(true)
+end sub
+
+' --- deep links -----------------------------------------------------------------------------------
+' A deep link names a title by its ID on the signed-in server (Jellyfin Id, Plex ratingKey). It opens
+' once the library is on screen: a movie's menu if it has one, a show's screen, else the title plays.
+' Signed out, there's nothing to open it from: the link is dropped and sign-in carries on.
+
+sub onDeepLink()
+    link = m.top.deepLink
+    if link = invalid or link.contentId = invalid then return
+    if m.login = invalid
+        m.deepLink = invalid
+        return
+    end if
+    m.deepLink = link
+    ' Already browsing: open it now. Still loading: startLibraries opens it.
+    if m.launched = true and m.libraries <> invalid and m.player = invalid and m.menu = invalid then openDeepLink()
+end sub
+
+sub openDeepLink()
+    link = m.deepLink
+    m.deepLink = invalid
+    id = link.contentId.ToStr()
+    if not CreateObject("roRegex", "^[A-Za-z0-9_-]+$", "").IsMatch(id)
+        setStatus("ovmplayer can't open that link.")
+        return
+    end if
+    if isPlex()
+        http(m.login.url + "/library/metadata/" + id, "GET", invalid, "onDeepLinkItem")
+    else
+        http(m.login.url + "/Items/" + id + "?userId=" + m.login.userId, "GET", invalid, "onDeepLinkItem")
+    end if
+end sub
+
+sub onDeepLinkItem(res as object, ctx as dynamic)
+    items = itemsOf(res.json)
+    if res.code <> 200 or items.Count() = 0
+        setStatus("Couldn't find that title on " + m.login.name + ".")
+        return
+    end if
+    item = items[0]
+    kind = LCase(msOr(item["Type"], ""))
+    if isPlex() then kind = LCase(msOr(item["type"], ""))
+    if kind = "show" or kind = "series"
+        openShow(addTile(CreateObject("roSGNode", "ContentNode"), item, "show", false))
+    else if kind = "movie" or kind = "episode"
+        if kind = "movie" then matchMovie(item)
+        entryId = m.menuOf[itemKey(item)]
+        if entryId <> invalid and m.manifestTiles[entryId] <> invalid
+            chooseTile(m.manifestTiles[entryId], "browse", m.rows)
+        else
+            playDirect(item, invalid, "browse", m.rows)
+        end if
+    else
+        setStatus("ovmplayer can't open that kind of item.")
+    end if
 end sub

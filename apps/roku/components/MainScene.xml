@@ -9,6 +9,10 @@
   <script type="text/brightscript" uri="MainScene.library.brs" />
   <script type="text/brightscript" uri="pkg:/source/matcher.brs" />
   <script type="text/brightscript" uri="pkg:/source/navigator.brs" />
+  <interface>
+    <!-- { contentId, mediaType } from a deep link (main.brs) -->
+    <field id="deepLink" type="assocarray" onChange="onDeepLink" />
+  </interface>
   <children>
     <Rectangle id="bg" width="1920" height="1080" color="0x131418FF" />
 

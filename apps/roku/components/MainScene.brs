@@ -56,6 +56,7 @@ end sub
 
 ' First run (or after switching server): Plex or Jellyfin?
 sub chooseKind()
+    launchDialog()
     show("choose")
     content = CreateObject("roSGNode", "ContentNode")
     content.createChild("ContentNode").title = "Plex"
@@ -78,6 +79,24 @@ function assetHeaders() as object
     if isPlex() then return { "X-Plex-Token": m.login.token }
     return { "Authorization": authHeader(m.login.token) }
 end function
+
+' --- launch beacons (Roku certification 3.2) ------------------------------------------------
+' Launch time runs until the library is on screen. Questions asked before it (Plex or Jellyfin,
+' sign-in, the menu server) are dialogs, whose time the beacons leave out.
+
+sub launchDialog()
+    if m.launched = true or m.inLaunchDialog = true then return
+    m.inLaunchDialog = true
+    m.top.signalBeacon("AppDialogInitiate")
+end sub
+
+sub launchComplete()
+    if m.launched = true then return
+    if m.inLaunchDialog = true then m.top.signalBeacon("AppDialogComplete")
+    m.inLaunchDialog = false
+    m.launched = true
+    m.top.signalBeacon("AppLaunchComplete")
+end sub
 
 ' --- screens ------------------------------------------------------------------------------
 
@@ -192,6 +211,7 @@ sub onHttp(event as object)
     if pending.handler = "onPlexAudioSet" then onPlexAudioSet(res, pending.context)
     if pending.handler = "onPlexDecision" then onPlexDecision(res, pending.context)
     if pending.handler = "onPlexTranscodeDecision" then onPlexTranscodeDecision(res, pending.context)
+    if pending.handler = "onDeepLinkItem" then onDeepLinkItem(res, pending.context)
 end sub
 
 ' --- finding a server -----------------------------------------------------------------------

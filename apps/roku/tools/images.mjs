@@ -20,4 +20,5 @@ mkdirSync(new URL("../images/", import.meta.url), { recursive: true });
 art(540, 405, 260).save(new URL("../images/icon_fhd.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
 art(290, 218, 140).save(new URL("../images/icon_hd.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
 art(1920, 1080, 360).save(new URL("../images/splash_fhd.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
+art(1280, 720, 240).save(new URL("../images/splash_hd.png", import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1"));
 console.log("images written");
