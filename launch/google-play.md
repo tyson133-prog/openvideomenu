@@ -65,12 +65,11 @@ code on 2026-09-28). Re-check if the app changes.
 
 - **Privacy policy:** https://openvideomenu.org/privacy.html
 - **Ads:** No.
-- **App access:** *All or some functionality is restricted* (the app needs a media server). Give
-  reviewers a Jellyfin test server and account: the app signs in with a username and password as
-  well as Quick Connect. Best is a test server with the Sintel example, so they see a menu;
-  otherwise `https://demo.jellyfin.org/stable`, user `demo`, no password (check it's still up).
-  > Choose Jellyfin, enter the server address `<test server>`, and sign in with username `<user>`
-  > and password `<password>`. Open "Sintel" in the Menus row to see its menu.
+- **App access:** *All or some functionality is restricted* (the app needs a media server). Reviewers
+  use the demo server (`deploy/demo-server`), which runs all the time with the Sintel and Example Show
+  examples; the `review` account's password is kept outside the repo.
+  > Choose Jellyfin, enter the server address `https://demo.openvideomenu.org`, and sign in with
+  > username `review` and password `<password>`. Open "Sintel" in the Menus row to see its menu.
 - **Content rating (IARC questionnaire):** category *All other app types*; no violence, sexuality,
   language or controlled substances in the app itself; no user interaction or chat between users; no
   sharing of location; no purchases. It plays the user's own media. Expect a rating of Everyone / PEGI 3.

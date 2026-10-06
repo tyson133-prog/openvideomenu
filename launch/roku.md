@@ -1,8 +1,8 @@
-# Roku: ovmplayer beta channel
+# Roku: ovmplayer in the Roku Streaming Store
 
-A **beta channel** lets up to 20 testers install the app from a link, without Roku's certification. It
-expires 120 days after it's created, and needs no store listing. A public channel (certification and
-listing) can follow at launch.
+The public channel goes through Roku's certification: automated checks you can run as often as you like,
+then a review by Roku that starts only when you schedule publishing. It goes live on the date you pick.
+Testers can try it before then from a **beta channel** (below).
 
 ## Signing key (once)
 
@@ -17,17 +17,49 @@ Roku packages are signed on a Roku in developer mode, with a key that lives on t
 
 (`genkey` makes a new key each time it runs. Run it only once.)
 
+The TV must be linked to the Roku developer account and online when it signs.
+
 ## Each version
 
 ```sh
 cd apps/roku
-npm run package -- --version 0.1.2 --sign     # builds, installs on the TV, signs, downloads the .pkg
+npm run package -- --version 0.1.4 --sign     # builds, installs on the TV, signs, downloads the .pkg
 ```
 
 The `.pkg` lands in `apps/roku/out/`. The version must be higher than the last upload. The release
-package leaves out the conformance cases (dev test mode).
+package leaves out the conformance cases (dev test mode). The dashboard takes the signed `.pkg`, not the
+zip.
 
-## Developer Dashboard
+## Certification (public channel)
+
+What the app already does for the criteria (October 2026): `rsg_version=1.3`, low-memory events
+(roAppMemoryMonitor and the device's general memory level), `AppLaunchComplete` once the library is on
+screen with the first-run questions wrapped in `AppDialogInitiate`/`AppDialogComplete`, and deep links
+at launch and through roInput (also while something plays).
+
+1. **Static Analysis:** upload the `.pkg`; fix every error. Set the **minimum Roku OS to 15.1** when
+   uploading (a dashboard setting).
+2. **Test credentials:** the demo server, which runs all the time.
+   - Choose **Jellyfin**, then **Type an address…**: `https://demo.openvideomenu.org`
+   - **Use username and password:** user `review`; the password is kept outside the repo.
+3. **Deep-link test values** (Jellyfin IDs on the demo server; `deploy/demo-server/configure.mjs` prints
+   them again):
+   - Sintel, which opens its menu: `contentId=8abb00881d1cf44cda4357f3c253c369&mediaType=movie`
+   - Example Show, which opens its screen: `contentId=39bcdf08f9551e6f30cdc6660c99073d&mediaType=series`
+   - An episode, which plays: `contentId=cc0161de1989260ab600e242abf35707&mediaType=episode`
+4. **Sign-in and sign-out scripts** for App Behavior Analysis (Roku Remote Tool):
+   - Sign in from first launch: Down, Select (Jellyfin); Select (Type an address…); type the address;
+     Down ×4, Select (Connect); Select (Use username and password); type `review`; Down ×4, Select;
+     type the password; Down ×4, Select. The library shows.
+   - Sign out: from the library, `*` (Options) signs out and returns to "Where are your movies?".
+5. **Schedule publishing** for launch day, at least a week or two ahead: Roku's review starts only once
+   it's scheduled, and a failed review needs time for a resubmission. Not on a Friday or weekend; the
+   earliest is two business days out.
+
+## Beta channel (testers before launch)
+
+A beta channel lets up to 20 testers install the app from a link, without certification. It expires 120
+days after it's created.
 
 1. developer.roku.com → **Manage channels** → **Add channel** → *Beta channel*.
 2. Name: **ovmplayer** · upload the `.pkg`.
@@ -36,10 +68,7 @@ package leaves out the conformance cases (dev test mode).
    Software update).
 4. For later versions: upload the new `.pkg` to the same beta channel.
 
-Beta channels stop working 120 days after creation; create a new one (same key) if testing runs
-longer, or publish the public channel.
-
-## Listing text (for the public channel later)
+## Listing text
 
 **Name:** ovmplayer · **Category:** Movies & TV / Special interest
 
@@ -52,11 +81,5 @@ longer, or publish the public channel.
 > choices. Everything else plays as usual. Needs your own Plex or
 > Jellyfin server; no ads, no tracking, no account with us. Learn more at openvideomenu.org.
 
-**Notes for certification (public channel):** it's a client for the user's own media server, so
-reviewers need a test server and account (the app signs in with a username and password, or Quick
-Connect); offer a test server with the Sintel example, or the Jellyfin demo server.
-Roku requires channels to behave well with deep links and the Home key; check the current Roku
-certification checklist before submitting.
-
-Artwork for the public listing (channel poster and so on) is sized by the dashboard at submission time;
+Artwork for the listing (channel poster and so on) is sized by the dashboard at submission time;
 `apps/roku/images/` and `store-art/` hold the source art.

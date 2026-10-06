@@ -7,10 +7,12 @@ work;** nothing here publishes anything by itself.
 | File | What it is |
 |---|---|
 | [`google-play.md`](google-play.md) | Play Console listing text, Data safety answers, content rating, reviewer access |
-| [`roku.md`](roku.md) | Roku beta channel: signing key, packaging, dashboard steps, listing text |
+| [`roku.md`](roku.md) | Roku: signing key, packaging, certification (test account, deep links, scripts), beta channel, listing text |
 | [`store-art/`](store-art) | Play icon (512), feature graphic (1024×500), TV banner (1280×720), TV screenshots (1920×1080). `store-art/src/` has the HTML they're rendered from. |
 | [`../site/`](../site) | The website, including the privacy policy both stores require |
 | [`../.github/workflows/release.yml`](../.github/workflows/release.yml) | Builds every artifact from a version tag into a **draft** GitHub release |
+| [`../.github/workflows/publish-nuget.yml`](../.github/workflows/publish-nuget.yml) | Pushes the .NET packages to nuget.org when that release is published |
+| [`../deploy/demo-server/`](../deploy/demo-server) | The demo server (https://demo.openvideomenu.org) that store reviewers sign in to |
 
 ## Checklist
 
@@ -28,25 +30,31 @@ work;** nothing here publishes anything by itself.
 - [ ] **Host the website** (see [`../site/README.md`](../site/README.md)) and fill its placeholders,
   at least the privacy page's date and contact email: both stores link to it.
 - [ ] **Contact email** for listings and the privacy page.
+- [ ] **nuget.org account**, an API key for the `OpenVideoMenu*` packages as the `NUGET_API_KEY` secret,
+  and a request to reserve the `OpenVideoMenu.*` ID prefix.
+- [x] **Demo server for store reviewers:** https://demo.openvideomenu.org (`deploy/demo-server`), account
+  `review`.
 
 ### Each release
 
 1. Tag the version: `git tag v0.1.2 && git push origin v0.1.2`. The workflow tests everything and
    drafts a release with the APK, App Bundle (AAB), unsigned Roku zip, Jellyfin plugin zip and
-   repository manifest, and NuGet package.
+   repository manifest, and the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool).
 2. **Roku:** sign on the TV: `cd apps/roku && npm run package -- --version 0.1.2 --sign`, then upload
-   the `.pkg` to the beta channel.
+   the `.pkg` to the beta channel, or to the public channel's certification (see [`roku.md`](roku.md):
+   schedule publishing a week or two before the day it should go live).
 3. **Google Play:** upload the `.aab` to the closed-testing track.
 4. **Jellyfin repository:** host `jellyfin-repository.json` (e.g. on the website) where testers add it;
    its download URL points at the release's plugin zip, which must be public by then.
-5. **Publish the draft release** when the testers should get it.
+5. **Publish the draft release** when the testers should get it. Publishing it also pushes the NuGet
+   packages to nuget.org (permanent: versions can be unlisted, never deleted).
 
 ## Before inviting testers
 
-- [ ] Restore Jellyfin `MinResumeDurationSeconds` 10 → 300 on the test container (test setting).
+- [x] Restore Jellyfin `MinResumeDurationSeconds` 10 → 300 on the test container (test setting).
 - [ ] Remove the Hyper-V firewall rules `OVM-WSL-Test-TCP` and `OVM-WSL-Test-mDNS` (if not done).
 - [ ] Decide the public branch (`main`) and commit email.
 - [ ] Example titles testers can download (Sintel and Example Show), since testers have no DVD Tamer yet.
 - [ ] Test the Jellyfin plugin repository install from a clean Jellyfin (add repository → install).
 - [ ] Fire TV: untested; either test it or keep the site saying so.
-- [ ] A Jellyfin test server and account for store reviewers (see [`google-play.md`](google-play.md#app-content-policy--app-content)).
+- [x] A Jellyfin test server and account for store reviewers: the demo server (see [`google-play.md`](google-play.md#app-content-policy--app-content) and [`roku.md`](roku.md)).
