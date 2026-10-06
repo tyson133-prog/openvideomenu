@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Reference 10-foot web renderer for Open Video Menu menus. Plugs into any host through playback, input and media-resolver adapters.",
   "license": "Apache-2.0",
+  "homepage": "https://openvideomenu.org/",
+  "repository": { "type": "git", "url": "git+https://github.com/tyson133-prog/openvideomenu.git", "directory": "packages/renderer-web" },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,8 +1,10 @@
 {
   "name": "@openvideomenu/cli",
   "version": "0.1.0",
-  "description": "Open Video Menu command line: validate manifests and preview menus in a browser.",
+  "description": "Open Video Menu command line: validate manifests and bundles, preview menus in a browser, and pack or unpack bundles.",
   "license": "Apache-2.0",
+  "homepage": "https://openvideomenu.org/",
+  "repository": { "type": "git", "url": "git+https://github.com/tyson133-prog/openvideomenu.git", "directory": "packages/cli" },
   "type": "module",
   "engines": { "node": ">=22.2" },
   "bin": {

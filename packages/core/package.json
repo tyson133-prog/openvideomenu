@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Parse, validate, resolve and navigate Open Video Menu manifests. No dependencies; runs in browsers and Node.",
   "license": "Apache-2.0",
+  "homepage": "https://openvideomenu.org/",
+  "repository": { "type": "git", "url": "git+https://github.com/tyson133-prog/openvideomenu.git", "directory": "packages/core" },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

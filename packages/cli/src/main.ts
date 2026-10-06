@@ -127,7 +127,8 @@ async function main(argv: string[]): Promise<number> {
   const [command, target, ...rest] = argv;
   if (!command || command === "--help" || command === "-h" || !target) {
     console.log(USAGE);
-    return command ? 0 : 1;
+    // Asking for help is a success; a command without its file or folder is a mistake.
+    return command === "--help" || command === "-h" ? 0 : 1;
   }
   switch (command) {
     case "validate":
