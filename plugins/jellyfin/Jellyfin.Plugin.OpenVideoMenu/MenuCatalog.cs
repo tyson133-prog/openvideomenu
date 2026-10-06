@@ -93,8 +93,12 @@ public sealed class MenuCatalog
         return (s.Entries, s.Json, s.ETag);
     }
 
-    /// <summary>Number of manifests found so far (0 before the first scan).</summary>
-    public int Count => _snapshot?.Entries.Count ?? 0;
+    /// <summary>
+    /// Number of manifests: after a restart, once the first scan is done. Unlike <see cref="Current"/> it never
+    /// starts a rescan, so the anonymous health check can't make the server scan more than once.
+    /// </summary>
+    public async Task<int> CountAsync(CancellationToken cancel) =>
+        (_snapshot ?? await ScanAsync(cancel).ConfigureAwait(false)).Entries.Count;
 
     /// <summary>
     /// An allowed file, or null. <paramref name="path"/> is root-relative with forward slashes. A bundle

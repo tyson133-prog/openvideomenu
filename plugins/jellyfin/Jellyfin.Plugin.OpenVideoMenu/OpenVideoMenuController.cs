@@ -24,13 +24,13 @@ public class OpenVideoMenuController(MenuCatalog catalog, Microsoft.Extensions.L
     [HttpGet("health")]
     [AllowAnonymous]
     [Produces(MediaTypeNames.Application.Json)]
-    public IActionResult Health() => Ok(new
+    public async Task<IActionResult> Health(CancellationToken cancel) => Ok(new
     {
         ok = true,
         name = "Open Video Menu for Jellyfin",
         api = "1",
         format = Format.Version,
-        manifests = catalog.Count,
+        manifests = await catalog.CountAsync(cancel).ConfigureAwait(false),
         auth = "jellyfin",
     });
 
