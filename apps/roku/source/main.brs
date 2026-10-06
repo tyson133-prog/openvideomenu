@@ -12,8 +12,18 @@ sub Main(args as dynamic)
     screen.SetMessagePort(port)
     scene = screen.CreateScene("MainScene")
     screen.Show()
+    ' Roku certification (2026-10): apps must take low-memory warnings. The monitor needs Roku OS
+    ' 15.2, a step above the minimum, so it may be missing.
+    memory = CreateObject("roAppMemoryMonitor")
+    if memory <> invalid
+        memory.SetMessagePort(port)
+        memory.EnableMemoryWarningEvent(true)
+    end if
     while true
         msg = Wait(0, port)
         if type(msg) = "roSGScreenEvent" and msg.IsScreenClosed() then return
+        if type(msg) = "roAppMemoryNotificationEvent"
+            print "ovmplayer: memory at "; memory.GetMemoryLimitPercent(); "% of the app's limit"
+        end if
     end while
 end sub
