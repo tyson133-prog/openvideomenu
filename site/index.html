@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Open Video Menu</title>
-  <meta name="description" content="Menus for the films and shows in your own library: one small file next to the video. How to see it, get the players, make menus, and implement it.">
+  <meta name="description" content="DVD-style menus on top of the MP4 and MKV files you stream today: one small file next to the video, from the simplest menu to a full DVD's. How to see it, get the players, make menus, and implement it.">
   <link rel="canonical" href="https://openvideomenu.org/">
   <meta property="og:title" content="Open Video Menu">
-  <meta property="og:description" content="Menus for the films and shows in your own library. An open, royalty-free format.">
+  <meta property="og:description" content="DVD-style menus on top of the video you stream today. An open, royalty-free format.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://openvideomenu.org/">
   <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
@@ -35,8 +35,8 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <h1>Open Video Menu</h1>
-        <p class="lead">Menus for the films and shows in your own library: backgrounds, scene selection, special features, audio and subtitle choices. A menu is one small file next to the video. Any app can play it; it's an open, royalty-free format.</p>
+        <h1>DVD-style menus for the video you stream today.</h1>
+        <p class="lead">Open Video Menu puts DVD-style menus (motion backgrounds, scene selection, special features, audio and subtitle choices) on top of modern video: the MP4 and MKV files Plex and Jellyfin stream to your TV. A menu is one small file next to the video, and the video itself is never changed. It's an open, royalty-free format any app can play.</p>
         <pre class="code" aria-label="Example folder"><span class="c"># A film folder, as Plex and Jellyfin expect it</span>
 Sintel (2010)/
   Sintel (2010).mp4
@@ -48,6 +48,19 @@ Sintel (2010)/
         <div class="tv-stand" aria-hidden="true"></div>
         <figcaption class="tv-caption">Sintel's menu in ovmplayer, from a Plex library.</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section id="levels">
+    <div class="wrap">
+      <h2>From the simplest menu to a full DVD</h2>
+      <p class="muted">One format covers all of it. A menu says which level it needs; a player says which it supports, and below that it shows the plain list.</p>
+      <ul style="list-style:none;padding-left:0">
+        <li><strong>Level 0, Basic:</strong> a plain list of the film and its extras. Every player can do this.</li>
+        <li><strong>Level 1, Menus:</strong> artwork, buttons, highlights, scene selection and special features.</li>
+        <li><strong>Level 2, Enhanced:</strong> motion menus with music, transitions, angles, and buttons over the film while it plays.</li>
+        <li><strong>Level 3, Disc logic:</strong> everything a DVD's own programming does: variables and conditions, random play, parental control, resume, timers. Tested on 954 real DVDs: each one's menus translate to it and behave like the disc in automated checks.</li>
+      </ul>
     </div>
   </section>
 
@@ -91,7 +104,7 @@ Sintel (2010)/
     <div class="wrap">
       <h2>3. Make menus</h2>
       <ol>
-        <li><strong>From your DVDs:</strong> DVD Tamer turns a DVD's own menus into Open Video Menu as it rips the disc (<span class="tbd">DVD Tamer link</span>). Or use <code>ovm-dvd</code>: <code>dotnet tool install -g OpenVideoMenu.Dvd.Tool</code>, then <code>ovm-dvd export Film.iso "Film (Year).ovmz" --files "Film - title {n}.mkv"</code>.</li>
+        <li><strong>From your DVDs:</strong> DVD Tamer turns your DVDs into video files for your library and brings their original menus along (<span class="tbd">DVD Tamer link</span>). Or use <code>ovm-dvd</code>: <code>dotnet tool install -g OpenVideoMenu.Dvd.Tool</code>, then <code>ovm-dvd export Film.iso "Film (Year).ovmz" --files "Film - title {n}.mkv"</code>.</li>
         <li><strong>Put the menu next to the film,</strong> as <code>Title.ovmz</code> (or <code>Title.openvideomenu.json</code> with its art), then rescan the library.</li>
         <li><strong>Try the examples:</strong> <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/openvideomenu-examples.zip">download Sintel and the Example Show</a> (about 250 MB) and copy the <code>Movies</code> and <code>TV</code> folders into your libraries.</li>
       </ol>
