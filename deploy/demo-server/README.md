@@ -21,8 +21,8 @@ project. Never anything else.
 Jellyfin listens on `127.0.0.1:8096` only. The host's web server publishes it: `apache-demo.conf` is
 the Apache site (proxy to localhost), and `certbot --apache -d demo.openvideomenu.org` adds HTTPS.
 
-The container is capped at 400 MB of memory, so on a small host that serves other sites only Jellyfin
-can run out.
+The container is capped at 768 MB of memory, so on a small host that serves other sites only Jellyfin
+can run out. It runs all the time: it's also the public demo.
 
 ## Setting it up
 
