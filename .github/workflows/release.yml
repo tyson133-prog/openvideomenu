@@ -123,9 +123,27 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: dotnet, path: dist/ }
 
+  examples:
+    needs: test
+    # Windows draws the menus in Georgia, like the demo server's (Linux has no Georgia).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: choco install ffmpeg --no-progress -y
+      - name: Build the examples (Sintel with the real film)
+        shell: bash
+        run: |
+          node examples/sintel/build.mjs --film
+          node examples/dvd-shaped/build.mjs
+          node examples/package.mjs --out dist/openvideomenu-examples.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: examples, path: dist/ }
+
   release:
     if: github.event_name == 'push'
-    needs: [android, roku, dotnet]
+    needs: [android, roku, dotnet, examples]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -136,4 +154,4 @@ jobs:
         run: |
           gh release create "$VERSION" dist/* --repo "${{ github.repository }}" --draft \
             --title "Open Video Menu $VERSION" \
-            --notes "Draft: players, Jellyfin plugin and .NET packages for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
+            --notes "Draft: players, Jellyfin plugin, .NET packages and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * First-run setup of the demo's Jellyfin, through its API: the admin account, the Movies and TV
- * libraries over /media, and the review account (a plain user) that store reviewers sign in with.
+ * libraries over /media, the review account (a plain user) that store reviewers sign in with, and the
+ * public demo account. Safe to run again: it updates what's there.
  *
  *   OVM_DEMO_ADMIN_PASSWORD=… OVM_DEMO_REVIEW_PASSWORD=… node configure.mjs [--url http://127.0.0.1:18096]
  *
@@ -14,6 +15,8 @@ const arg = (name, fallback) => {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
 const base = arg("--url", "http://127.0.0.1:18096");
+// The public demo account's password: it's on the website, so it lives here too.
+const DEMO_PASSWORD = "demo";
 const adminPassword = process.env.OVM_DEMO_ADMIN_PASSWORD;
 const reviewPassword = process.env.OVM_DEMO_REVIEW_PASSWORD;
 if (!adminPassword || !reviewPassword) throw new Error("Set OVM_DEMO_ADMIN_PASSWORD and OVM_DEMO_REVIEW_PASSWORD.");
@@ -72,26 +75,48 @@ for (const [name, type, path, libraryOptions] of libraries) {
   console.log(`Library ${name} added.`);
 }
 
-// The review account: an ordinary user who can see and play everything here, and change nothing.
+// Two ordinary users who can see and play everything here, and change nothing: `review` for store
+// reviewers (its password stays private), and `demo` for anyone (its password is on the website, and
+// reset-demo.sh puts it back if a visitor changes it). Demo visitors get no transcoding, so they can't
+// load the host's CPU: the examples play as they are on every ovmplayer.
 const users = await call("GET", "/Users");
-let review = users.find((u) => u.Name === "review");
-if (!review) {
-  review = await call("POST", "/Users/New", { Name: "review", Password: reviewPassword });
-  console.log("User review added.");
-} else {
-  await call("POST", `/Users/${review.Id}/Password`, { NewPw: reviewPassword });
-  console.log("User review: password set.");
+async function account(name, password, extra) {
+  let user = users.find((u) => u.Name === name);
+  if (!user) {
+    user = await call("POST", "/Users/New", { Name: name, Password: password });
+    console.log(`User ${name} added.`);
+  } else {
+    await call("POST", `/Users/${user.Id}/Password`, { NewPw: password });
+    console.log(`User ${name}: password set.`);
+  }
+  const policy = (await call("GET", `/Users/${user.Id}`)).Policy;
+  await call("POST", `/Users/${user.Id}/Policy`, {
+    ...policy,
+    IsAdministrator: false,
+    EnableAllFolders: true,
+    EnableContentDeletion: false,
+    EnableRemoteAccess: true,
+    EnableMediaPlayback: true,
+    EnableUserPreferenceAccess: false,
+    ...extra,
+  });
+  return user;
 }
-const policy = (await call("GET", `/Users/${review.Id}`)).Policy;
-await call("POST", `/Users/${review.Id}/Policy`, {
-  ...policy,
-  IsAdministrator: false,
-  EnableAllFolders: true,
-  EnableContentDeletion: false,
-  EnableRemoteAccess: true,
-  EnableMediaPlayback: true,
-  EnableUserPreferenceAccess: false,
+const review = await account("review", reviewPassword, {});
+await account("demo", DEMO_PASSWORD, {
+  EnableVideoPlaybackTranscoding: false,
+  EnableAudioPlaybackTranscoding: false,
+  EnablePlaybackRemuxing: false,
+  MaxActiveSessions: 10,
 });
+
+// An API key for reset-demo.sh (created once; printed so it can go in the host's reset.env).
+const keys = await call("GET", "/Auth/Keys");
+if (!keys.Items.some((k) => k.AppName === "ovm-demo-reset")) {
+  await call("POST", "/Auth/Keys?app=ovm-demo-reset");
+  const key = (await call("GET", "/Auth/Keys")).Items.find((k) => k.AppName === "ovm-demo-reset");
+  console.log(`API key for reset-demo.sh (put it in /opt/ovm-demo/reset.env as OVM_DEMO_API_KEY): ${key.AccessToken}`);
+}
 
 await call("POST", "/Library/Refresh");
 console.log("Library scan started. Once it's done, the titles' IDs (for deep-link testing):");

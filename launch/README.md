@@ -39,7 +39,8 @@ work;** nothing here publishes anything by itself.
 
 1. Tag the version: `git tag v0.1.2 && git push origin v0.1.2`. The workflow tests everything and
    drafts a release with the APK, App Bundle (AAB), unsigned Roku zip, Jellyfin plugin zip and
-   repository manifest, and the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool).
+   repository manifest, the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool), and
+   `openvideomenu-examples.zip` (Sintel and the Example Show, which the website links to).
 2. **Roku:** sign on the TV: `cd apps/roku && npm run package -- --version 0.1.2 --sign`, then upload
    the `.pkg` to the beta channel, or to the public channel's certification (see [`roku.md`](roku.md):
    schedule publishing a week or two before the day it should go live).
@@ -54,7 +55,8 @@ work;** nothing here publishes anything by itself.
 - [x] Restore Jellyfin `MinResumeDurationSeconds` 10 → 300 on the test container (test setting).
 - [ ] Remove the Hyper-V firewall rules `OVM-WSL-Test-TCP` and `OVM-WSL-Test-mDNS` (if not done).
 - [ ] Decide the public branch (`main`) and commit email.
-- [ ] Example titles testers can download (Sintel and Example Show), since testers have no DVD Tamer yet.
+- [x] Example titles testers can download (Sintel and Example Show): a release asset, linked from the
+  website, and the public demo account on demo.openvideomenu.org.
 - [ ] Test the Jellyfin plugin repository install from a clean Jellyfin (add repository → install).
 - [ ] Fire TV: untested; either test it or keep the site saying so.
 - [x] A Jellyfin test server and account for store reviewers: the demo server (see [`google-play.md`](google-play.md#app-content-policy--app-content) and [`roku.md`](roku.md)).

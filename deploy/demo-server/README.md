@@ -35,10 +35,15 @@ can run out. It runs all the time: it's also the public demo.
    ssh -L 18096:127.0.0.1:8096 <host>
    OVM_DEMO_ADMIN_PASSWORD=… OVM_DEMO_REVIEW_PASSWORD=… node configure.mjs
    ```
-   It creates the `admin` account, the Movies and TV libraries, and the `review` account (an
-   ordinary user), then lists the titles' IDs. The TV library reads only what's on disk: online
+   It creates the `admin` account, the Movies and TV libraries, the `review` account for store
+   reviewers and the public `demo` account (ordinary users), then lists the titles' IDs. The first time,
+   it also prints an API key: put it in `/opt/ovm-demo/reset.env` (mode 600) as `OVM_DEMO_API_KEY=…`. The TV library reads only what's on disk: online
    metadata would match the made-up Example Show to a real show and rename it.
 4. Enable the Apache site, then run certbot.
+5. Install `reset-demo.sh` in `/opt/ovm-demo` and run it every 15 minutes:
+   `echo "*/15 * * * * ubuntu /opt/ovm-demo/reset-demo.sh" | sudo tee /etc/cron.d/ovm-demo-reset`.
+   Jellyfin already refuses a password change from the `demo` account; this puts it back if one gets
+   through anyway.
 
 ## Running it
 
@@ -47,6 +52,12 @@ cd /opt/ovm-demo
 sudo docker compose up -d     # start
 sudo docker compose stop      # stop
 ```
+
+## The public demo
+
+Anyone with ovmplayer can sign in as `demo`, password `demo` (the website says so). That account can't
+transcode, so visitors can't load the host's CPU: the examples play as they are on every ovmplayer.
+Each viewing of Sintel streams about 200 MB.
 
 ## For a store review
 
