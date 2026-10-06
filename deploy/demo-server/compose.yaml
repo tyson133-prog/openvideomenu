@@ -1,0 +1,27 @@
+# The public demo: Jellyfin with the Open Video Menu plugin and the example titles, for app-store
+# reviewers and anyone trying ovmplayer without a library of their own. See README.md.
+#
+#   docker compose up -d     # start (e.g. while a store review is open)
+#   docker compose stop      # stop
+#
+# Jellyfin listens on localhost only; the host's web server proxies the public name to it.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:12.2
+    container_name: ovm-demo-jellyfin
+    user: "1000:1000"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8096:8096"
+    environment:
+      JELLYFIN_PublishedServerUrl: https://demo.openvideomenu.org
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      # Read-only: the demo titles and their menus.
+      - ./media:/media:ro
+    # The host is small and serves other sites: if Jellyfin runs out of memory, only Jellyfin stops.
+    mem_limit: 400m
+    memswap_limit: 700m
+    security_opt:
+      - no-new-privileges:true
