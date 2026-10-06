@@ -1,0 +1,1531 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:openvideomenu:schema:manifest:0.1",
+  "title": "Open Video Menu manifest v0.1 (draft)",
+  "description": "Menus over existing media files. Structural rules only; cross-references (menu ids, button ids, media ids, chapter numbers) are checked by the reference validator and described in spec/openvideomenu-v0.1.md. Unknown properties are allowed (readers ignore them); vendor extensions use keys starting with \"x-\".",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "title",
+    "media",
+    "fallback"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "openvideomenu"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+$"
+    },
+    "title": {
+      "$ref": "#/$defs/title"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "media": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/media"
+      }
+    },
+    "menus": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/menu"
+      }
+    },
+    "rootMenu": {
+      "$ref": "#/$defs/id"
+    },
+    "firstPlay": {
+      "$ref": "#/$defs/action"
+    },
+    "resumePoint": {
+      "description": "Level 2: how long the resume point lasts (spec 6.5): until that playback completes (untilEnd, default), or like a disc's, until a resume uses it (untilUsed).",
+      "enum": [
+        "untilEnd",
+        "untilUsed"
+      ]
+    },
+    "actions": {
+      "description": "Level 2: named actions, run from anywhere with {\"type\": \"run\", \"action\": name}, so shared logic is written once (spec 6.4).",
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "fallback": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/fallbackGroup"
+      }
+    },
+    "vars": {
+      "description": "Level 2: session variables with starting values: an integer or text (a variable keeps that type). Names starting with @ are player state.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[^@]"
+      },
+      "additionalProperties": {
+        "type": [
+          "integer",
+          "string"
+        ]
+      }
+    },
+    "keys": {
+      "$ref": "#/$defs/menuKeys"
+    },
+    "counters": {
+      "description": "Level 2: integer variables of vars that count seconds by themselves, like a disc's registers in counter mode (spec 6.7).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "level": {
+      "description": "The lowest conformance level at which the menus work as authored (spec 10): 0-3. A player below it shows the fallback list.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "cuePlayback": {
+      "description": "Level 2: what playback started during playback (a cue, an overlay's button, a key, the timer) does to the title playing: interrupt it and return (default), or replace it, as a disc's links do (spec 6.3).",
+      "enum": [
+        "interrupt",
+        "replace"
+      ]
+    }
+  },
+  "dependentRequired": {
+    "menus": [
+      "rootMenu"
+    ]
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "description": "Relative path (resolved against the manifest's location, forward slashes) or absolute URL.",
+      "type": "string",
+      "minLength": 1
+    },
+    "seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "color": {
+      "type": "string"
+    },
+    "title": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "year": {
+          "type": "integer"
+        },
+        "ids": {
+          "type": "object",
+          "properties": {
+            "imdb": {
+              "type": "string"
+            },
+            "tmdb": {
+              "type": "string"
+            },
+            "tvdb": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generator": {
+          "type": "string"
+        }
+      }
+    },
+    "mediaRef": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/path"
+        },
+        {
+          "type": "object",
+          "required": [
+            "scheme",
+            "id"
+          ],
+          "properties": {
+            "scheme": {
+              "type": "string",
+              "minLength": 1
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/mediaRef"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "description": "feature, episode, trailer, featurette, behindthescenes, deleted, interview, scene, short, other (other values allowed).",
+          "type": "string"
+        },
+        "duration": {
+          "$ref": "#/$defs/seconds"
+        },
+        "chapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "time"
+            ],
+            "properties": {
+              "time": {
+                "$ref": "#/$defs/seconds"
+              },
+              "label": {
+                "type": "string"
+              },
+              "thumbnail": {
+                "$ref": "#/$defs/path"
+              }
+            }
+          }
+        },
+        "angles": {
+          "description": "Level 2: the other angles as files; ref is angle 1, angles[0] angle 2, ... (spec 4.1).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/mediaRef"
+          }
+        },
+        "angleTracks": {
+          "description": "Level 2: the file's first N video tracks are angles 1..N (spec 4.1).",
+          "type": "integer",
+          "minimum": 2
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cue"
+          },
+          "description": "Level 2: cues whenever this media plays (spec 6.3)."
+        },
+        "segments": {
+          "description": "Level 2: pieces of other media played as one title with its own timeline (spec 4.2).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
+        },
+        "holds": {
+          "$ref": "#/$defs/holds"
+        },
+        "number": {
+          "type": "integer",
+          "description": "A number for logic to read as @lastNumber (Level 3), e.g. a disc's title number or an episode number."
+        },
+        "prohibitsAt": {
+          "$ref": "#/$defs/prohibitsAt"
+        }
+      },
+      "not": {
+        "required": [
+          "angles",
+          "angleTracks"
+        ]
+      },
+      "oneOf": [
+        {
+          "required": [
+            "ref"
+          ]
+        },
+        {
+          "required": [
+            "segments"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "ref"
+                ]
+              },
+              {
+                "required": [
+                  "angles"
+                ]
+              },
+              {
+                "required": [
+                  "angleTracks"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "rect": {
+      "description": "[x, y, width, height] in canvas pixels.",
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "type": "number",
+          "minimum": 0
+        }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "canvas": {
+      "type": "object",
+      "required": [
+        "width",
+        "height"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "aspect": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^\\s*[0-9]+(\\.[0-9]+)?\\s*([:/]\\s*[0-9]+(\\.[0-9]+)?\\s*)?$"
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          ]
+        }
+      }
+    },
+    "buttonState": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/path"
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "textColor": {
+          "$ref": "#/$defs/color"
+        },
+        "fill": {
+          "$ref": "#/$defs/color"
+        }
+      }
+    },
+    "button": {
+      "type": "object",
+      "required": [
+        "id",
+        "rect",
+        "action"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "label": {
+          "type": "string"
+        },
+        "a11yLabel": {
+          "type": "string"
+        },
+        "showLabel": {
+          "type": "boolean"
+        },
+        "states": {
+          "type": "object",
+          "properties": {
+            "normal": {
+              "$ref": "#/$defs/buttonState"
+            },
+            "selected": {
+              "$ref": "#/$defs/buttonState"
+            },
+            "activated": {
+              "$ref": "#/$defs/buttonState"
+            }
+          }
+        },
+        "nav": {
+          "type": "object",
+          "properties": {
+            "up": {
+              "$ref": "#/$defs/id"
+            },
+            "down": {
+              "$ref": "#/$defs/id"
+            },
+            "left": {
+              "$ref": "#/$defs/id"
+            },
+            "right": {
+              "$ref": "#/$defs/id"
+            }
+          }
+        },
+        "autoAction": {
+          "type": "boolean"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
+        },
+        "altRects": {
+          "description": "Level 2, information: where the button sits when the source shows the canvas letterboxed or pan-scanned (a disc's other button groups).",
+          "type": "object",
+          "properties": {
+            "letterbox": {
+              "$ref": "#/$defs/rect"
+            },
+            "panscan": {
+              "$ref": "#/$defs/rect"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "showLabel": {
+            "const": true
+          }
+        },
+        "required": [
+          "showLabel"
+        ]
+      },
+      "then": {
+        "required": [
+          "label"
+        ]
+      }
+    },
+    "menu": {
+      "type": "object",
+      "required": [
+        "canvas",
+        "buttons"
+      ],
+      "properties": {
+        "canvas": {
+          "$ref": "#/$defs/canvas"
+        },
+        "background": {
+          "type": "object",
+          "properties": {
+            "image": {
+              "$ref": "#/$defs/path"
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "video": {
+              "$ref": "#/$defs/loopingMedia"
+            },
+            "audio": {
+              "$ref": "#/$defs/loopingMedia"
+            }
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "defaultButton": {
+          "$ref": "#/$defs/buttonRef"
+        },
+        "autoNav": {
+          "type": "boolean"
+        },
+        "buttons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/button"
+          },
+          "description": "Empty: a menu that only shows its background, then its timeout decides (spec 5)."
+        },
+        "buttonsAt": {
+          "$ref": "#/$defs/seconds",
+          "description": "Seconds into the intro before buttons appear."
+        },
+        "back": {
+          "$ref": "#/$defs/action",
+          "description": "What the remote's Back key does on this menu (any action, incl. activate)."
+        },
+        "timeout": {
+          "type": "object",
+          "description": "Level 2: what happens when the menu is left alone. Counted from when the menu appears; a key press restarts it unless restartOnInput is false.",
+          "required": [
+            "after",
+            "action"
+          ],
+          "properties": {
+            "after": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Seconds."
+            },
+            "action": {
+              "$ref": "#/$defs/action"
+            },
+            "restartOnInput": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
+        },
+        "buttonSets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/buttonSet"
+          }
+        }
+      }
+    },
+    "playItem": {
+      "type": "object",
+      "required": [
+        "media"
+      ],
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "chapter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        },
+        "audio": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "object",
+              "required": [
+                "var"
+              ],
+              "properties": {
+                "var": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ],
+          "description": "Level 2: 1-based audio track, or {var}."
+        },
+        "subtitle": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "object",
+              "required": [
+                "var"
+              ],
+              "properties": {
+                "var": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ],
+          "description": "Level 2: 1-based subtitle track (0 = off), or {var}."
+        },
+        "angle": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "object",
+              "required": [
+                "var"
+              ],
+              "properties": {
+                "var": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ],
+          "description": "Level 2: 1-based angle of media with angles, or {var} (spec 4.1)."
+        },
+        "end": {
+          "$ref": "#/$defs/seconds",
+          "description": "Level 2: stop here, as if the item ended (spec 6.3)."
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cue"
+          },
+          "description": "Level 2: cues for this way of playing the media (spec 6.3)."
+        },
+        "keys": {
+          "$ref": "#/$defs/menuKeys"
+        },
+        "prohibits": {
+          "$ref": "#/$defs/prohibits"
+        },
+        "holds": {
+          "$ref": "#/$defs/holds"
+        },
+        "prohibitsAt": {
+          "$ref": "#/$defs/prohibitsAt"
+        }
+      }
+    },
+    "afterAction": {
+      "description": "Runs when playback completes. Not a bare play/playAll (use playAll for fixed sequences); an if or do may play, e.g. a disc's conditional play-all.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/action"
+        },
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "goto",
+                "back",
+                "resume",
+                "set",
+                "if",
+                "do",
+                "run",
+                "saveResume",
+                "clearResume",
+                "timer",
+                "cancelTimer",
+                "requestParental",
+                "exit"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "play",
+            "playAll",
+            "goto",
+            "back",
+            "resume",
+            "set",
+            "activate",
+            "if",
+            "do",
+            "run",
+            "saveResume",
+            "clearResume",
+            "seek",
+            "timer",
+            "cancelTimer",
+            "requestParental",
+            "exit"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "saveResume"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: save the resume point: media from chapter or at; without media, the playback in progress at at (default: the cue's time).",
+            "properties": {
+              "media": {
+                "$ref": "#/$defs/id"
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0
+              },
+              "chapter": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "queue": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/playItem"
+                },
+                "description": "With media: what plays after it when resumed."
+              },
+              "after": {
+                "$ref": "#/$defs/afterAction"
+              },
+              "item": {
+                "$ref": "#/$defs/playItem",
+                "description": "Instead of media: the play item to resume, with its own end, cues and holds."
+              }
+            },
+            "not": {
+              "required": [
+                "at",
+                "chapter"
+              ]
+            },
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "media",
+                    "item"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "description": "Level 2: the name of an entry in the manifest's actions.",
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "play"
+              }
+            }
+          },
+          "then": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/playItem"
+              }
+            ],
+            "properties": {
+              "after": {
+                "$ref": "#/$defs/afterAction"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "playAll"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "items"
+            ],
+            "properties": {
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/playItem"
+                }
+              },
+              "after": {
+                "$ref": "#/$defs/afterAction"
+              },
+              "order": {
+                "description": "Level 2: inOrder (default), shuffle (every item once, random order) or random (count items picked at random).",
+                "enum": [
+                  "inOrder",
+                  "shuffle",
+                  "random"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "goto"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "menu"
+            ],
+            "properties": {
+              "menu": {
+                "$ref": "#/$defs/id"
+              },
+              "button": {
+                "$ref": "#/$defs/buttonRef"
+              },
+              "transition": {
+                "$ref": "#/$defs/path",
+                "description": "Clip played before the menu opens."
+              },
+              "history": {
+                "enum": [
+                  "push",
+                  "replace"
+                ],
+                "description": "Replace = don't add to Back's history (page turns)."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "set"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "var",
+              "value"
+            ],
+            "properties": {
+              "var": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "$ref": "#/$defs/value"
+              },
+              "then": {
+                "$ref": "#/$defs/action"
+              },
+              "op": {
+                "enum": [
+                  "set",
+                  "add",
+                  "sub",
+                  "mul",
+                  "div",
+                  "mod",
+                  "and",
+                  "or",
+                  "xor",
+                  "random"
+                ],
+                "description": "How the variable changes: replaced (default), arithmetic, bitwise, or a random 1..value."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "activate"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "button"
+            ],
+            "properties": {
+              "button": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "resume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "otherwise": {
+                "description": "Runs instead when there's nothing to resume (the viewer hasn't stopped a title partway). Not another resume.",
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/action"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "not": {
+                          "const": "resume"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "if"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "test",
+              "then"
+            ],
+            "properties": {
+              "test": {
+                "$ref": "#/$defs/test"
+              },
+              "then": {
+                "$ref": "#/$defs/action"
+              },
+              "else": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "do"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/action"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "seek"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: continue the playback in progress elsewhere: at seconds, or the start of chapter (spec 6.3). Only during playback.",
+            "properties": {
+              "at": {
+                "type": "number",
+                "minimum": 0
+              },
+              "chapter": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "at"
+                ]
+              },
+              {
+                "required": [
+                  "chapter"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "timer"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: start the navigation timer: action runs after `after` seconds, wherever the viewer is (spec 6.7).",
+            "required": [
+              "after",
+              "action"
+            ],
+            "properties": {
+              "after": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "action": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cancelTimer"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: stop the navigation timer."
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "requestParental"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: ask the player to allow a parental level for now (a disc's SetTmpPML): then runs if it does, else if not (spec 6.8).",
+            "required": [
+              "level",
+              "then"
+            ],
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "then": {
+                "$ref": "#/$defs/action"
+              },
+              "else": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "exit"
+              }
+            }
+          },
+          "then": {
+            "description": "Level 2: stop and leave the title (a disc's Exit)."
+          }
+        }
+      ]
+    },
+    "fallbackGroup": {
+      "type": "object",
+      "required": [
+        "label",
+        "items"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "action"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/action"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "play",
+                          "playAll"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "loopingMedia": {
+      "description": "Plays once from 0, then loops from loopStart (default 0).",
+      "type": "object",
+      "required": [
+        "src"
+      ],
+      "properties": {
+        "src": {
+          "$ref": "#/$defs/path"
+        },
+        "loopStart": {
+          "$ref": "#/$defs/seconds"
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "Level 2: false plays it once and stays on its last frame. Default true."
+        }
+      }
+    },
+    "varRef": {
+      "type": "object",
+      "required": [
+        "var"
+      ],
+      "properties": {
+        "var": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A variable of /vars, or @ player state (@audio, @audioLanguage, ...)."
+        }
+      }
+    },
+    "value": {
+      "description": "An integer, text, or the current value of a variable.",
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/varRef"
+        }
+      ]
+    },
+    "buttonRef": {
+      "description": "A button id, or a variable holding one.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "$ref": "#/$defs/varRef"
+        }
+      ]
+    },
+    "test": {
+      "description": "Level 2: a condition: one comparison of a variable (eq/ne any value; lt/le/gt/ge integers; has = any bit set), or all/any/not.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "var"
+          ],
+          "properties": {
+            "var": {
+              "type": "string",
+              "minLength": 1
+            },
+            "eq": {
+              "$ref": "#/$defs/value"
+            },
+            "ne": {
+              "$ref": "#/$defs/value"
+            },
+            "lt": {
+              "$ref": "#/$defs/value"
+            },
+            "le": {
+              "$ref": "#/$defs/value"
+            },
+            "gt": {
+              "$ref": "#/$defs/value"
+            },
+            "ge": {
+              "$ref": "#/$defs/value"
+            },
+            "has": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "minProperties": 2,
+          "maxProperties": 2
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/test"
+              }
+            }
+          },
+          "maxProperties": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/test"
+              }
+            }
+          },
+          "maxProperties": 1
+        },
+        {
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/test"
+            }
+          },
+          "maxProperties": 1
+        }
+      ]
+    },
+    "cue": {
+      "description": "Level 2 (spec 6.3): a point cue {at, action}, or an overlay of buttons over the video from `from` to `to`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "at",
+            "action"
+          ],
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/seconds"
+            },
+            "action": {
+              "$ref": "#/$defs/action"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "from",
+            "to",
+            "canvas",
+            "buttons"
+          ],
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/seconds"
+            },
+            "to": {
+              "$ref": "#/$defs/seconds"
+            },
+            "canvas": {
+              "$ref": "#/$defs/canvas"
+            },
+            "buttons": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/button"
+              }
+            },
+            "defaultButton": {
+              "$ref": "#/$defs/buttonRef"
+            },
+            "autoNav": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "segment": {
+      "type": "object",
+      "required": [
+        "media"
+      ],
+      "properties": {
+        "media": {
+          "$ref": "#/$defs/id"
+        },
+        "start": {
+          "$ref": "#/$defs/seconds"
+        },
+        "end": {
+          "$ref": "#/$defs/seconds"
+        }
+      }
+    },
+    "menuKeys": {
+      "description": "Level 2: what the remote's menu keys do (spec 6.6): Menu, Title, and calls to the audio, subtitle, angle and chapter menus. A key without an action does the player's default.",
+      "type": "object",
+      "properties": {
+        "menu": {
+          "$ref": "#/$defs/action"
+        },
+        "title": {
+          "$ref": "#/$defs/action"
+        },
+        "audioMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "subtitleMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "angleMenu": {
+          "$ref": "#/$defs/action"
+        },
+        "chapterMenu": {
+          "$ref": "#/$defs/action"
+        }
+      }
+    },
+    "prohibits": {
+      "description": "Level 2: what the source forbids, as information; players decide whether to honour it (spec 6.6). Known values: seek, chapterJump, titleJump, stop, back, previous, next, fastForward, rewind, pause, menuKey, titleKey, audioMenuKey, subtitleMenuKey, angleMenuKey, chapterMenuKey, resume, buttons, endHold, audioChange, subtitleChange, angleChange, karaokeChange, displayModeChange, skipIntro.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "holds": {
+      "description": "Level 2: frames held on screen (spec 6.3): playback stops on the frame at `at` for `for` seconds, or until the viewer goes on (\"input\").",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "for"
+        ],
+        "properties": {
+          "at": {
+            "type": "number",
+            "minimum": 0
+          },
+          "for": {
+            "oneOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "const": "input"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "buttonSet": {
+      "description": "Level 2: the buttons a menu shows from `from` to `to` seconds on its clock (spec 5.3).",
+      "type": "object",
+      "required": [
+        "from",
+        "buttons"
+      ],
+      "properties": {
+        "from": {
+          "type": "number",
+          "minimum": 0
+        },
+        "to": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "buttons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/button"
+          }
+        },
+        "defaultButton": {
+          "$ref": "#/$defs/buttonRef"
+        },
+        "autoNav": {
+          "type": "boolean"
+        }
+      }
+    },
+    "prohibitsAt": {
+      "description": "Level 2: what the source forbids during parts of a title, on its timeline, beside prohibits (spec 6.6). Windows may overlap; what's forbidden at a moment is the plain list plus every window covering it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "from",
+          "ops"
+        ],
+        "properties": {
+          "from": {
+            "type": "number",
+            "minimum": 0
+          },
+          "to": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "ops": {
+            "$ref": "#/$defs/prohibits"
+          }
+        }
+      }
+    }
+  }
+}

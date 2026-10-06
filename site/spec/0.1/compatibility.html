@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compatibility · Open Video Menu 0.1</title>
+  <meta name="description" content="Open Video Menu 0.1: Compatibility.">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../index.html"><img src="../../assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="../../index.html#see">See it</a>
+      <a href="../../index.html#players">Get the players</a>
+      <a href="../../index.html#make">Make menus</a>
+      <a href="../../index.html#implement">Implement it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="spec-page">
+    <div class="wrap">
+      <p class="small muted spec-nav">Open Video Menu 0.1 · <a href="index.html">Specification 0.1</a> · <a href="server-api.html">Server API</a> · <a href="dvd-profile.html">DVD profile</a> · <strong>Compatibility</strong> · <a href="license.html">License</a> · <a href="manifest.schema.json">JSON Schema</a></p>
+      
+      <article class="prose spec">
+<h1 id="compatibility-charter-draft"><a class="anchor" href="#compatibility-charter-draft">Compatibility charter (draft)</a></h1>
+<blockquote>
+<p>Takes effect at <strong>v1.0</strong>. Until then the format is a v0.x draft and may change.</p>
+</blockquote>
+<p>Open Video Menu is meant to outlive any one player, tool or maintainer. These rules are permanent from v1.0 onward:</p>
+<ol>
+<li><strong>Old manifests keep working.</strong> Every valid manifest from any earlier version MUST keep working in every later player.</li>
+<li><strong>Nothing is removed or redefined.</strong> Fields are never removed or renamed, and never change meaning. Minor versions only add optional fields.</li>
+<li><strong>Unknown fields are ignored.</strong> Readers MUST ignore fields and extensions they don&#39;t understand, so newer manifests still work in older players.</li>
+<li><strong>The basic floor never moves.</strong> Every manifest MUST include the <code>fallback</code> list. A player that can show that list and play media works with every manifest ever written.</li>
+<li><strong>The server API is covered too.</strong> Endpoints and fields of a released API version (e.g. <code>/v1/</code>, see <a href="server-api.html">server-api.md</a>) are never removed or redefined; breaking changes get a new version served alongside the old one.</li>
+<li><strong>Extensions first, core later.</strong> New features start as namespaced <code>x-&lt;vendor&gt;-*</code> extensions. They join the core only through a public proposal, with conformance tests.</li>
+</ol>
+<h2 id="what-quotcompatiblequot-means"><a class="anchor" href="#what-quotcompatiblequot-means">What &quot;compatible&quot; means</a></h2>
+<p>An implementation is compatible when it passes the conformance suite for the level it claims (0, 1, 2 or 3). The name, and any &quot;compatible&quot; badge, is reserved for implementations that pass. (A trademark policy will say this formally before v1.0.)</p>
+<p>The code is Apache-2.0, so forks are welcome. A fork that breaks these rules just can&#39;t call itself Open Video Menu compatible.</p>
+
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="../../privacy.html">Privacy</a> · <span class="tbd">Source code</span> · <span class="tbd">Contact</span></span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

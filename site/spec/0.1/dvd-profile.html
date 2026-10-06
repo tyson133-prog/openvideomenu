@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DVD profile · Open Video Menu 0.1</title>
+  <meta name="description" content="Open Video Menu 0.1: DVD profile.">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../index.html"><img src="../../assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="../../index.html#see">See it</a>
+      <a href="../../index.html#players">Get the players</a>
+      <a href="../../index.html#make">Make menus</a>
+      <a href="../../index.html#implement">Implement it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="spec-page">
+    <div class="wrap">
+      <p class="small muted spec-nav">Open Video Menu 0.1 · <a href="index.html">Specification 0.1</a> · <a href="server-api.html">Server API</a> · <strong>DVD profile</strong> · <a href="compatibility.html">Compatibility</a> · <a href="license.html">License</a> · <a href="manifest.schema.json">JSON Schema</a></p>
+      <details class="spec-toc" open><summary>Contents</summary><ul><li><a href="#what-to-export">What to export</a></li><li><a href="#mapping">Mapping</a></li><li><a href="#suggested-x-dvd-shape">Suggested <code>x-dvd</code> shape</a></li><li><a href="#coverage">Coverage</a></li><li><a href="#assets">Assets</a></li><li><a href="#reference-importer">Reference importer</a></li><li><a href="#worked-example">Worked example</a></li></ul></details>
+      <article class="prose spec">
+<h1 id="dvd-import-profile-early-draft"><a class="anchor" href="#dvd-import-profile-early-draft">DVD import profile (early draft)</a></h1>
+<p>This profile describes how a tool that reads a DVD&#39;s menu structure (from an unencrypted disc image or VIDEO_TS folder) should express it as a manifest, so any importer produces files every player understands. Level 1 rows give menus every player shows. Level 2 rows cover what a player shows and plays as written: motion menus and timeouts, button sets, angles, segments, remote keys, and what happens during playback (cues, seeks, still cells). Level 3 rows cover the disc&#39;s programs: registers, conditions, named actions for shared programs, the resume point, live track changes, the navigation timer, counters and parental requests. An importer that translates the disc&#39;s programs, rather than simulating them, can write each PGC&#39;s commands once as named actions.</p>
+<h2 id="what-to-export"><a class="anchor" href="#what-to-export">What to export</a></h2>
+<p>An importer that exports a disc&#39;s menus SHOULD export the whole disc: every title its navigation can
+reach, all audio and subtitle tracks, and the complete logic, so the menus behave as the disc does.
+Partial exports (only some titles, simplified logic) are valid manifests; how faithful to be is the
+importer&#39;s choice.</p>
+<p>An export with the disc&#39;s logic declares <code>&quot;level&quot;: 3</code>, so players without Level 3 show its fallback list
+instead of menus whose buttons would do nothing. An export kept free of logic declares the level it uses
+(<code>openvideomenu validate</code> shows it).</p>
+<h2 id="mapping"><a class="anchor" href="#mapping">Mapping</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Disc concept</th><th>Manifest</th></tr></thead><tbody><tr><td>FirstPlay PGC</td><td><code>firstPlay</code> (e.g. <code>play</code> of a warning/logo clip). If FirstPlay just jumps to a menu, set <code>rootMenu</code> and omit <code>firstPlay</code>.</td></tr>
+<tr><td>VMGM / VTSM menu PGC</td><td>One entry in <code>menus</code>. Use a stable id such as <code>vts1-pgc2</code> or <code>vmgm-pgc1</code>.</td></tr>
+<tr><td>Menu video frame size</td><td><code>canvas.width/height</code> = storage size (720×480 NTSC, 720×576 PAL).</td></tr>
+<tr><td>Menu display aspect</td><td><code>canvas.aspect</code> = <code>&quot;16:9&quot;</code> or <code>&quot;4:3&quot;</code> from the video attributes.</td></tr>
+<tr><td>Still menu background</td><td><code>background.image</code>: the menu&#39;s still frame without the highlight subpicture, as PNG.</td></tr>
+<tr><td>Button rectangle (PCI: X0,Y0,X1,Y1 inclusive)</td><td><code>rect: [X0, Y0, X1 - X0 + 1, Y1 - Y0 + 1]</code></td></tr>
+<tr><td>Button neighbours (up/down/left/right)</td><td><code>nav</code>, using the manifest ids of those button numbers. Drop self-references.</td></tr>
+<tr><td>Auto-action button</td><td><code>autoAction: true</code></td></tr>
+<tr><td>Initial button (highlighted on entry)</td><td><code>defaultButton</code></td></tr>
+<tr><td>Button groups (4:3 / 16:9 / letterbox / pan-scan)</td><td><code>rect</code> from the group that matches <code>canvas.aspect</code> (widescreen when there is a choice); the letterbox and pan-scan groups of a widescreen menu go in the button&#39;s <code>altRects</code>.</td></tr>
+<tr><td>Highlight subpicture + colour/contrast per state</td><td>Render per-button PNGs with alpha: the <code>selected</code> colours → <code>states.selected.image</code>, the <code>action</code> colours → <code>states.activated.image</code>. A hard-edged look is authentic. Don&#39;t smooth it.</td></tr>
+<tr><td>Button command resolving to title/chapter</td><td><code>play { media, chapter }</code>, where <code>media</code> points to the file that holds that title</td></tr>
+<tr><td>Button command resolving to a menu</td><td><code>goto { menu, button? }</code></td></tr>
+<tr><td>Resume (<code>LinkRSM</code>), including a conditional one such as <code>if (gN != 0) LinkRSM</code> else a link elsewhere</td><td><code>resume</code>; the path taken when there&#39;s nothing to resume becomes its <code>otherwise</code> (e.g. <code>goto</code> a widescreen/fullscreen picker), so the button works the first time too.</td></tr>
+<tr><td>The disc&#39;s resume information (RSM)</td><td><code>resumePoint: &quot;untilUsed&quot;</code>, so it lasts until a Resume uses it, as on the disc. A title&#39;s call to a menu (<code>CallSS</code> with a resume cell) is <code>saveResume</code> with that cell&#39;s time (no <code>media</code>: the playback in progress) before the <code>goto</code>. The resume point keeps SPRM 7 (<code>@lastChapter</code>) as it was at the call, and a Resume restores it until playback reaches the next chapter, as the disc&#39;s resume registers do. A jump out of a title that saves nothing (<code>JumpSS</code>, <code>JumpTT</code>) is <code>clearResume</code> before the <code>goto</code>, or nothing if the disc keeps an earlier point. A save in a program shared by several places, which can&#39;t say &quot;here&quot;, gives the title&#39;s play <code>item</code> (with its end, cell-command cues, button overlays and holds) and adds <code>queue</code> and <code>after</code> for what the title&#39;s own commands play next (the rest of a play-all).</td></tr>
+<tr><td>Links that end the playing title (a cell command or a button in a title that jumps to another title, or to a menu program that starts one)</td><td><code>cuePlayback: &quot;replace&quot;</code> at the top of the manifest: playback started from a cue or a button over the film then ends the title instead of returning to it, and may have an <code>after</code>, as on the disc. Like the disc&#39;s links, these leave the resume point alone; only calls save it (<code>saveResume</code>).</td></tr>
+<tr><td>Title that plays other titles first (e.g. intro + episode)</td><td><code>playAll { items }</code></td></tr>
+<tr><td>&quot;Play all&quot; titles (one PGC chaining episodes)</td><td><code>playAll</code>, or <code>play</code> of the combined file if one was written</td></tr>
+<tr><td>Button text (e.g. from OCR)</td><td><code>label</code>, and <code>a11yLabel</code> if the text is unhelpful</td></tr>
+<tr><td>Buttons unreachable by arrows / tiny hidden buttons</td><td>Keep them. Put their media in a <code>fallback</code> group with <code>hidden: true</code>.</td></tr>
+<tr><td>Titles and chapters (PTT)</td><td><code>media</code> entries with <code>chapters</code> (start time in seconds within the output file)</td></tr>
+<tr><td>Remote Return (Go Up)</td><td>Menu <code>back</code>, chosen per menu to behave like the disc: the PGC&#39;s <strong>Go Up</strong> target when it has one (<code>goto</code> that menu); otherwise the menu&#39;s own <strong>on-screen back button</strong>, i.e. a button that returns to the menu this one was entered from (<code>activate</code> it, so its highlight shows and the viewer lands on the right item); otherwise leave <code>back</code> out (history).</td></tr>
+<tr><td>Highlight information that changes during a menu cell (new HLI start/end times in the menu&#39;s navigation packets)</td><td><code>buttonSets</code> on the menu: one set per run of the cell with the same buttons, <code>from</code>/<code>to</code> on the menu video&#39;s clock; the menu&#39;s own <code>buttons</code> are the ones it shows longest.</td></tr>
+<tr><td>Menu cells without buttons (clips and stills between programs, in loops, or a cell that links to itself as a trap)</td><td>A menu with no <code>buttons</code>: the cell&#39;s video as <code>background.video</code> with <code>loop: false</code> (or its still as <code>background.image</code>), and a <code>timeout</code> after the cell&#39;s length plus its still time whose action is what the cell&#39;s command, the next cell or the PGC&#39;s post commands do. Each cell is written once; a cell that links to itself is a menu whose timeout goes to itself, and one with infinite still time has no timeout. The viewer can skip such a menu with any key, as a DVD player&#39;s Next skips a cell, and a title started from it returns, on Back, to the menu before the clips.</td></tr>
+<tr><td>Menu that moves on by itself (still time or end of the menu&#39;s video, then a link)</td><td>If the next part has the same buttons, it&#39;s the same menu looping: <code>background.video</code> with <code>loopStart</code>. Otherwise menu <code>timeout</code> with <code>after</code> = the time until it moves on and the link as its <code>action</code>; <code>restartOnInput: false</code> to match the disc&#39;s timer exactly.</td></tr>
+<tr><td>Next / previous page (<code>LinkNextPG</code>, <code>LinkPrevPG</code>, PGC next/prev)</td><td><code>goto</code> with <code>history: &quot;replace&quot;</code>, so paging adds no Back steps.</td></tr>
+<tr><td>General registers (GPRM 0–15)</td><td>Manifest <code>vars</code> (integers). Registers in counter mode (SetGPRMMD) are also listed in <code>counters</code>.</td></tr>
+<tr><td>Temporary parental level (SetTmpPML level, line)</td><td><code>requestParental</code> with <code>level</code>; <code>then</code> is the program from that line, <code>else</code> what follows the command.</td></tr>
+<tr><td>Parental blocks (PGCs chosen by the player&#39;s parental level)</td><td><code>if</code> on <code>@parentalLevel</code> choosing the play.</td></tr>
+<tr><td>Navigation timer (SetNVTMR; SPRM 9 and 10)</td><td><code>timer</code> with <code>after</code> = the seconds and <code>action</code> = a <code>run</code> of the PGC it names (a <code>play</code> of that title); a time of 0 is <code>cancelTimer</code>. SPRM 9 reads as <code>@navTimer</code>.</td></tr>
+<tr><td>Register commands (Set: mov, add, sub, mul, div, mod, and, or, xor, rnd)</td><td><code>set</code> with the matching <code>op</code> (<code>rnd</code> → <code>random</code>).</td></tr>
+<tr><td>Conditional commands (<code>if (a op b)</code>), Goto/Break programs</td><td><code>if</code>, <code>do</code>; a program&#39;s skipped lines become <code>else</code> branches.</td></tr>
+<tr><td>Player settings read by commands (SPRM)</td><td>Player state: SPRM 1/2/3 → <code>@audio</code>/<code>@subtitle</code>/<code>@angle</code> (SPRM 2 is off when bit 6 is clear), 8 → <code>@focus</code> (button number ÷ 1024 → its id; during a title, the button highlighted over it), 0/16/18 → <code>@menuLanguage</code>/<code>@audioLanguage</code>/<code>@subtitleLanguage</code> (ISO 639 codes as text), 4/5/6 → the title playing, as <code>@lastMedia</code> (or, for arithmetic, <code>@lastNumber</code>, with each title&#39;s media given that number as its <code>number</code>), 7 → <code>@lastChapter</code> (live during playback), 12 → <code>@country</code>, 13 → <code>@parentalLevel</code>, 14 → <code>@aspect</code>, 20 → <code>@region</code>.</td></tr>
+<tr><td>SetSTN (choose audio/subtitle/angle)</td><td><code>set</code> on <code>@audio</code>/<code>@subtitle</code>/<code>@angle</code>. In a cell command or a button over the film, it changes the playing title&#39;s track at once.</td></tr>
+<tr><td>Multi-angle title (angle blocks in its cells)</td><td>Media <code>angles</code>: one file per angle, as the rip wrote them (each whole title, the angle blocks differing). Or <code>angleTracks</code> when the rip keeps the angles as video tracks of one file. Menus that choose an angle with SetSTN set <code>@angle</code>.</td></tr>
+<tr><td>Title that ends at a cell (a cell command <code>LinkTailPGC</code>, e.g. one song of a concert)</td><td>Play item <code>end</code> at that cell&#39;s end time.</td></tr>
+<tr><td>Other cell commands during a title (SetGPRM, CallSS to a menu, conditional links)</td><td>Point cues <code>{ at, action }</code> at the cell&#39;s end time: <code>set</code>, <code>goto</code>, <code>if</code>. Jumps within the title (LinkCN, LinkPGN, LinkPTTN, a cell linking to its own start to loop) are <code>seek</code> to that cell&#39;s time on the title&#39;s timeline.</td></tr>
+<tr><td>Still cells (a cell&#39;s still time, 1–254 seconds or 255 = until the viewer goes on; a PGC&#39;s still time after its last cell)</td><td><code>holds</code> on the media (or the play item, when only one way of playing it holds): <code>{ at, for }</code> at the cell&#39;s last frame on the title&#39;s timeline, <code>for</code> the seconds or <code>&quot;input&quot;</code>.</td></tr>
+<tr><td>Menus made of title cells (a still or short cell whose buttons wait for a choice)</td><td>An overlay with the cell&#39;s buttons over the cell&#39;s time, and a hold <code>&quot;input&quot;</code> at its last frame; a cell that loops instead is a point cue at its end that <code>seek</code>s back to its start.</td></tr>
+<tr><td>Buttons in a title&#39;s navigation packets (highlights shown over the film)</td><td>Overlays <code>{ from, to, buttons }</code> on the media, one per run of VOBUs with the same buttons; a button that calls a featurette (and resumes with RSM) is a <code>play</code> from the overlay, which returns to the film.</td></tr>
+<tr><td>Titles that share video, or play it out of order (a play-all and its episodes, songs of a concert, cuts of a film; seamless branching&#39;s interleaved cells)</td><td>Either one file per title as the rip made them, or, to keep one copy of shared video, a media with <code>segments</code> per title over the ranges of the files that hold each run of cells. Chapters and cues then count on the title&#39;s own timeline.</td></tr>
+<tr><td>Shared programs: PGCs many links lead into (their pre-commands), menu-domain dispatchers, title post-commands, loops (a Goto back to an earlier line)</td><td>Named <code>actions</code>, each written once and reached with <code>run</code>. A loop is a named action that runs itself in tail position. Keeps the export about the size of the disc&#39;s own programs.</td></tr>
+<tr><td>The remote&#39;s Menu and Title keys, and menu calls (MenuCall: root, title, audio, subpicture, angle, PTT)</td><td><code>keys</code>: <code>menu</code>, <code>title</code>, <code>audioMenu</code>, <code>subtitleMenu</code>, <code>angleMenu</code>, <code>chapterMenu</code>. During a title, the title set&#39;s menu of that type (its VTSM entry), on the media; in menus, on the manifest (VMG title menu) and per title set&#39;s menus.</td></tr>
+<tr><td>User operation prohibitions (UOPs, on PGCs and in navigation packets)</td><td><code>prohibits</code> on the menu, media or play item: UOP 0/5 → <code>seek</code>, 1 → <code>chapterJump</code>, 2 → <code>titleJump</code>, 3 → <code>stop</code>, 4 → <code>back</code>, 6 → <code>previous</code>, 7 → <code>next</code>, 8 → <code>fastForward</code>, 9 → <code>rewind</code>, 10 → <code>titleKey</code>, 11 → <code>menuKey</code>, 12 → <code>subtitleMenuKey</code>, 13 → <code>audioMenuKey</code>, 14 → <code>angleMenuKey</code>, 15 → <code>chapterMenuKey</code>, 16 → <code>resume</code>, 17 → <code>buttons</code>, 18 → <code>endHold</code>, 19 → <code>pause</code>, 20 → <code>audioChange</code>, 21 → <code>subtitleChange</code>, 22 → <code>angleChange</code>, 23 → <code>karaokeChange</code>, 24 → <code>displayModeChange</code>. What a PGC forbids throughout goes in <code>prohibits</code>; what its cells&#39; navigation packs forbid (cell by cell, or within a cell) goes in <code>prohibitsAt</code> windows on the media, on its timeline. Information only: players decide.</td></tr>
+<tr><td>Exit</td><td><code>exit</code>.</td></tr>
+<tr><td>PGC playback mode: random or shuffle (with a program count)</td><td><code>playAll</code> with <code>order: &quot;random&quot;</code> and <code>count</code>, or <code>order: &quot;shuffle&quot;</code>.</td></tr>
+<tr><td>Karaoke mixing (SetAMXMD, SPRM 11)</td><td><code>set</code> on <code>@karaoke</code>.</td></tr>
+<tr><td>Menu language (SPRM 0, the player&#39;s setup)</td><td><code>@menuLanguage</code>, which the player reports from its settings; menus per language as below.</td></tr>
+<tr><td>SetHL_BTN (highlight a button)</td><td><code>set</code> on <code>@focus</code>, or <code>goto</code> with <code>button</code>.</td></tr>
+<tr><td>Menus per language (several language units in a menu table)</td><td>One menu per language; <code>firstPlay</code> (or the link into them) chooses with <code>if</code> on <code>@menuLanguage</code>.</td></tr>
+<tr><td>The disc&#39;s own numbers and commands</td><td><code>x-dvd</code> on the menu or button (below): VTS/PGC/cell/button numbers, raw VM commands, so an export can be traced back to the disc.</td></tr></tbody></table></div>
+<h2 id="suggested-x-dvd-shape"><a class="anchor" href="#suggested-x-dvd-shape">Suggested <code>x-dvd</code> shape</a></h2>
+<p><code>x-dvd</code> is informational. Players ignore it. Keeping it lets future versions, or full DVD-VM players, replay the disc more faithfully, and it lets an export be traced back to the disc.</p>
+<pre><code class="language-json">&quot;x-dvd&quot;: { &quot;domain&quot;: &quot;VTSM&quot;, &quot;vtsn&quot;: 1, &quot;pgcn&quot;: 2, &quot;cell&quot;: 1 }
+</code></pre>
+<p>On a button:</p>
+<pre><code class="language-json">&quot;x-dvd&quot;: { &quot;button&quot;: 3, &quot;colorTable&quot;: 0, &quot;commands&quot;: [&quot;SetSTN (audio 1)&quot;, &quot;JumpVTS_PTT 1:1&quot;] }
+</code></pre>
+<h2 id="coverage"><a class="anchor" href="#coverage">Coverage</a></h2>
+<p>Every part of the DVD navigation model has a manifest form, including what wasn&#39;t seen in an audit of
+954 discs (counter registers, karaoke mixing). Where a disc says what the viewer may not do, the manifest
+records it in <code>prohibits</code>, and players decide whether to honour it.</p>
+<h2 id="assets"><a class="anchor" href="#assets">Assets</a></h2>
+<ul>
+<li><strong>Images:</strong> PNG. Backgrounds MAY be JPEG.</li>
+<li><strong>Motion menus</strong> (Level 2): H.264 MP4 or VP9 WebM loops.</li>
+<li><strong>Menu audio</strong> (Level 2): AAC or Opus.</li>
+<li>Keep a menu&#39;s assets small (a few MB at most) so menus open instantly on TVs over Wi-Fi.</li>
+</ul>
+<h2 id="reference-importer"><a class="anchor" href="#reference-importer">Reference importer</a></h2>
+<p><a href="https://github.com/tyson133-prog/openvideomenu/blob/main/sdk/dotnet-dvd"><code>sdk/dotnet-dvd</code></a> (<code>OpenVideoMenu.Dvd</code>, .NET) imports discs as this profile describes.
+It also verifies an export against the disc it came from, by playing both side by side.</p>
+<h2 id="worked-example"><a class="anchor" href="#worked-example">Worked example</a></h2>
+<p><a href="https://github.com/tyson133-prog/openvideomenu/blob/main/examples/dvd-shaped"><code>examples/dvd-shaped</code></a> is a synthetic title built the way this profile describes. Conformance case <a href="https://github.com/tyson133-prog/openvideomenu/blob/main/conformance/cases/07-dvd-shaped.json"><code>07-dvd-shaped.json</code></a> checks the same shape.</p>
+
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="../../privacy.html">Privacy</a> · <span class="tbd">Source code</span> · <span class="tbd">Contact</span></span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

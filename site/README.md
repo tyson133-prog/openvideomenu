@@ -25,10 +25,9 @@ grep -n "tbd" *.html
 | Where | Placeholder |
 |---|---|
 | 1. See it | Demo video |
-| 2. Get the players | Google Play, APK download, Roku channel, Jellyfin plugin repository URL, menu-server setup guide |
+| 2. Get the players | Google Play, APK download, Roku channel, Jellyfin plugin repository URL |
 | 3. Make menus | DVD Tamer link |
-| 4. Implement it | Links to the specification, JSON Schema, conformance suite, server API and DVD profile (they wait on the public repository and branch) |
-| Footer | Source code and contact links |
+| Footer | Contact link |
 | privacy | Effective date, contact email, host name and log retention |
 
 Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">` for buttons).
@@ -37,7 +36,21 @@ Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">`
 
 One page, a how-to: what Open Video Menu is, then four numbered steps (see it, get the players, make
 menus, implement it). Keep it that way: details belong in the specification and the READMEs it links
-to, not on the site. `privacy.html` (both app stores require it) and `404.html` are the only other pages.
+to, not on the site. `privacy.html` (both app stores require it) and `404.html` are the only other pages, besides the
+specification (below).
+
+## The specification
+
+`spec/<version>/` holds the specification as web pages (the spec, server API, DVD profile, compatibility,
+license, and the JSON Schema), built from the Markdown in the repo's `spec/` folder. After changing the
+spec, run `npm run site:spec` and commit the pages. Each version keeps its address: a new version gets a new
+folder and `spec/` points at it.
+
+## The repository's address
+
+Links into the code use `https://github.com/tyson133-prog/openvideomenu` with branch `main`. If the
+public repository or branch differs, change it in `index.html` (step 4 and the footer) and in
+`tools/build-spec.mjs` (`REPO`), then rebuild the spec pages.
 
 ## Images
 

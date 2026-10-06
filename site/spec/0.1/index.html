@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Specification 0.1 · Open Video Menu 0.1</title>
+  <meta name="description" content="Open Video Menu 0.1: Specification 0.1.">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../index.html"><img src="../../assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="../../index.html#see">See it</a>
+      <a href="../../index.html#players">Get the players</a>
+      <a href="../../index.html#make">Make menus</a>
+      <a href="../../index.html#implement">Implement it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="spec-page">
+    <div class="wrap">
+      <p class="small muted spec-nav">Open Video Menu 0.1 · <strong>Specification 0.1</strong> · <a href="server-api.html">Server API</a> · <a href="dvd-profile.html">DVD profile</a> · <a href="compatibility.html">Compatibility</a> · <a href="license.html">License</a> · <a href="manifest.schema.json">JSON Schema</a></p>
+      <details class="spec-toc" open><summary>Contents</summary><ul><li><a href="#1-purpose">1. Purpose</a></li><li><a href="#2-files">2. Files</a></li><li><a href="#3-top-level">3. Top level</a></li><li><a href="#4-media">4. Media</a></li><li><a href="#5-menus">5. Menus</a></li><li><a href="#6-actions">6. Actions</a></li><li><a href="#7-cross-reference-rules">7. Cross-reference rules</a></li><li><a href="#8-fallback-list-level-0">8. Fallback list (Level 0)</a></li><li><a href="#9-unknown-fields-and-extensions">9. Unknown fields and extensions</a></li><li><a href="#10-conformance-levels">10. Conformance levels</a></li></ul></details>
+      <article class="prose spec">
+<h1 id="open-video-menu-manifest-format--v01-draft"><a class="anchor" href="#open-video-menu-manifest-format--v01-draft">Open Video Menu manifest format — v0.1 (draft)</a></h1>
+<blockquote>
+<p><strong>Status: draft.</strong> Fields may change before v1.0.
+After v1.0 the <a href="compatibility.html">compatibility charter</a> applies and nothing here is ever removed or redefined.</p>
+</blockquote>
+<p>The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.</p>
+<h2 id="1-purpose"><a class="anchor" href="#1-purpose">1. Purpose</a></h2>
+<p>An Open Video Menu manifest adds a menu to media that already exists: a film and its extras, a season of episodes, an imported DVD. It holds backgrounds, buttons, highlight art, remote-control navigation and actions. Every action <strong>points to</strong> existing media files or streams. The manifest never contains video.</p>
+<h2 id="2-files"><a class="anchor" href="#2-files">2. Files</a></h2>
+<ul>
+<li>A manifest is a UTF-8 JSON file named <code>&lt;Title&gt;.openvideomenu.json</code>, placed next to the main media file, for example <code>Sintel (2010)/Sintel (2010).openvideomenu.json</code>.</li>
+<li><strong>Relative paths resolve against the manifest&#39;s own URL or location.</strong> They use forward slashes, and they MAY contain spaces and other characters (readers percent-encode as needed).</li>
+<li>Absolute URLs are allowed anywhere a path is.</li>
+<li><strong>Readers MUST accept JSON nested at least 256 levels deep</strong> (actions inside actions). Writers with
+deeper logic SHOULD share it with named actions (§6.4), which keeps manifests shallow.</li>
+<li><strong>Keep menu art away from media scanners.</strong> Put menu assets in their own folder (e.g. <code>menus/</code>). If it holds video or audio, include a <code>.plexignore</code> containing <code>*</code> and an empty <code>.ignore</code> (Jellyfin), or media servers will list the clips as titles or as extra versions of the film. <code>openvideomenu validate</code> warns when these are missing.</li>
+</ul>
+<h3 id="21-bundles"><a class="anchor" href="#21-bundles">2.1 Bundles</a></h3>
+<p>A menu set can ship as one file instead of a manifest plus a folder of art: a <strong>bundle</strong> named
+<code>&lt;Title&gt;.ovmz</code>, placed where the manifest would be (next to the main media file).</p>
+<ul>
+<li><strong>Publishers SHOULD bundle manifests that have local assets</strong> (menu images, clips, audio), so a title&#39;s
+folder holds one menu file. A plain <code>&lt;Title&gt;.openvideomenu.json</code> with loose assets remains valid.
+Manifests without local assets need no bundle.</li>
+<li><strong>A bundle is a ZIP archive</strong> holding <code>manifest.json</code> at its root and the manifest&#39;s assets at the
+paths the manifest names (e.g. <code>menus/main.jpg</code>).</li>
+<li><strong>Every entry MUST be stored uncompressed</strong> (ZIP method 0), and entries MUST NOT be encrypted. Menu
+art is already compressed (JPEG, PNG, video, audio), so compression would save almost nothing, while
+stored entries let a server serve any member, including byte ranges of a video clip, without
+unpacking. ZIP64 MAY be used for bundles over 4 GB.</li>
+<li><strong>Entry names</strong> use forward slashes and MUST NOT be absolute or contain <code>..</code> segments.</li>
+<li><strong>Paths resolve as if the bundle were a folder</strong> named <code>&lt;Title&gt;.ovmz</code> holding <code>manifest.json</code>: asset
+paths resolve inside the bundle. <strong><code>media</code> refs resolve against the folder that contains the bundle</strong>,
+exactly as for a plain manifest, so the same manifest works in either form.</li>
+<li>If a folder holds both <code>&lt;Title&gt;.ovmz</code> and <code>&lt;Title&gt;.openvideomenu.json</code>, readers SHOULD use the bundle.</li>
+<li>Readers MUST support both forms. <code>openvideomenu pack</code> makes a bundle from a manifest and its assets;
+<code>openvideomenu unpack</code> does the reverse.</li>
+</ul>
+<p>The machine-readable schema is <a href="manifest.schema.json"><code>schema/manifest.schema.json</code></a>. The schema checks structure only. Cross-references (§7) are checked by validators such as <code>openvideomenu validate</code>.</p>
+<h2 id="3-top-level"><a class="anchor" href="#3-top-level">3. Top level</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>format</code></td><td>yes</td><td>Always <code>&quot;openvideomenu&quot;</code>.</td></tr>
+<tr><td><code>version</code></td><td>yes</td><td><code>&quot;MAJOR.MINOR&quot;</code>. This document is <code>0.1</code>.</td></tr>
+<tr><td><code>title</code></td><td>yes</td><td><code>{ name, year?, ids? }</code>. <code>ids</code> holds strings such as <code>imdb</code>, <code>tmdb</code> or <code>tvdb</code>.</td></tr>
+<tr><td><code>source</code></td><td>no</td><td><code>{ kind, generator? }</code>. <code>kind</code> is e.g. <code>&quot;dvd&quot;</code>, <code>&quot;authored&quot;</code> or <code>&quot;generated&quot;</code>.</td></tr>
+<tr><td><code>media</code></td><td>yes</td><td>Map of media id → <a href="#4-media">media</a>. At least one entry.</td></tr>
+<tr><td><code>menus</code></td><td>no</td><td>Map of menu id → <a href="#5-menus">menu</a>.</td></tr>
+<tr><td><code>rootMenu</code></td><td>if <code>menus</code></td><td>The menu opened at start and after top-level playback ends.</td></tr>
+<tr><td><code>firstPlay</code></td><td>no</td><td><a href="#6-actions">Action</a> run at start instead of opening <code>rootMenu</code>, e.g. an intro.</td></tr>
+<tr><td><code>level</code></td><td>no</td><td>The lowest <a href="#10-conformance-levels">conformance level</a> at which the menus work as authored, 0–3. Players below it show the fallback list.</td></tr>
+<tr><td><code>vars</code></td><td>no</td><td><em>(Level 3)</em> Named variables with starting values, e.g. <code>{&quot;audio&quot;: 1, &quot;subs&quot;: 0}</code> (§6.1).</td></tr>
+<tr><td><code>actions</code></td><td>no</td><td><em>(Level 3)</em> <a href="#64-named-actions-level-3">Named actions</a>, run from anywhere with <code>run</code>.</td></tr>
+<tr><td><code>resumePoint</code></td><td>no</td><td><em>(Level 3)</em> How long the <a href="#65-the-resume-point-level-3">resume point</a> lasts: <code>&quot;untilEnd&quot;</code> (default) or <code>&quot;untilUsed&quot;</code>.</td></tr>
+<tr><td><code>keys</code></td><td>no</td><td><em>(Level 2)</em> What the remote&#39;s <a href="#66-remote-keys-and-prohibitions-level-2">menu keys</a> do.</td></tr>
+<tr><td><code>cuePlayback</code></td><td>no</td><td><em>(Level 2)</em> What playback started <a href="#63-during-playback-level-2">during playback</a> does to the title playing: <code>&quot;interrupt&quot;</code> (default) or <code>&quot;replace&quot;</code>.</td></tr>
+<tr><td><code>counters</code></td><td>no</td><td><em>(Level 3)</em> Variables that <a href="#67-time-the-navigation-timer-and-counters-level-3">count seconds</a> by themselves.</td></tr>
+<tr><td><code>fallback</code></td><td><strong>yes</strong></td><td><a href="#8-fallback-list-level-0">Fallback list</a> for players without menu support.</td></tr>
+<tr><td><code>x-*</code></td><td>no</td><td>Vendor extensions (§9).</td></tr></tbody></table></div>
+<h2 id="4-media"><a class="anchor" href="#4-media">4. Media</a></h2>
+<pre><code class="language-json">&quot;feature&quot;: {
+  &quot;ref&quot;: &quot;Sintel (2010).mp4&quot;,
+  &quot;kind&quot;: &quot;feature&quot;,
+  &quot;label&quot;: &quot;Sintel&quot;,
+  &quot;duration&quot;: 888,
+  &quot;chapters&quot;: [{ &quot;time&quot;: 0, &quot;label&quot;: &quot;Chapter 1&quot;, &quot;thumbnail&quot;: &quot;menus/chapter-1.jpg&quot; }]
+}
+</code></pre>
+<ul>
+<li><code>ref</code> (required, unless the media is made of <code>segments</code>, §4.2) is either:<ul>
+<li>a relative path or URL, or</li>
+<li><code>{ &quot;scheme&quot;: &quot;...&quot;, &quot;id&quot;: &quot;...&quot; }</code>, an opaque reference the host player resolves. For example, a media server can use its own item ids. A player that doesn&#39;t know a scheme treats that media as unavailable.</li>
+</ul>
+</li>
+<li><code>kind</code> suggests how to group the media: <code>feature</code>, <code>episode</code>, <code>trailer</code>, <code>featurette</code>, <code>behindthescenes</code>, <code>deleted</code>, <code>interview</code>, <code>scene</code>, <code>short</code> or <code>other</code>. Other values are allowed.</li>
+<li><code>chapters</code> are start times in seconds and MUST increase. Chapter numbers in actions start at <strong>1</strong>.</li>
+<li><code>number</code> is an optional integer for logic to read (Level 3, §6.1): a disc&#39;s title number, an episode
+number. Players ignore it otherwise.</li>
+</ul>
+<h3 id="41-angles-level-2"><a class="anchor" href="#41-angles-level-2">4.1 Angles (Level 2)</a></h3>
+<p>The same scene filmed or drawn more than one way: a DVD&#39;s multi-angle title, a sing-along with and
+without lyrics, a storyboard beside the finished shot. A media entry says where its angles are in one
+of two ways, the author&#39;s choice (not both):</p>
+<pre><code class="language-json">&quot;feature&quot;: { &quot;ref&quot;: &quot;Roots (angle 1).mkv&quot;, &quot;angles&quot;: [&quot;Roots (angle 2).mkv&quot;] }
+&quot;storyboard&quot;: { &quot;ref&quot;: &quot;Storyboard.mkv&quot;, &quot;angleTracks&quot;: 3 }
+</code></pre>
+<ul>
+<li><strong><code>angles</code></strong>: the other angles as separate files, each a <code>ref</code> (path, URL or <code>{scheme, id}</code>). The
+media&#39;s own <code>ref</code> is angle 1, <code>angles[0]</code> angle 2, and so on. The files MUST line up in time, so
+changing angle keeps the position. This is how rips of multi-angle titles come out: one whole file per
+angle.</li>
+<li><strong><code>angleTracks</code></strong>: N (at least 2): the file&#39;s first N video tracks are angles 1 to N.</li>
+</ul>
+<p>Which angle plays: the play item&#39;s <code>angle</code> (a number or <code>{&quot;var&quot;: name}</code>, like <code>audio</code>), otherwise
+<code>@angle</code> (§6.1). A number outside the media&#39;s angles plays angle 1, like a DVD player. A player SHOULD
+let the viewer change angle during playback (a DVD remote&#39;s Angle key) and report it as <code>@angle</code>. A
+player that can&#39;t switch video tracks plays angle 1 of <code>angleTracks</code> media. Players without Level 2
+play the <code>ref</code> (angle 1).</p>
+<h3 id="42-segments-level-2"><a class="anchor" href="#42-segments-level-2">4.2 Segments (Level 2)</a></h3>
+<p>A title can be made of pieces of other media and still play as one title: an extended cut that
+splices scenes into the film, a disc&#39;s &quot;play all&quot; over separately ripped episodes, a playlist that
+plays a concert&#39;s songs in another order. Such a media entry has <code>segments</code> instead of <code>ref</code>:</p>
+<pre><code class="language-json">&quot;extended&quot;: {
+  &quot;label&quot;: &quot;Extended cut&quot;,
+  &quot;segments&quot;: [
+    { &quot;media&quot;: &quot;film&quot;, &quot;end&quot;: 3120 },
+    { &quot;media&quot;: &quot;extra-scenes&quot;, &quot;end&quot;: 95 },
+    { &quot;media&quot;: &quot;film&quot;, &quot;start&quot;: 3120 }
+  ],
+  &quot;chapters&quot;: [{ &quot;time&quot;: 0 }, { &quot;time&quot;: 3120 }, { &quot;time&quot;: 3215 }]
+}
+</code></pre>
+<ul>
+<li>Each segment is <code>{ media, start?, end? }</code>: a range, in seconds, of a media entry that has a <code>ref</code>
+(segments don&#39;t nest). <code>start</code> defaults to 0. <code>end</code> is required on every segment but the last, which
+may run to the end of its media.</li>
+<li>The media plays its segments in order as <strong>one title with its own timeline</strong>, starting at 0 with the
+first segment: its <code>chapters</code>, <code>cues</code> (§6.3), <code>duration</code>, the viewer&#39;s seek bar, a play&#39;s <code>start</code>, and
+where it stops (for <code>resume</code>) are all on that timeline. The segments&#39; own media keep their chapters and
+cues for when they play by themselves; inside the composite they don&#39;t apply.</li>
+<li>Players SHOULD join segments without a gap. A player that can&#39;t MAY show a brief pause between them.</li>
+<li>A composite media has no <code>angles</code> or <code>angleTracks</code> of its own. A play&#39;s <code>angle</code> (or <code>@angle</code>) applies to
+each segment whose media has angles (§4.1); a segment whose media lacks that angle plays angle 1.</li>
+<li>Players without Level 2 can&#39;t play segments: they treat the media as unavailable.</li>
+</ul>
+<h2 id="5-menus"><a class="anchor" href="#5-menus">5. Menus</a></h2>
+<pre><code class="language-json">&quot;main&quot;: {
+  &quot;canvas&quot;: { &quot;width&quot;: 720, &quot;height&quot;: 480, &quot;aspect&quot;: &quot;16:9&quot; },
+  &quot;background&quot;: { &quot;image&quot;: &quot;menus/main.png&quot;, &quot;color&quot;: &quot;#000&quot; },
+  &quot;defaultButton&quot;: &quot;play&quot;,
+  &quot;autoNav&quot;: false,
+  &quot;buttons&quot;: [ ... ]
+}
+</code></pre>
+<ul>
+<li><strong><code>canvas</code></strong> sets the coordinate space for every rect in the menu, in storage pixels.<ul>
+<li><code>aspect</code> is the display aspect ratio (<code>&quot;16:9&quot;</code>, <code>&quot;4:3&quot;</code>, <code>&quot;2.39:1&quot;</code> or a number). It defaults to <code>width/height</code>, meaning square pixels.</li>
+<li>Players MUST display the canvas at <code>aspect</code>, scaled to fit the screen and letterboxed or pillarboxed as needed. This is how anamorphic DVD menus (720×480 shown at 16:9) keep correct geometry.</li>
+</ul>
+</li>
+<li><strong><code>background.image</code></strong> is stretched to the whole canvas. <code>background.color</code> fills anything not covered.</li>
+<li><strong><code>buttonsAt</code></strong>: see §5.1.</li>
+<li><strong><code>defaultButton</code></strong> gets focus when the menu opens. It defaults to the first button.</li>
+<li><strong><code>buttons</code></strong> MAY be empty: a menu that only shows its background, a clip or a still, like a disc&#39;s
+menu cell without buttons. Its <code>timeout</code> (§5.2) decides what follows, as a step up, so a sequence of
+clips, or one that loops by going to itself, adds nothing to Back&#39;s history. <strong>Any key or click but Back
+skips it:</strong> its timeout runs at once, as an intro is skipped (§5.1), unless the player honours a <code>skipIntro</code>
+prohibition (§6.6). Without a timeout it waits: there is nothing to press, and Back and the menu keys
+(§6.6) work as on any menu.</li>
+<li><strong><code>back</code></strong>: what the remote&#39;s Back key does on this menu (§6.2).</li>
+<li><strong><code>timeout</code></strong>: what happens when the menu is left alone (§5.2).</li>
+<li><strong><code>buttonSets</code></strong>: buttons that change while the menu plays (§5.3).</li>
+<li><strong><code>autoNav: true</code></strong> means that pressing a direction with no <code>nav</code> entry moves to the nearest button that way. The reference algorithm uses button centres: a candidate must lie in the direction of travel, and the score is the distance along the axis plus twice the sideways offset. With <code>autoNav</code> false or absent, a missing direction does nothing, which matches DVD behaviour.</li>
+</ul>
+<h3 id="buttons"><a class="anchor" href="#buttons">Buttons</a></h3>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>id</code></td><td>yes</td><td>Unique within the menu.</td></tr>
+<tr><td><code>rect</code></td><td>yes</td><td><code>[x, y, width, height]</code> in canvas pixels.</td></tr>
+<tr><td><code>action</code></td><td>yes</td><td>What activating the button does.</td></tr>
+<tr><td><code>label</code></td><td>no</td><td>Human name. Used for accessibility and tools, and drawn only when <code>showLabel</code> is true.</td></tr>
+<tr><td><code>a11yLabel</code></td><td>no</td><td>Screen-reader text when it differs from <code>label</code>.</td></tr>
+<tr><td><code>showLabel</code></td><td>no</td><td>If true, the player draws <code>label</code> itself. Otherwise the text is part of the background art, as on DVDs.</td></tr>
+<tr><td><code>states</code></td><td>no</td><td><code>normal</code>, <code>selected</code> and <code>activated</code>, each <code>{ image?, rect?, textColor?, fill? }</code>.</td></tr>
+<tr><td><code>nav</code></td><td>no</td><td><code>{ up?, down?, left?, right? }</code>: button ids in the same menu.</td></tr>
+<tr><td><code>autoAction</code></td><td>no</td><td>If true, the button activates as soon as it is selected (DVD auto-action).</td></tr>
+<tr><td><code>altRects</code></td><td>no</td><td><em>(Level 2, information)</em> <code>{ letterbox?, panscan? }</code>: where the button sits when the source shows the canvas letterboxed or pan-scanned (a disc&#39;s other button groups for a widescreen menu on a 4:3 TV). Players show the whole canvas at its aspect (§5), so <code>rect</code> is what they use; these keep the source&#39;s layouts.</td></tr></tbody></table></div>
+<p><strong>How states are drawn:</strong></p>
+<ul>
+<li>The state&#39;s <code>image</code> is drawn over <code>rect</code>, or over the state&#39;s own <code>rect</code> if it has one. PNG with alpha is recommended.</li>
+<li>Players show exactly one state per button: <code>activated</code> briefly when the button is activated, <code>selected</code> while it has focus, otherwise <code>normal</code>.</li>
+<li>If a button has no <code>selected</code> image and no drawn label, players SHOULD draw their own focus indicator, so focus is never invisible.</li>
+</ul>
+<h3 id="51-motion-menus"><a class="anchor" href="#51-motion-menus">5.1 Motion menus</a></h3>
+<pre><code class="language-json">&quot;background&quot;: {
+  &quot;image&quot;: &quot;menus/main.jpg&quot;,
+  &quot;video&quot;: { &quot;src&quot;: &quot;menus/main-loop.mp4&quot;, &quot;loopStart&quot;: 2.5 }
+},
+&quot;buttonsAt&quot;: 2.5
+</code></pre>
+<ul>
+<li><strong><code>background.video</code></strong> is a motion background stretched to the canvas like <code>image</code>. It plays once from 0, which is the menu&#39;s <em>intro</em>, then loops from <code>loopStart</code> (default 0) for as long as the menu is shown. It MAY carry its own audio.</li>
+<li><strong><code>background.audio</code></strong> is menu music. It loops the same way and plays alongside the video.</li>
+<li><em>(Level 2)</em> <strong><code>loop: false</code></strong> on <code>background.video</code> or <code>background.audio</code> plays it once and leaves it
+on its last frame (the video) or silent (the audio), as a disc&#39;s clip followed by its still time. A
+<code>timeout</code> after the clip&#39;s length plus the still time then moves on.</li>
+<li><strong>Music that plays with a motion background SHOULD be in the video itself</strong>, not in <code>background.audio</code>. Some players can play only one stream at a time (Roku is one), so they would drop a separate audio track. Use <code>background.audio</code> for menus with a still image, or for music that deliberately loops independently of the video. A player that can&#39;t play both plays the video.</li>
+<li><strong><code>image</code></strong> remains the poster: shown while the video loads, and by players without motion support. Those players still work, because they simply show the still.</li>
+<li><strong><code>buttonsAt</code></strong> is the number of seconds into the intro before buttons appear and respond. It&#39;s measured on the background video&#39;s clock when there is one, otherwise from when the menu opened. Until then, buttons and their highlights are hidden.</li>
+<li><strong>Intros play only on a fresh entry:</strong> at start, or via <code>goto</code>. Returning to a menu with <code>back</code> or at the end of playback starts the background at <code>loopStart</code> with buttons ready, so the intro is not replayed.</li>
+<li><strong>Any key or click during an intro skips it.</strong> Players jump the background to <code>buttonsAt</code> and show the buttons. That input does nothing else. Pointer <em>hover</em> does not skip. Players MUST NOT make intros unskippable, except a player that honours a <code>skipIntro</code> prohibition (§6.6).</li>
+<li><strong>Keep menu assets small</strong> (a few MB per menu) so menus open instantly on TVs over Wi-Fi. H.264 MP4 or VP9 WebM for video; AAC (in MP4/M4A) or Opus for audio. MP4/M4A files SHOULD be written with the index at the start (&quot;faststart&quot;), because some players, such as Android WebView, stall on files that must be read from the end first.</li>
+</ul>
+<h3 id="52-menu-timeouts-level-2"><a class="anchor" href="#52-menu-timeouts-level-2">5.2 Menu timeouts (Level 2)</a></h3>
+<p>A menu can move on by itself when it&#39;s left alone, as DVD menus do when their video or still time runs
+out: an intro gives way to the main menu, or the film starts after a minute.</p>
+<pre><code class="language-json">&quot;timeout&quot;: { &quot;after&quot;: 30, &quot;action&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;feature&quot; } }
+</code></pre>
+<ul>
+<li><strong><code>after</code></strong> is in seconds, counted from when the menu appears (intro included). It starts over every
+time the menu appears, whether fresh or returned to.</li>
+<li><strong><code>restartOnInput</code></strong> (default <code>true</code>): a key press or click restarts the countdown, so nothing starts
+while the viewer is choosing. Importers set it to <code>false</code> to match a disc whose timer runs regardless.</li>
+<li><strong><code>action</code></strong> runs when the time is up, as a <em>step up</em>, like a menu&#39;s <code>back</code> (§6.2): no history is
+added, and a <code>goto</code> to a menu already in history unwinds it. Nobody chose it, so Back never returns to
+an intro that moved on by itself. It MAY <code>activate</code> one of the menu&#39;s own buttons.</li>
+<li><strong>A menu&#39;s own video looping is not a timeout.</strong> An intro that runs into its loop with the same buttons
+is one menu with <code>background.video.loopStart</code> (§5.1).</li>
+<li><strong>Navigation model:</strong> whenever a menu with a timeout appears, and after input when <code>restartOnInput</code>
+applies (unless the viewer is leaving), the navigator emits <code>{ &quot;type&quot;: &quot;startTimer&quot;, &quot;menu&quot;, &quot;after&quot; }</code>.
+The player keeps the clock and reports <code>{ &quot;type&quot;: &quot;timeout&quot;, &quot;menu&quot; }</code> when it runs out. A timeout for a
+menu that isn&#39;t showing any more is ignored. A new <code>startTimer</code> replaces the previous countdown.</li>
+</ul>
+<h3 id="53-button-sets-level-2"><a class="anchor" href="#53-button-sets-level-2">5.3 Button sets (Level 2)</a></h3>
+<p>A motion menu&#39;s buttons can change while it plays: a disc&#39;s highlight information can make buttons
+appear, move and go during a menu cell (a &quot;skip&quot; button over the intro, a row of choices that slides in).</p>
+<pre><code class="language-json">&quot;buttons&quot;: [ ... ],
+&quot;buttonSets&quot;: [
+  { &quot;from&quot;: 0, &quot;to&quot;: 6, &quot;buttons&quot;: [{ &quot;id&quot;: &quot;skip&quot;, &quot;rect&quot;: [560, 400, 120, 40], &quot;action&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;main&quot; } }] },
+  { &quot;from&quot;: 12, &quot;defaultButton&quot;: &quot;s2&quot;, &quot;buttons&quot;: [ ... ] }
+]
+</code></pre>
+<ul>
+<li>Each set shows its <code>buttons</code> from <code>from</code> to <code>to</code> seconds (to the end of the loop without <code>to</code>) on the
+menu&#39;s clock: the background video&#39;s, as for <code>buttonsAt</code> (§5.1), so the windows come round with each
+loop; without a background video, the time since the menu appeared. Windows MUST NOT overlap.</li>
+<li><strong>Outside every window, the menu&#39;s own <code>buttons</code> show.</strong> Players without Level 2 show only those, so
+importers SHOULD give the menu the buttons it shows longest.</li>
+<li>A set&#39;s buttons have everything a menu&#39;s have; their <code>nav</code> stays within the set. <code>defaultButton</code> and
+<code>autoNav</code> may be given per set. Button ids are unique within a set, and the same id in two sets (or in
+a set and the menu) is the same button for focus.</li>
+<li><strong>When the buttons change, the highlight stays:</strong> on the same id when the new buttons have it,
+otherwise on the button in the same place in the list (a disc keeps the selected button <em>number</em>),
+otherwise on the set&#39;s <code>defaultButton</code>.</li>
+<li>A <code>goto</code> MAY name a button that only a set has: it is highlighted when that set shows. A menu&#39;s
+<code>back</code>, <code>timeout</code> and <code>keys</code> MAY <code>activate</code> any of its buttons; only buttons showing can be pressed.</li>
+<li><strong>Navigation model:</strong> players report <code>{ &quot;type&quot;: &quot;buttonSet&quot;, &quot;index&quot;: i }</code> when the menu&#39;s clock enters
+set <code>i</code>&#39;s window, and <code>{ &quot;type&quot;: &quot;buttonSet&quot;, &quot;index&quot;: null }</code> when it leaves them all.</li>
+</ul>
+<h2 id="6-actions"><a class="anchor" href="#6-actions">6. Actions</a></h2>
+<p>Every action is an object with a <code>type</code>:</p>
+<div class="table-wrap"><table><thead><tr><th><code>type</code></th><th>Fields</th><th>Behaviour</th></tr></thead><tbody><tr><td><code>play</code></td><td><code>media</code>, <code>chapter?</code>, <code>start?</code>, <code>end?</code>, <code>after?</code>, <code>cues?</code></td><td>Play one media item. <code>chapter</code> (1-based) wins over <code>start</code> (seconds). <em>(Level 2)</em> <code>end</code> stops there as if the item ended; <code>cues</code> (§6.3).</td></tr>
+<tr><td><code>playAll</code></td><td><code>items[]</code>, <code>after?</code>, <code>order?</code>, <code>count?</code></td><td>Play <code>{ media, chapter?, start? }</code> items in order. <em>(Level 2)</em> <code>order: &quot;shuffle&quot;</code> plays every item once in a random order; <code>&quot;random&quot;</code> plays <code>count</code> items (default: as many as there are), each picked at random (a disc&#39;s random and shuffle programs). Both draw from the seeded generator (§6.1).</td></tr>
+<tr><td><code>goto</code></td><td><code>menu</code>, <code>button?</code>, <code>transition?</code>, <code>history?</code></td><td>Open a menu, focusing <code>button</code> or its <code>defaultButton</code>. <code>transition</code> is a clip (path) played first, full screen. <code>history: &quot;replace&quot;</code> doesn&#39;t add the current menu to Back&#39;s history, for page turns (§6.2).</td></tr>
+<tr><td><code>back</code></td><td>—</td><td>Return to the previous menu in the history. At the top of the history, the player MAY exit.</td></tr>
+<tr><td><code>activate</code></td><td><code>button</code></td><td>Press a button of the current menu: its activated state shows and its action runs. Only allowed in a menu&#39;s <code>back</code> (§6.2).</td></tr>
+<tr><td><code>set</code></td><td><code>var</code>, <code>value</code>, <code>op?</code>, <code>then?</code></td><td><em>(Level 3)</em> Change a variable or player state, then optionally run another action (§6.1).</td></tr>
+<tr><td><code>if</code></td><td><code>test</code>, <code>then</code>, <code>else?</code></td><td><em>(Level 3)</em> Run <code>then</code> or <code>else</code> depending on a condition (§6.1).</td></tr>
+<tr><td><code>do</code></td><td><code>steps</code></td><td><em>(Level 3)</em> Run actions in order until one navigates (§6.1).</td></tr>
+<tr><td><code>run</code></td><td><code>action</code></td><td><em>(Level 3)</em> Run a named action from <code>actions</code>, as if it were written here (§6.4).</td></tr>
+<tr><td><code>saveResume</code></td><td><code>media?</code> or <code>item?</code>, <code>at?</code>, <code>chapter?</code>, <code>queue?</code>, <code>after?</code></td><td><em>(Level 3)</em> Save the resume point (§6.5).</td></tr>
+<tr><td><code>clearResume</code></td><td>—</td><td><em>(Level 3)</em> Forget the resume point (§6.5).</td></tr>
+<tr><td><code>seek</code></td><td><code>at</code> or <code>chapter</code></td><td><em>(Level 2)</em> During playback, continue the title elsewhere on its timeline (§6.3).</td></tr>
+<tr><td><code>timer</code></td><td><code>after</code>, <code>action</code></td><td><em>(Level 3)</em> Start the navigation timer (§6.7).</td></tr>
+<tr><td><code>cancelTimer</code></td><td>—</td><td><em>(Level 3)</em> Stop the navigation timer (§6.7).</td></tr>
+<tr><td><code>requestParental</code></td><td><code>level</code>, <code>then</code>, <code>else?</code></td><td><em>(Level 3)</em> Ask the player to allow a parental level for now (§6.8).</td></tr>
+<tr><td><code>exit</code></td><td>—</td><td><em>(Level 2)</em> Leave the title, from a menu or during playback, as the player&#39;s own Stop would (a disc&#39;s Exit). The player closes the title; one that can&#39;t starts it again.</td></tr>
+<tr><td><code>resume</code></td><td><code>otherwise?</code></td><td>Continue the last playback the viewer stopped early, from where they stopped, then whatever was to follow it (the rest of a <code>playAll</code>, its <code>after</code>). When there&#39;s nothing to resume, run <code>otherwise</code> instead, as if it were the action itself (same history rules); without <code>otherwise</code>, nothing happens. <code>otherwise</code> is any action allowed where the <code>resume</code> is, but not another <code>resume</code>.</td></tr></tbody></table></div>
+<p><strong>Navigation semantics</strong> (normative; the conformance suite checks them):</p>
+<ol>
+<li><strong>Start:</strong> if <code>firstPlay</code> exists, run it. Otherwise open <code>rootMenu</code>. A manifest without menus shows the fallback list.</li>
+<li><strong><code>goto</code> from a button</strong> pushes the current menu and focused button onto the history (unless it says <code>history: &quot;replace&quot;</code>). <code>back</code> pops it.</li>
+<li><strong>When playback completes on its own</strong>, the player returns to the menu and button it was started from, then runs <code>after</code> if present. Playback a menu without buttons started (a clip&#39;s timeout) returns where Back from that menu goes: the last menu in Back&#39;s history, which it takes off the history, since clips add nothing to it. Playback started with no menu, for example from <code>firstPlay</code>, returns to <code>rootMenu</code>.</li>
+<li><strong>When the viewer stops playback early</strong> (the Back key), the player returns to the same place and does not run <code>after</code>. It remembers the playback for <code>resume</code>: the media, the position, and what was to follow. That is the <em>resume point</em> (§6.5). Completing that media&#39;s playback forgets it.</li>
+<li><strong>During playback</strong>, direction keys and Enter belong to the video player. Only Back (and, at Level 2, the menu keys of §6.6) is handled by the menu logic, except while an overlay&#39;s buttons show (§6.3).</li>
+<li><strong><code>after</code></strong> MUST NOT be <code>play</code> or <code>playAll</code>, and neither may the <code>otherwise</code> of a <code>resume</code> used as <code>after</code>. Use <code>playAll</code> for sequences.</li>
+<li><strong>Transitions:</strong> a <code>goto</code> with <code>transition</code> pushes history as usual, plays the clip, then opens the target menu as a fresh entry (with its intro). <strong>Any key or click skips the transition</strong> straight to the menu (unless the player honours a <code>skipIntro</code> prohibition, §6.6). Hover is ignored.</li>
+</ol>
+<h3 id="61-variables-and-logic-level-3"><a class="anchor" href="#61-variables-and-logic-level-3">6.1 Variables and logic (Level 3)</a></h3>
+<p>DVDs keep state in registers and decide with small command programs: which soundtrack was chosen,
+whether the film was started, the viewer&#39;s preferred language, which button to highlight. Open Video
+Menu writes the same logic as <strong>JSON data</strong>: variables, player state, conditions and a few actions,
+which any player can read and any tool can inspect, with no scripting language. With named actions
+(§6.4) that logic can loop, as a disc&#39;s programs do, so it is a small program all the same: the step
+budget there keeps it from running without end. It works on any media, not only discs, and the
+fallback list still works everywhere.</p>
+<p>This section and §6.4–§6.8 are <strong>Level 3</strong>: the program state a player keeps. Everything else marked
+Level 2 a player shows or plays from the manifest as written.</p>
+<pre><code class="language-json">&quot;vars&quot;: { &quot;audio&quot;: 1, &quot;played&quot;: 0, &quot;lang&quot;: &quot;en&quot; },
+...
+{ &quot;type&quot;: &quot;if&quot;,
+  &quot;test&quot;: { &quot;var&quot;: &quot;@audioLanguage&quot;, &quot;eq&quot;: &quot;fr&quot; },
+  &quot;then&quot;: { &quot;type&quot;: &quot;do&quot;, &quot;steps&quot;: [
+    { &quot;type&quot;: &quot;set&quot;, &quot;var&quot;: &quot;@audio&quot;, &quot;value&quot;: 2 },
+    { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;main-fr&quot; } ] },
+  &quot;else&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;main&quot; } }
+</code></pre>
+<p><strong>Variables.</strong> <code>vars</code> declares the manifest&#39;s own variables and their starting values: an integer or
+text. A variable keeps that type. Variables start at their <code>vars</code> values when the player starts and keep
+their values across menus and playback until it starts again. Names MUST NOT start with <code>@</code>.</p>
+<p><strong>Player state</strong> is read as <code>@</code> variables. Players report what they know when they start (and when it
+changes, e.g. the viewer picks another soundtrack during playback); anything unknown reads as its default.
+Players SHOULD let the viewer choose the preferred languages in their settings, as a DVD player&#39;s setup
+does, and report them as <code>@audioLanguage</code>, <code>@subtitleLanguage</code> and <code>@menuLanguage</code>. A change reaches
+the logic as soon as it is reported; menus chosen once, at <code>firstPlay</code>, follow it the next time the
+title starts.</p>
+<div class="table-wrap"><table><thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>@audio</code></td><td>integer</td><td>0 (unknown)</td><td>Current audio track, 1-based. Writable.</td></tr>
+<tr><td><code>@subtitle</code></td><td>integer</td><td>0 (off)</td><td>Current subtitle track, 1-based; 0 = off. Writable.</td></tr>
+<tr><td><code>@angle</code></td><td>integer</td><td>1</td><td>Current angle, 1-based. Writable.</td></tr>
+<tr><td><code>@focus</code></td><td>text</td><td>—</td><td>The highlighted button&#39;s id: of the menu; during playback, of the overlay showing (§6.3), or <code>&quot;&quot;</code> when none shows. Writable: setting it highlights that button of the menu or the overlay.</td></tr>
+<tr><td><code>@audioLanguage</code>, <code>@subtitleLanguage</code>, <code>@menuLanguage</code></td><td>text</td><td><code>&quot;&quot;</code></td><td>The viewer&#39;s preferred languages, ISO 639-1 (<code>&quot;fr&quot;</code>).</td></tr>
+<tr><td><code>@lastMedia</code></td><td>text</td><td><code>&quot;&quot;</code></td><td>Media id of the playback in progress, or of the last one.</td></tr>
+<tr><td><code>@lastNumber</code></td><td>integer</td><td>0</td><td>That media&#39;s <code>number</code> (§4); 0 when it has none.</td></tr>
+<tr><td><code>@lastChapter</code></td><td>integer</td><td>0</td><td>Chapter (1-based) playback is in, or was in when it last stopped; after playback completes, the chapter it ended in (the one its <code>end</code> closes, or the media&#39;s last); after a resume, the chapter the resume point was saved in until playback reaches the next chapter (§6.5). Logic run during playback reads it live: for a cue or an overlay&#39;s button, the chapter playback is in just before the cue&#39;s time (so a cue at a chapter&#39;s start reads the chapter it ends, as a disc&#39;s cell command does); for a key or the timer, the chapter at the position reported.</td></tr>
+<tr><td><code>@region</code></td><td>integer</td><td>0 (unknown)</td><td>Player region, 1–8.</td></tr>
+<tr><td><code>@parentalLevel</code></td><td>integer</td><td>8 (unrestricted)</td><td>Parental level, 1–8. A granted <code>requestParental</code> raises it (§6.8).</td></tr>
+<tr><td><code>@country</code></td><td>text</td><td><code>&quot;&quot;</code></td><td>ISO 3166-1 alpha-2.</td></tr>
+<tr><td><code>@aspect</code></td><td>text</td><td><code>&quot;16:9&quot;</code></td><td>The TV&#39;s shape: <code>&quot;16:9&quot;</code> or <code>&quot;4:3&quot;</code>.</td></tr>
+<tr><td><code>@resumeMedia</code></td><td>text</td><td><code>&quot;&quot;</code></td><td>Media id of the resume point (§6.5); <code>&quot;&quot;</code> when there is none.</td></tr>
+<tr><td><code>@navTimer</code></td><td>integer</td><td>0</td><td>Whole seconds left on the navigation timer (§6.7); 0 when none runs.</td></tr>
+<tr><td><code>@karaoke</code></td><td>integer</td><td>0</td><td>Karaoke channels to mix in, as bits (a disc&#39;s SPRM 11). Writable. Players with karaoke audio MAY apply it; others keep it as a value.</td></tr></tbody></table></div>
+<p><strong>Values</strong> are an integer, text, or <code>{&quot;var&quot;: name}</code> (the current value of a variable or player state).</p>
+<p><strong>Conditions</strong> (<code>test</code>) compare one variable with a value, or combine conditions:</p>
+<ul>
+<li><code>{ &quot;var&quot;: v, &quot;eq&quot; | &quot;ne&quot;: value }</code> for any type; <code>&quot;lt&quot; | &quot;le&quot; | &quot;gt&quot; | &quot;ge&quot;</code> for integers; <code>&quot;has&quot;</code>: true
+when any bit of the value is set in the variable (integers).</li>
+<li><code>{ &quot;all&quot;: [tests] }</code>, <code>{ &quot;any&quot;: [tests] }</code>, <code>{ &quot;not&quot;: test }</code>.</li>
+<li>Exactly one comparison per test. Comparing an integer with text is an error.</li>
+</ul>
+<p><strong>Actions:</strong></p>
+<ul>
+<li><strong><code>set</code></strong> <code>{ var, value, op?, then? }</code> changes a variable, then runs <code>then</code>. <code>op</code> is <code>set</code> (default),
+<code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code> (towards zero), <code>mod</code>, <code>and</code>, <code>or</code>, <code>xor</code>, or <code>random</code> (a whole number from
+1 to <code>value</code>). Division or modulo by zero leaves the variable unchanged. Only <code>set</code> works on text.
+Writable player state: setting <code>@audio</code>/<code>@subtitle</code>/<code>@angle</code> chooses the track for the next playback
+(a DVD&#39;s SetSTN), and during playback (in a cue, an overlay&#39;s button or a key) also changes it now
+(§6.3); setting <code>@focus</code> highlights a button (SetHL_BTN).</li>
+<li><strong><code>if</code></strong> <code>{ test, then, else? }</code> runs <code>then</code> when the test holds, otherwise <code>else</code> (or nothing).</li>
+<li><strong><code>do</code></strong> <code>{ steps }</code> runs actions in order and stops after the first one that navigates: opens a menu,
+starts playback or a transition, or leaves. Like a DVD program, which ends at its link.</li>
+<li><code>if</code>, <code>do</code>, <code>set</code>, <code>run</code>, <code>saveResume</code>, <code>clearResume</code>, <code>timer</code>, <code>cancelTimer</code> and <code>requestParental</code>
+MUST NOT be used in the fallback list. <code>after</code> MAY be an <code>if</code> or <code>do</code> that plays
+(a disc&#39;s conditional play-all), but not a bare <code>play</code>/<code>playAll</code>.</li>
+</ul>
+<p><strong>Focus from a variable.</strong> A menu&#39;s <code>defaultButton</code> and a <code>goto</code>&#39;s <code>button</code> MAY be <code>{&quot;var&quot;: name}</code>
+holding a button id. When it doesn&#39;t name a button of that menu, the usual default applies.</p>
+<p><strong>Choosing tracks</strong> <em>(Level 2; from a variable, Level 3)</em>. <code>play</code> and <code>playAll</code> items MAY have <code>audio</code>
+and <code>subtitle</code>, each a number or <code>{&quot;var&quot;: name}</code>:</p>
+<ul>
+<li><code>audio: N</code> plays the Nth audio track of the media (1-based); <code>subtitle: N</code> shows the Nth subtitle
+track; <code>subtitle: 0</code> turns subtitles off.</li>
+<li>Without them, playback uses the current <code>@audio</code> and <code>@subtitle</code> when known, otherwise the player&#39;s
+default. A number outside the media&#39;s tracks is ignored.</li>
+<li><code>angle: N</code> plays angle N of media that has angles (§4.1); without it, <code>@angle</code> decides.</li>
+</ul>
+<p><strong>Randomness.</strong> <code>random</code> draws from a generator the player seeds at start. The reference navigator uses
+<code>seed = (seed × 1103515245 + 12345) mod 2³¹</code>, result <code>1 + seed mod value</code>, so conformance cases can
+check it; players seed it unpredictably.</p>
+<p><strong>Players without Level 3</strong> ignore these fields: menus open with their plain <code>defaultButton</code>, media play
+with their own or default tracks, and <code>set</code>/<code>if</code>/<code>do</code> do nothing. Menus that need logic to work say so
+with the manifest&#39;s <code>level</code> (§10), and players below it show the fallback list instead.</p>
+<h3 id="62-the-remote39s-back-key"><a class="anchor" href="#62-the-remote39s-back-key">6.2 The remote&#39;s Back key</a></h3>
+<p>On a DVD, the remote&#39;s Return key doesn&#39;t retrace every menu you visited: each menu has a &quot;go up&quot; target. Open Video Menu menus say the same with <code>back</code>:</p>
+<pre><code class="language-json">&quot;neo-bio-2&quot;: {
+  &quot;back&quot;: { &quot;type&quot;: &quot;activate&quot;, &quot;button&quot;: &quot;cast&quot; },
+  &quot;buttons&quot;: [
+    { &quot;id&quot;: &quot;cast&quot;, &quot;rect&quot;: [300, 400, 100, 40], &quot;action&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;cast&quot;, &quot;button&quot;: &quot;neo&quot; } },
+    { &quot;id&quot;: &quot;next&quot;, &quot;rect&quot;: [500, 400, 100, 40], &quot;action&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;neo-bio-3&quot;, &quot;history&quot;: &quot;replace&quot; } }
+  ]
+}
+</code></pre>
+<ul>
+<li><strong>Remote Back on a menu with <code>back</code></strong> runs that action instead of popping history. It MAY be any action; <code>activate</code> presses one of the menu&#39;s own buttons (typically its on-screen Back or &quot;Cast&quot; button), showing its activated state.</li>
+<li><strong>It is a step up, not a new visit.</strong> A <code>goto</code> run by <code>back</code> doesn&#39;t add to history, and if its target is already in the history, the history is unwound to it (that entry and everything after it are dropped). So ten bio pages still take one press to leave.</li>
+<li><strong>Page turns</strong> (next/previous page of the same thing) SHOULD use <code>history: &quot;replace&quot;</code>, so they add no Back steps even in menus without <code>back</code>.</li>
+<li><strong>Without <code>back</code></strong>, Back returns through history as in §6 (at the top, the player MAY exit).</li>
+<li><strong>Back on <code>rootMenu</code> leaves the title</strong> (the player exits), unless that menu has its own <code>back</code>. This holds however the viewer got there: a &quot;return to the main menu&quot; button is a <code>goto</code> and adds history, but the main menu is still the top, and retracing into a submenu from it surprises viewers.</li>
+<li><strong>Back never traps the viewer.</strong> If a menu&#39;s <code>back</code> leaves the viewer on the same menu, players MUST return through history instead (or leave, on <code>rootMenu</code>). (A DVD may leave Return inactive; a TV app must not, unless it honours a <code>back</code> prohibition, §6.6.)</li>
+<li><strong>Importers choose per menu</strong> to match the source as closely as possible: a DVD&#39;s Go Up target, the menu&#39;s own on-screen Back button, or history (see the <a href="dvd-profile.html">DVD profile</a>).</li>
+</ul>
+<h3 id="63-during-playback-level-2"><a class="anchor" href="#63-during-playback-level-2">6.3 During playback (Level 2)</a></h3>
+<p>Menus can reach into playback: stop a title at a point (a DVD&#39;s &quot;play this song, then back to the
+menu&quot;), run an action when playback reaches a moment, or show buttons over the video, like the
+icon some discs show in certain scenes that branches to a featurette and back.</p>
+<pre><code class="language-json">&quot;feature&quot;: { &quot;ref&quot;: &quot;Film.mkv&quot;, &quot;cues&quot;: [
+  { &quot;at&quot;: 1200, &quot;action&quot;: { &quot;type&quot;: &quot;set&quot;, &quot;var&quot;: &quot;halfway&quot;, &quot;value&quot;: 1 } },
+  { &quot;from&quot;: 2470, &quot;to&quot;: 2485, &quot;canvas&quot;: { &quot;width&quot;: 1280, &quot;height&quot;: 720 },
+    &quot;buttons&quot;: [{ &quot;id&quot;: &quot;follow&quot;, &quot;rect&quot;: [1080, 600, 160, 90], &quot;label&quot;: &quot;Follow&quot;,
+                  &quot;states&quot;: { &quot;normal&quot;: { &quot;image&quot;: &quot;menus/rabbit.png&quot; } },
+                  &quot;action&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;rabbit-1&quot; } }] } ] }
+
+{ &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;concert&quot;, &quot;start&quot;: 300, &quot;end&quot;: 540 }
+</code></pre>
+<ul>
+<li><strong><code>end</code></strong> on a play item (seconds): playback stops there and counts as ended (<code>after</code> runs, a
+<code>playAll</code> goes on). It MUST be after <code>start</code>.</li>
+<li><strong><code>cues</code></strong> on a media entry apply whenever it plays; on a play item, only when played that way,
+as well as the media&#39;s. Two kinds:<ul>
+<li><strong>Point cue</strong> <code>{ at, action }</code>: the action runs when playback passes <code>at</code>. Not at the time
+playback starts from (nor on the way there, when a player starts at the keyframe before it),
+and not when the viewer seeks past it.</li>
+<li><strong>Overlay</strong> <code>{ from, to, canvas, buttons, defaultButton?, autoNav? }</code>: buttons over the video from
+<code>from</code> to <code>to</code>, with everything a menu&#39;s buttons have (states, labels, <code>nav</code>). While it shows, the
+arrows move between its buttons and Enter presses one; Back still stops playback. Overlays in one
+list MUST NOT overlap; when a media&#39;s and an item&#39;s overlap, the one that started last shows.</li>
+</ul>
+</li>
+<li><strong>Cue actions</strong> are ordinary actions, run at the cue&#39;s time: <code>at</code> for a point cue, an overlay&#39;s
+<code>to</code> for its buttons.<ul>
+<li>Starting playback (<code>play</code>, <code>playAll</code>, <code>resume</code>) <strong>interrupts</strong> the current one. When the new
+playback ends or the viewer stops it, the interrupted one continues from the cue&#39;s time. <code>after</code>
+is not allowed there.</li>
+<li><strong><code>cuePlayback: &quot;replace&quot;</code></strong> (top level) makes it <strong>replace</strong> the current one instead, as a disc&#39;s
+links do: the title playing ends and nothing returns to it. Like a disc&#39;s link, it leaves the resume
+point as it is: a cue that wants the title it ends to be resumable saves it first (<code>saveResume</code>,
+§6.5). The new playback returns where the old one would have. <code>after</code> is allowed. This holds for
+every way playback starts during playback: cues, overlays&#39; buttons, keys (§6.6) and the timer (§6.7).
+A manifest uses one behaviour throughout; a single replacing jump in an interrupting manifest is a
+<code>goto</code> with <code>saveResume</code>, then <code>resume</code>.</li>
+<li><code>goto</code> leaves playback; it is remembered for <code>resume</code> at the cue&#39;s time, unless the cue saved or
+cleared the resume point itself (§6.5).</li>
+<li><code>back</code> stops playback, like the remote&#39;s Back.</li>
+<li><strong><code>seek</code></strong> <code>{ at }</code> or <code>{ chapter }</code> continues the playback in progress elsewhere on its timeline,
+without interrupting it: a disc&#39;s link to a cell, program or chapter of the title playing (LinkCN,
+LinkPGN, LinkPTTN), or a cell that loops by linking to its own start. Cues behave as when the viewer
+seeks: point cues on the way don&#39;t run, overlays follow the position. Like a link, it ends a <code>do</code>.
+<code>seek</code> only works during playback: validators reject it in menus&#39; buttons, <code>back</code>, <code>timeout</code>,
+<code>firstPlay</code> and <code>after</code>.</li>
+<li><em>(Level 3)</em> <strong>Setting <code>@audio</code>, <code>@subtitle</code> or <code>@angle</code></strong> changes that track of the playback in progress now, as
+well as for the next playback (a disc&#39;s SetSTN in a cell command, or a commentary button over the
+film). The navigator emits <code>{ &quot;type&quot;: &quot;tracks&quot;, audio?, subtitle?, angle?, at }</code>; players SHOULD
+switch in place and MAY restart the title where it is with the new tracks.</li>
+<li><code>set</code>, <code>if</code> and <code>do</code> work as anywhere; <code>activate</code> is not allowed.</li>
+</ul>
+</li>
+<li><strong><code>holds</code></strong> <code>[{ at, for }]</code> on a media entry (whenever it plays) or a play item (beside the media&#39;s)
+keep a frame on screen: playback stops on the frame at <code>at</code> and stays there for <code>for</code> seconds, or
+until the viewer goes on (<code>&quot;for&quot;: &quot;input&quot;</code>). A disc&#39;s still cells: a photo gallery whose pictures wait
+for the remote, an information page shown for ten seconds, a menu made of a title cell (an overlay over
+a held frame). Rips keep a still cell as one frame, so without holds it would flash past.<ul>
+<li>A hold doesn&#39;t move the timeline: positions, chapters and cues stay where they are, and the time held
+is not counted.</li>
+<li>Cues before <code>at</code> have run when the hold starts, and an overlay whose window ends at <code>at</code> stays up
+while the frame is held; cues at <code>at</code> run when the hold ends, as a disc runs a cell&#39;s command after its
+still time.</li>
+<li>The viewer goes on from a hold with Enter (OK), or by pressing one of an overlay&#39;s buttons. Players
+MAY end any hold on any key: the viewer can always move on. A hold that ends the title (a last still)
+holds before playback counts as ended.</li>
+<li>Like point cues, a hold happens when ordinary play reaches it, not when seeking past it; playback that
+comes round again (a loop) holds again.</li>
+<li>The play effect lists the item&#39;s holds (the media&#39;s and the item&#39;s, in time order) for the player to
+carry out. Players without Level 2 play through them.</li>
+</ul>
+</li>
+<li><strong>Players</strong> carry out a <code>seek</code> effect <code>{ &quot;type&quot;: &quot;seek&quot;, position }</code> by moving playback there, and
+watch for the cues listed in the play effect and report <code>cue</code> (a point cue&#39;s <code>at</code>,
+an overlay&#39;s <code>from</code>) and <code>cueEnd</code> (an overlay&#39;s <code>to</code>, or leaving its window by seeking). A player
+that can&#39;t draw over its video SHOULD still run point cues; without Level 2, cues are ignored and
+<code>end</code> plays to the end of the media.</li>
+</ul>
+<h3 id="64-named-actions-level-3"><a class="anchor" href="#64-named-actions-level-3">6.4 Named actions (Level 3)</a></h3>
+<p>A disc&#39;s programs are shared: many buttons lead into the same title-start logic, the same dispatcher,
+the same end-of-episode check. Written out at every use, such logic multiplies along play-alls and
+resume points until a manifest is megabytes long. Named actions write it once:</p>
+<pre><code class="language-json">&quot;actions&quot;: {
+  &quot;episode-end&quot;: { &quot;type&quot;: &quot;if&quot;, &quot;test&quot;: { &quot;var&quot;: &quot;playingAll&quot;, &quot;eq&quot;: 1 },
+    &quot;then&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;episodes&quot;, &quot;button&quot;: &quot;next&quot; },
+    &quot;else&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;main&quot; } }
+}
+...
+{ &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;e1&quot;, &quot;after&quot;: { &quot;type&quot;: &quot;run&quot;, &quot;action&quot;: &quot;episode-end&quot; } }
+</code></pre>
+<ul>
+<li><strong><code>actions</code></strong> maps names to actions. <strong><code>run</code></strong> <code>{ action }</code> runs one <strong>as if it were written in
+place</strong>: the same history rules (a button&#39;s <code>goto</code> adds history, one in a menu&#39;s <code>back</code> steps up), the
+same <code>do</code> stopping, and in a cue, the same cue time.</li>
+<li>A named action MAY run others and itself: that is how a disc&#39;s loops (a program jumping back to an
+earlier line) are written. <strong>One event runs at most 10,000 actions</strong>; when a loop reaches that, the
+rest are dropped and the viewer stays where they were. Players MUST support loops of that length:
+an action in tail position (a <code>set</code>&#39;s <code>then</code>, an <code>if</code>&#39;s branches, a <code>do</code>&#39;s last step, a <code>resume</code>&#39;s
+<code>otherwise</code>, a <code>run</code>) continues the current action rather than nesting inside it.</li>
+<li>Named actions are shared by every menu, so they MUST NOT contain <code>activate</code> (which presses a button of
+one menu). Where a named action may run is checked through it: run from a cue, it must not start
+playback with <code>after</code> (§6.3), and a play&#39;s <code>after</code> must not come to another playback through it.</li>
+<li>Players without Level 3 ignore <code>run</code>, as they do <code>set</code>, <code>if</code> and <code>do</code>.</li>
+</ul>
+<h3 id="65-the-resume-point-level-3"><a class="anchor" href="#65-the-resume-point-level-3">6.5 The resume point (Level 3)</a></h3>
+<p>There is one resume point: the playback <code>resume</code> continues. Stopping playback early saves it, and so
+does a cue that leaves playback for a menu. It holds the whole playback (the item, what was queued after
+it, its <code>after</code>), so resuming carries on a play-all and runs its after-action, as a disc does. The
+resumed item plays with the tracks as they are now (<code>@audio</code>, <code>@subtitle</code>, <code>@angle</code>), since the viewer
+may have changed them while watching.</p>
+<p>A disc keeps its resume point longer, and its programs set it: a call from a title to a menu (CallSS)
+names the cell to come back to, and the point survives other titles until a Resume uses it.</p>
+<pre><code class="language-json">&quot;resumePoint&quot;: &quot;untilUsed&quot;,
+...
+{ &quot;at&quot;: 1320, &quot;action&quot;: { &quot;type&quot;: &quot;do&quot;, &quot;steps&quot;: [
+  { &quot;type&quot;: &quot;saveResume&quot;, &quot;chapter&quot;: 7 },
+  { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;scenes&quot; } ] } }
+</code></pre>
+<ul>
+<li><strong><code>resumePoint</code></strong>: <code>&quot;untilEnd&quot;</code> (default): completing that media&#39;s playback forgets the point.
+<code>&quot;untilUsed&quot;</code>: the point lasts through other playback and menus until a <code>resume</code> uses it, or a stop,
+a cue or <code>saveResume</code> replaces it, or <code>clearResume</code> forgets it.</li>
+<li><strong><code>saveResume</code></strong> <code>{ media?, item?, at?, chapter?, queue?, after? }</code> saves a point: <code>media</code> from <code>chapter</code>
+(its start) or <code>at</code> seconds (default 0). <strong><code>item</code></strong>, instead of <code>media</code>, saves a whole play item: the
+resumed title keeps its own <code>end</code>, cues, holds and keys (its tracks are the current ones, as for any
+resume), and its cues before the point don&#39;t run, as when the viewer seeks. Without <code>media</code>, it saves the playback in progress &quot;here&quot;, at
+<code>chapter</code> or <code>at</code>, or by default the cue&#39;s time; outside playback it does nothing. <code>at</code> and <code>chapter</code>
+are not both given.</li>
+<li>With <code>media</code> or <code>item</code>, <strong><code>queue</code></strong> (play items) and <strong><code>after</code></strong> say what follows it when it&#39;s resumed, as a
+stopped playback remembers them: the rest of a play-all, then its after-action, which must not start
+playback. That lets logic shared by many places (a named action) save a point inside a play-all,
+where it can&#39;t say &quot;here&quot;.</li>
+<li><strong><code>clearResume</code></strong> forgets the point.</li>
+<li>A cue that saves or clears the point and then leaves for a menu keeps what it said: leaving saves
+&quot;here&quot; only when the cue&#39;s action didn&#39;t save or clear the point itself.</li>
+<li><strong>The point remembers <code>@lastChapter</code></strong> as it was when saved (Level 3), as a disc&#39;s call saves its chapter
+register with the resume cell. When it is resumed, <code>@lastChapter</code> reads that chapter until playback
+reaches the next chapter, then is live again. For a viewer&#39;s stop, or a save &quot;here&quot;, that is the
+chapter playing anyway; it differs when a save names another position (a call&#39;s resume cell). Leaving
+playback from a cue keeps the chapter the cue&#39;s logic read.</li>
+<li><strong><code>@resumeMedia</code></strong> reads the point&#39;s media id, <code>&quot;&quot;</code> when there is none, so logic can choose (a disc&#39;s
+&quot;if a title was stopped, show Resume&quot;).</li>
+<li>Hosts MAY restore a point from their own records (the viewer&#39;s last position from the media server) as
+just media and position.</li>
+</ul>
+<h3 id="66-remote-keys-and-prohibitions-level-2"><a class="anchor" href="#66-remote-keys-and-prohibitions-level-2">6.6 Remote keys and prohibitions (Level 2)</a></h3>
+<p>A DVD remote has more than Back: <strong>Menu</strong> opens the disc&#39;s root menu, even in the middle of the film,
+and <strong>Title</strong> its title menu. A disc can also call its audio, subtitle, angle and chapter menus. And a
+disc says what it forbids: skipping the warning, fast-forwarding the logos, the Menu key during the
+film.</p>
+<pre><code class="language-json">&quot;keys&quot;: { &quot;title&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;titles&quot; } },
+&quot;media&quot;: {
+  &quot;film&quot;: { &quot;ref&quot;: &quot;Film.mkv&quot;,
+    &quot;keys&quot;: { &quot;menu&quot;: { &quot;type&quot;: &quot;goto&quot;, &quot;menu&quot;: &quot;film-root&quot; } },
+    &quot;prohibits&quot;: [&quot;fastForward&quot;, &quot;menuKey&quot;] }
+}
+</code></pre>
+<ul>
+<li><strong><code>keys</code></strong> <code>{ menu?, title?, audioMenu?, subtitleMenu?, angleMenu?, chapterMenu? }</code> maps the menu keys
+to actions. It may be on the manifest, a menu, a media entry and a play item.</li>
+<li><strong>During playback</strong>, a menu key runs like a cue&#39;s action (§6.3) at the position it was pressed, which
+players report with the key (<code>{ &quot;type&quot;: &quot;press&quot;, &quot;key&quot;: &quot;menu&quot;, &quot;position&quot;: 1234 }</code>): a menu it opens
+leaves playback, remembered for <code>resume</code>; playback it starts interrupts and returns. The play item&#39;s
+keys win over its media&#39;s, and the media&#39;s over the manifest&#39;s.</li>
+<li><strong>On a menu</strong>, the menu&#39;s keys win over the manifest&#39;s. They run as a step up, like <code>back</code> (§6.2), and
+MAY <code>activate</code> one of the menu&#39;s own buttons.</li>
+<li><strong>Without an action</strong>, Menu and Title open <code>rootMenu</code> (from playback, remembered for <code>resume</code>); the
+other keys do nothing.</li>
+<li>Players SHOULD give the Menu key to the remote&#39;s Menu key, or another key a TV remote has (Roku&#39;s <code>*</code>).
+Title and the menu calls are optional: players MAY offer them however suits their remotes.</li>
+<li><strong><code>prohibits</code></strong> lists what the source forbids, on a menu, a media entry or a play item: <code>seek</code>,
+<code>chapterJump</code>, <code>titleJump</code>, <code>stop</code>, <code>back</code>, <code>previous</code>, <code>next</code>, <code>fastForward</code>, <code>rewind</code>, <code>pause</code>,
+<code>menuKey</code>, <code>titleKey</code>, <code>audioMenuKey</code>, <code>subtitleMenuKey</code>, <code>angleMenuKey</code>, <code>chapterMenuKey</code>, <code>resume</code>,
+<code>buttons</code>, <code>endHold</code>, <code>audioChange</code>, <code>subtitleChange</code>, <code>angleChange</code>, <code>karaokeChange</code>,
+<code>displayModeChange</code> (a DVD&#39;s user operations), and <code>skipIntro</code> (skipping a menu&#39;s intro, a menu
+without buttons, or a transition). Other values are allowed.</li>
+<li><strong><code>prohibitsAt</code></strong> <code>[{ from, to?, ops }]</code> on a media entry or a play item records what is forbidden
+during parts of it, on its timeline (to its end without <code>to</code>): a disc forbids things cell by cell and
+even within a cell. Windows may overlap. What&#39;s forbidden at a moment is the plain <code>prohibits</code> plus the
+<code>ops</code> of every window covering it.</li>
+<li><strong>Prohibitions are information, never a requirement.</strong> The viewer can skip anything, any time, unless
+the player chooses otherwise: a player MAY honour any of them and MUST NOT be required to. Recording a
+prohibition never obliges a player to enforce it. The play effect lists the prohibitions of what plays
+(the media&#39;s and the item&#39;s, and their <code>prohibitsAt</code> windows by start) for players that do honour them.</li>
+<li><strong>Enforcement belongs to players, never to the spec.</strong> Where this document gives the viewer a way out
+(skipping intros and transitions, §5.1 and §6; Back never trapping, §6.2; ending holds, §6.3), a
+player that chooses to honour the matching prohibition MAY withhold it and still conforms. The
+conformance cases describe the default, a player that honours none.</li>
+</ul>
+<h3 id="67-time-the-navigation-timer-and-counters-level-3"><a class="anchor" href="#67-time-the-navigation-timer-and-counters-level-3">6.7 Time: the navigation timer and counters (Level 3)</a></h3>
+<p>A disc can set a timer that jumps somewhere when it runs out, whatever is showing (SetNVTMR: &quot;the film
+starts in ten seconds&quot; over a title made of stills), and keep registers that count seconds by
+themselves.</p>
+<pre><code class="language-json">&quot;vars&quot;: { &quot;elapsed&quot;: 0 },
+&quot;counters&quot;: [&quot;elapsed&quot;],
+...
+{ &quot;type&quot;: &quot;timer&quot;, &quot;after&quot;: 10, &quot;action&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;feature&quot; } }
+</code></pre>
+<ul>
+<li><strong><code>timer</code></strong> <code>{ after, action }</code> starts the navigation timer: <code>action</code> runs after <code>after</code> seconds,
+wherever the viewer is then. There is one timer; a new one replaces it. <strong><code>cancelTimer</code></strong> stops it.</li>
+<li>When it runs out, nobody chose it: on a menu (or during a transition) its action runs as a step up,
+like a menu&#39;s <code>timeout</code> (§5.2); during playback, like a cue&#39;s action (§6.3) at the position playback
+had reached. So its action follows a cue&#39;s rules.</li>
+<li><strong><code>@navTimer</code></strong> reads the whole seconds left on the timer (0 when none runs).</li>
+<li><strong><code>counters</code></strong> names integer variables of <code>vars</code> that count by themselves: each reads as its value plus
+the whole seconds since it was last set, or since the player started. Setting one starts its count
+again from the new value.</li>
+<li><strong>Navigation model:</strong> events MAY carry <code>time</code>, the player&#39;s clock in seconds (any origin, never going
+back); counters and <code>@navTimer</code> read it. Players SHOULD send it with every event when the manifest has
+counters or timers. A <code>timer</code> emits <code>{ &quot;type&quot;: &quot;startNavTimer&quot;, &quot;after&quot; }</code> (a <code>cancelTimer</code>,
+<code>{ &quot;type&quot;: &quot;cancelNavTimer&quot; }</code>); the player keeps the clock and reports <code>{ &quot;type&quot;: &quot;navTimer&quot;, position? }</code>
+when it runs out, with the playback position during playback. A report after the timer was replaced or
+stopped is ignored.</li>
+</ul>
+<h3 id="68-parental-level-requests-level-3"><a class="anchor" href="#68-parental-level-requests-level-3">6.8 Parental level requests (Level 3)</a></h3>
+<p>A disc can ask the player to allow a higher parental level for a while (SetTmpPML), for example before
+an uncut version, and take another path when the player won&#39;t.</p>
+<pre><code class="language-json">{ &quot;type&quot;: &quot;requestParental&quot;, &quot;level&quot;: 7,
+  &quot;then&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;uncut&quot; },
+  &quot;else&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;theatrical&quot; } }
+</code></pre>
+<ul>
+<li><strong><code>requestParental</code></strong> <code>{ level, then, else? }</code> asks for parental level <code>level</code> (1–8). If the player
+allows it, <code>@parentalLevel</code> becomes <code>level</code> and <code>then</code> runs; otherwise <code>else</code> runs (or nothing).</li>
+<li>Players decide how to answer: at once from their own settings, or after asking the viewer (for a PIN).
+A player without parental controls SHOULD allow every request.</li>
+<li>Like a link, the request ends a <code>do</code>: what a disc does when the request is refused goes in <code>else</code>.</li>
+<li><strong>Navigation model:</strong> the navigator emits <code>{ &quot;type&quot;: &quot;askParental&quot;, &quot;level&quot; }</code> and runs the branch when
+the player reports <code>{ &quot;type&quot;: &quot;parental&quot;, &quot;granted&quot; }</code>, with the same history and cue rules the request
+had. An answer with nothing asked is ignored; a new request replaces one still waiting.</li>
+<li>Choosing what plays by parental level (a disc&#39;s parental block) needs no request: <code>if</code> on
+<code>@parentalLevel</code>.</li>
+</ul>
+<h2 id="7-cross-reference-rules"><a class="anchor" href="#7-cross-reference-rules">7. Cross-reference rules</a></h2>
+<p>Validators MUST reject a manifest when:</p>
+<ul>
+<li>a <code>media</code>, <code>menu</code>, <code>rootMenu</code>, <code>defaultButton</code>, <code>goto.button</code>, <code>activate.button</code>, <code>nav</code> or <code>run.action</code> target doesn&#39;t exist, or</li>
+<li>a named action contains <code>activate</code>, or only runs named actions in a circle (it would never do anything), or</li>
+<li><code>activate</code> is used anywhere but a menu&#39;s <code>back</code>, <code>timeout</code> or <code>keys</code>, or</li>
+<li>a <code>resume</code>&#39;s <code>otherwise</code> is another <code>resume</code>, or</li>
+<li>button ids are duplicated within a menu, or</li>
+<li>a chapter number is out of range, or</li>
+<li><code>fallback</code> is empty or all of it is hidden.</li>
+</ul>
+<p>Rects that extend outside the canvas are warnings, not errors.</p>
+<h2 id="8-fallback-list-level-0"><a class="anchor" href="#8-fallback-list-level-0">8. Fallback list (Level 0)</a></h2>
+<pre><code class="language-json">&quot;fallback&quot;: [
+  { &quot;label&quot;: &quot;Movie&quot;, &quot;items&quot;: [{ &quot;label&quot;: &quot;Play Movie&quot;, &quot;action&quot;: { &quot;type&quot;: &quot;play&quot;, &quot;media&quot;: &quot;feature&quot; } }] },
+  { &quot;label&quot;: &quot;Hidden features&quot;, &quot;hidden&quot;: true, &quot;items&quot;: [ ... ] }
+]
+</code></pre>
+<p>Every manifest MUST include a fallback list: groups of items whose actions are <code>play</code> or <code>playAll</code>. A player that can only show a list and play media supports every manifest ever written. Groups marked <code>hidden</code> (easter eggs) are not shown unless the viewer asks for them.</p>
+<h2 id="9-unknown-fields-and-extensions"><a class="anchor" href="#9-unknown-fields-and-extensions">9. Unknown fields and extensions</a></h2>
+<ul>
+<li>Readers MUST ignore properties they don&#39;t understand.</li>
+<li>Vendor or tool data goes in properties starting with <code>x-</code>, e.g. <code>x-dvd</code> for DVD provenance (see <a href="dvd-profile.html">profiles/dvd.md</a>). Validators SHOULD warn about unknown properties that don&#39;t start with <code>x-</code>, because they&#39;re usually typos.</li>
+<li>A manifest with a <strong>newer minor version</strong> MUST still be read: its unknown fields are ignored.</li>
+<li>A manifest with a <strong>different major version</strong> MUST be rejected rather than guessed at.</li>
+</ul>
+<h2 id="10-conformance-levels"><a class="anchor" href="#10-conformance-levels">10. Conformance levels</a></h2>
+<div class="table-wrap"><table><thead><tr><th>Level</th><th>A player must support</th></tr></thead><tbody><tr><td><strong>0: Basic</strong></td><td>The fallback list and playback.</td></tr>
+<tr><td><strong>1: Menus</strong></td><td>Canvases and aspect, still backgrounds, buttons, state overlays, nav/autoNav, autoAction, chapters, the actions <code>play</code>, <code>playAll</code>, <code>goto</code>, <code>back</code>, <code>resume</code> and <code>activate</code>, a menu&#39;s <code>back</code>, and the navigation semantics.</td></tr>
+<tr><td><strong>2: Enhanced</strong></td><td>What a player shows and plays from the manifest as written: motion backgrounds, menu audio, <code>buttonsAt</code>, transitions and skipping (§5.1), menu timeouts (§5.2), button sets (§5.3), angles (§4.1), segments (§4.2), track numbers on play items (§6.1), cues and buttons during playback, <code>end</code>, <code>seek</code>, holds and <code>cuePlayback</code> (§6.3), menu keys (§6.6), <code>playAll</code> order and <code>exit</code> (§6). Prohibitions and <code>altRects</code> are information players MAY use.</td></tr>
+<tr><td><strong>3: Disc logic</strong></td><td>Program state: variables, player state, conditions and logic, and focus and tracks from variables (§6.1); live track changes (§6.3); named actions (§6.4); the resume point (§6.5); the navigation timer and counters (§6.7); parental level requests (§6.8). Menus per language are separate menus chosen with <code>@menuLanguage</code>.</td></tr></tbody></table></div>
+<p>Each level includes the ones below it. Players without a level ignore its fields and actions; a manifest
+says the level its menus need with <code>level</code>:</p>
+<ul>
+<li><strong><code>level</code></strong> is the lowest level at which the menus work as authored. Writers SHOULD give it when
+the menus need Level 2 or 3. Menus whose Level 2 features only enrich them (a motion background with
+a still poster) MAY declare a lower level; a translated disc, where nearly every button runs logic,
+declares 3.</li>
+<li><strong>A player below a manifest&#39;s <code>level</code></strong> SHOULD show the fallback list rather than menus that would
+only partly work. It MAY offer the menus anyway. Without <code>level</code>, players try the menus.</li>
+<li>Validators warn when <code>level</code> is lower than the level the manifest uses, or absent when it uses
+Level 3. <code>openvideomenu validate</code> shows the level each manifest uses.</li>
+</ul>
+<p>Players claim a level by passing that level&#39;s cases in <a href="https://github.com/tyson133-prog/openvideomenu/blob/main/conformance"><code>conformance/</code></a>. Each case lists input events and the expected state and effects, so any implementation in any language can run them.</p>
+
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="../../privacy.html">Privacy</a> · <span class="tbd">Source code</span> · <span class="tbd">Contact</span></span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
