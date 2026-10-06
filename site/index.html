@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Open Video Menu — menus for the films and shows you already have</title>
-  <meta name="description" content="An open, royalty-free format that brings full menus back to your films and shows: a small file next to the video, played by the apps you already use.">
+  <title>Open Video Menu</title>
+  <meta name="description" content="Menus for the films and shows in your own library: one small file next to the video. How to see it, get the players, make menus, and implement it.">
   <link rel="canonical" href="https://openvideomenu.org/">
   <meta property="og:title" content="Open Video Menu">
-  <meta property="og:description" content="Menus for the films and shows you already have. An open, royalty-free format.">
+  <meta property="og:description" content="Menus for the films and shows in your own library. An open, royalty-free format.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://openvideomenu.org/">
   <meta property="og:image" content="https://openvideomenu.org/assets/img/sintel-main-menu.jpg">
@@ -22,23 +22,11 @@
   <div class="wrap">
     <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
     <nav class="nav" aria-label="Main">
-      <a href="format.html">The format</a>
-      <a href="players.html">Players</a>
-      <a href="developers.html">Developers</a>
-      <a href="faq.html">FAQ</a>
-      <a href="about.html">About</a>
-      <a class="btn btn-primary btn-small" href="players.html">Get the players</a>
+      <a href="#see">See it</a>
+      <a href="#players">Get the players</a>
+      <a href="#make">Make menus</a>
+      <a href="#implement">Implement it</a>
     </nav>
-    <details class="menu-toggle">
-      <summary>Menu</summary>
-      <nav class="mobile-nav" aria-label="Main">
-        <a href="format.html">The format</a>
-        <a href="players.html">Players</a>
-        <a href="developers.html">Developers</a>
-        <a href="faq.html">FAQ</a>
-        <a href="about.html">About</a>
-      </nav>
-    </details>
   </div>
 </header>
 
@@ -47,195 +35,91 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <p class="eyebrow">Open format · Royalty-free · Version 0.1</p>
-        <h1>Bring back the <em>menu</em>.</h1>
-        <p class="lead">Open Video Menu puts full menus on the films and shows you already have: animated backgrounds, scene selection, special features, audio and subtitle choices. It's one small file next to the video, played by the apps you already use.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="players.html">Get the players</a>
-          <a class="btn btn-ghost" href="format.html">How the format works</a>
-        </div>
-      </div>
-      <figure class="tv">
-        <div class="tv-screen"><img src="assets/img/sintel-main-menu.jpg" alt="The Sintel main menu on a TV: a desert landscape with the title and the buttons Play Movie, Scene Selection and Special Features" width="1600" height="900"></div>
-        <div class="tv-stand" aria-hidden="true"></div>
-        <figcaption class="tv-caption">Sintel's menu running in ovmplayer on Google TV, from a Plex library.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap split">
-      <div>
-        <p class="eyebrow">Why</p>
-        <h2>The extras never left. The menu did.</h2>
-        <p>When films went digital, the bonus features mostly vanished. People still loved them, but the <strong>menu</strong> was what tied them to the film, and the menu didn't make the move.</p>
-        <p>Without it, trailers and featurettes sit as loose files beside the movie, or get left behind. Scene selection, commentary tracks and hidden extras went the same way.</p>
-        <p>Open Video Menu describes the menu itself: what's on screen, where each button leads, what plays. The menu works in any app that supports the format, with nothing else to buy or install.</p>
-      </div>
-      <figure class="tv">
-        <div class="tv-screen"><img src="assets/img/sintel-scene-selection.jpg" alt="Sintel's scene selection menu: six chapter thumbnails with the first one highlighted" width="1600" height="900" loading="lazy"></div>
-        <div class="tv-stand" aria-hidden="true"></div>
-        <figcaption class="tv-caption">Scene selection, with highlights and remote-control navigation.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">How it works</p>
-        <h2>A file next to your film. Nothing to reorganize.</h2>
-        <p class="lead">Menus live beside the media, in the folders Plex and Jellyfin already use. The menu points at files you have; it never contains the film.</p>
-      </div>
-      <ol class="steps">
-        <li class="card">
-          <h3>Add the menu</h3>
-          <p>Put <code>Title.openvideomenu.json</code> and its art next to the film, or a single tidy <code>Title.ovmz</code> bundle. Tools make these for you.</p>
-        </li>
-        <li class="card">
-          <h3>Your server shares it</h3>
-          <p>The Jellyfin plugin serves menus straight from your library. For Plex, a small menu server runs alongside it. Both only read your files.</p>
-        </li>
-        <li class="card">
-          <h3>Press play on the couch</h3>
-          <p>Open the title on your TV and its menu appears. Titles without a menu just play, as they always have.</p>
-        </li>
-      </ol>
-      <div class="split" style="margin-top:48px">
+        <h1>Open Video Menu</h1>
+        <p class="lead">Menus for the films and shows in your own library: backgrounds, scene selection, special features, audio and subtitle choices. A menu is one small file next to the video. Any app can play it; it's an open, royalty-free format.</p>
         <pre class="code" aria-label="Example folder"><span class="c"># A film folder, as Plex and Jellyfin expect it</span>
 Sintel (2010)/
   Sintel (2010).mp4
   Sintel (2010).ovmz          <span class="c">← the menu and its art</span>
-  Trailers/Sintel Trailer.mp4
-  Other/Music and Effects Track.mp4</pre>
-        <div>
-          <h3>Open, readable, small</h3>
-          <p class="muted">A manifest is plain JSON, often a few kilobytes. It lists what can be played, the menus and their buttons, and a plain list that even the simplest player can show. Bundles pack the menu art into one file, stored uncompressed so servers can stream it directly.</p>
-          <a href="format.html">See what's inside a manifest →</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">What menus can do</p>
-        <h2>Everything a great menu can do.</h2>
-      </div>
-      <div class="grid grid-3">
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></div>
-          <h3>Motion menus</h3>
-          <p>Animated backgrounds with music that loop from any point the menu chooses, and intros and transitions that any button press skips.</p>
-        </div>
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="4" width="7" height="6" rx="1"/><rect x="3" y="14" width="7" height="6" rx="1"/><rect x="14" y="14" width="7" height="6" rx="1"/></svg></div>
-          <h3>Scene selection</h3>
-          <p>Chapter pages with thumbnails and highlights, and D-pad navigation that goes exactly where the menu's author intended.</p>
-        </div>
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h10M4 17h13"/></svg></div>
-          <h3>Special features</h3>
-          <p>Trailers, featurettes, deleted scenes and play-all, all linked to the files you already keep beside the film.</p>
-        </div>
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg></div>
-          <h3>Audio and subtitles</h3>
-          <p>Language and commentary menus that choose the soundtrack and subtitles, and remember your choice.</p>
-        </div>
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></div>
-          <h3>Pick up where you left off</h3>
-          <p>Stop partway and pick up later: the film, an extra, or an episode. Progress syncs back to your media server.</p>
-        </div>
-        <div class="card">
-          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12l4 4 10-10"/></svg></div>
-          <h3>Always a fallback</h3>
-          <p>Every manifest carries a plain list, so any player can offer the extras, even one that can't draw menus at all.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap split reverse">
-      <div>
-        <p class="eyebrow">Works today</p>
-        <h2>On your server, on your TV.</h2>
-        <p>Proof-of-concept players already run Open Video Menu on real TVs, from real libraries. They exist to show the format working today. We'd much rather your favourite app supported it natively.</p>
-        <div class="pill-row" style="margin:24px 0">
-          <span class="pill">Plex</span>
-          <span class="pill">Jellyfin</span>
-          <span class="pill">Google TV</span>
-          <span class="pill">Android TV</span>
-          <span class="pill">Roku</span>
-          <span class="pill">Web browsers <small>preview</small></span>
-        </div>
-        <a class="btn btn-ghost" href="players.html">Get the players</a>
+  Trailers/Sintel Trailer.mp4</pre>
       </div>
       <figure class="tv">
-        <div class="tv-screen"><img src="assets/img/resume-prompt.jpg" alt="A resume prompt for Sintel offering to resume the film or the trailer where the viewer stopped, or open the menu" width="1600" height="900" loading="lazy"></div>
+        <div class="tv-screen"><img src="assets/img/sintel-main-menu.jpg" alt="The Sintel main menu on a TV: a desert landscape with the title and the buttons Play Movie, Scene Selection and Special Features" width="1600" height="900"></div>
         <div class="tv-stand" aria-hidden="true"></div>
-        <figcaption class="tv-caption">Opening a title you've started: resume the film or an extra, or go to the menu.</figcaption>
+        <figcaption class="tv-caption">Sintel's menu in ovmplayer, from a Plex library.</figcaption>
       </figure>
     </div>
   </section>
 
-  <section>
+  <section id="see">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Make menus</p>
-        <h2>Import them, or make your own.</h2>
-      </div>
-      <div class="grid grid-3">
-        <div class="card">
-          <h3>DVD Tamer</h3>
-          <p class="muted">Turns a DVD's own menus into Open Video Menu, with buttons, highlights and navigation as the DVD had them.</p>
-          <span class="tbd">Link and release date</span>
-        </div>
-        <div class="card">
-          <h3>Command-line tools</h3>
-          <p class="muted"><code>openvideomenu</code> validates manifests, previews menus in a browser, and packs or unpacks bundles.</p>
-          <a href="developers.html#tools">Tools for authors →</a>
-        </div>
-        <div class="card">
-          <h3>Libraries</h3>
-          <p class="muted">Read, write and check manifests from TypeScript or .NET, with the same results as the reference implementation.</p>
-          <a href="developers.html#libraries">For developers →</a>
-        </div>
-      </div>
+      <h2>1. See it</h2>
+      <ol>
+        <li>Install ovmplayer on your TV (step 2).</li>
+        <li>Choose <strong>Jellyfin</strong>, then <strong>Type an address</strong>, and enter <code>https://demo.openvideomenu.org</code>.</li>
+        <li>Choose <strong>Use username and password</strong>: <code>demo</code>, password <code>demo</code>.</li>
+        <li>Open <strong>Sintel</strong> in the Menus row.</li>
+      </ol>
+      <div class="tbd tbd-block" style="width:100%;max-width:720px;aspect-ratio:16/9;margin-top:16px">Demo video</div>
     </div>
   </section>
 
-  <section>
+  <section id="players">
     <div class="wrap">
-      <div class="callout">
-        <div class="split">
-          <div>
-            <p class="eyebrow">Open by design</p>
-            <h2>Free to implement. Forever compatible.</h2>
-            <p>The specification is licensed CC BY 4.0 and covered by a royalty-free patent pledge (OWFa 1.0). The reference code is Apache-2.0. From version 1.0, manifests written today keep working: fields are never removed or redefined, and unknown fields are ignored.</p>
-          </div>
-          <ul class="checks">
-            <li>No fees, no permission needed, for free or commercial software</li>
-            <li>A language-neutral conformance suite defines "compatible"</li>
-            <li>No DRM, no accounts, no servers of ours in the loop</li>
-            <li>Menus point at your files; the format never copies or changes your videos</li>
+      <h2>2. Get the players</h2>
+      <p class="muted">The players are proof-of-concept apps that show the format working today, with your Plex or Jellyfin library. Titles without a menu just play.</p>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>On your TV</h3>
+          <ul>
+            <li><strong>Google TV and Android TV:</strong> <span class="btn tbd-link">Google Play</span> <span class="btn tbd-link">Download APK</span></li>
+            <li><strong>Roku:</strong> <span class="btn tbd-link">Add the Roku channel</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>On your server</h3>
+          <ul>
+            <li><strong>Jellyfin:</strong> in Dashboard → Plugins → Repositories, add <span class="tbd">Repository URL</span>, install <strong>Open Video Menu</strong>, and restart Jellyfin.</li>
+            <li><strong>Plex:</strong> run the menu server beside Plex, with your media folders read-only: <code>docker compose up -d</code> (<span class="tbd">setup guide</span>). It only answers people signed in to your Plex server.</li>
           </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <section>
-    <div class="wrap center" style="text-align:center">
-      <h2>Your films deserve their menus back.</h2>
-      <p class="lead center">Try the players, read the spec, or add support to your app.</p>
-      <div class="actions" style="justify-content:center">
-        <a class="btn btn-primary" href="players.html">Get the players</a>
-        <a class="btn btn-ghost" href="developers.html">Implement the format</a>
-      </div>
+  <section id="make">
+    <div class="wrap">
+      <h2>3. Make menus</h2>
+      <ol>
+        <li><strong>From your DVDs:</strong> DVD Tamer turns a DVD's own menus into Open Video Menu as it rips the disc (<span class="tbd">DVD Tamer link</span>). Or use <code>ovm-dvd</code>: <code>dotnet tool install -g OpenVideoMenu.Dvd.Tool</code>, then <code>ovm-dvd export Film.iso "Film (Year).ovmz" --files "Film - title {n}.mkv"</code>.</li>
+        <li><strong>Put the menu next to the film,</strong> as <code>Title.ovmz</code> (or <code>Title.openvideomenu.json</code> with its art), then rescan the library.</li>
+        <li><strong>Try the examples:</strong> <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/openvideomenu-examples.zip">download Sintel and the Example Show</a> (about 250 MB) and copy the <code>Movies</code> and <code>TV</code> folders into your libraries.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="implement">
+    <div class="wrap">
+      <h2>4. Implement it</h2>
+      <p class="muted">Free to implement in any software, with no fees and no permission needed.</p>
+      <h3>In a player</h3>
+      <ol>
+        <li>Read the <span class="tbd">specification</span> and the <span class="tbd">JSON Schema</span>.</li>
+        <li>Start at <strong>Level 0</strong>: show the manifest's plain list of titles and play them. It takes about an afternoon. Menus (Level 1) and the rest build on the same file.</li>
+        <li>Use a library, or write your own: <code>npm install @openvideomenu/core</code> (TypeScript) or <code>dotnet add package OpenVideoMenu</code> (.NET). Navigation is a state machine; your player supplies three things: playing a URL from a time, turning remote presses into up, down, left, right, enter and back, and finding the file a menu names.</li>
+        <li>Run the <span class="tbd">conformance suite</span>. When it passes, your player is <strong>compatible</strong>.</li>
+      </ol>
+      <h3>In a media server</h3>
+      <ol>
+        <li>Serve the read-only <span class="tbd">server API</span>: a list of the library's menus, and their manifests and art, with byte ranges.</li>
+        <li>Announce it on the network as <code>_openvideomenu._tcp</code>. The Jellyfin plugin and the Plex menu server are working examples.</li>
+      </ol>
+      <h3>In an importer</h3>
+      <ol>
+        <li>Follow the <span class="tbd">DVD profile</span>, or build on <code>OpenVideoMenu.Dvd</code>.</li>
+        <li>Check your output: <code>openvideomenu validate</code> and <code>openvideomenu preview</code> (<code>npm install -g @openvideomenu/cli</code>).</li>
+      </ol>
+      <p class="muted small">Say your software "supports Open Video Menu" any time, and "compatible" once it passes the conformance suite. Please don't name a product "Open Video Menu".</p>
     </div>
   </section>
 
@@ -243,38 +127,8 @@ Sintel (2010)/
 
 <footer class="site-footer">
   <div class="wrap">
-    <div class="footer-grid">
-      <div>
-        <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
-        <p class="muted small" style="margin-top:14px;max-width:26em">An open, royalty-free format for menus over the films and shows you already have.</p>
-      </div>
-      <div>
-        <h4>Format</h4>
-        <ul>
-          <li><a href="format.html">Overview</a></li>
-          <li><a href="format.html#spec">Specification 0.1</a></li>
-          <li><a href="format.html#compatibility">Compatibility</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Use it</h4>
-        <ul>
-          <li><a href="players.html">Players</a></li>
-          <li><a href="developers.html">Developers</a></li>
-          <li><a href="faq.html">FAQ</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Project</h4>
-        <ul>
-          <li><a href="about.html">About &amp; governance</a></li>
-          <li><a href="about.html#contact">Contact</a></li>
-          <li><a href="privacy.html">Privacy</a></li>
-        </ul>
-      </div>
-    </div>
     <div class="legal">
-      <span>© 2026 Tyson Treasure and the Open Video Menu contributors. Specification CC BY 4.0; code Apache-2.0.</span>
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="privacy.html">Privacy</a> · <span class="tbd">Source code</span> · <span class="tbd">Contact</span></span>
       <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
     </div>
   </div>

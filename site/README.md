@@ -22,19 +22,25 @@ Anything that doesn't exist yet is marked in the pages with a dashed "Placeholde
 grep -n "tbd" *.html
 ```
 
-| Page | Placeholder |
+| Where | Placeholder |
 |---|---|
-| index | DVD Tamer link and release date |
-| format | Links to the published spec, schema, server API and DVD profile |
-| players | Google Play, APK download, Downloader code, Roku channel and beta link, Jellyfin plugin repository URL, menu-server setup guide, example title download, demo video |
-| developers | Conformance suite link, npm and NuGet links |
-| about | Repository, issue tracker, forum, contact email |
+| 1. See it | Demo video |
+| 2. Get the players | Google Play, APK download, Roku channel, Jellyfin plugin repository URL, menu-server setup guide |
+| 3. Make menus | DVD Tamer link |
+| 4. Implement it | Links to the specification, JSON Schema, conformance suite, server API and DVD profile (they wait on the public repository and branch) |
+| Footer | Source code and contact links |
 | privacy | Effective date, contact email, host name and log retention |
 
 Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">` for buttons).
 
+## What the site is
+
+One page, a how-to: what Open Video Menu is, then four numbered steps (see it, get the players, make
+menus, implement it). Keep it that way: details belong in the specification and the READMEs it links
+to, not on the site. `privacy.html` (both app stores require it) and `404.html` are the only other pages.
+
 ## Images
 
-`assets/img/` holds the mark and favicon (SVG) and screenshots of the Sintel example running on a TV.
+`assets/img/` holds the mark and favicon (SVG) and a screenshot of the Sintel example running on a TV.
 Sintel © Blender Foundation, durian.blender.org, CC BY 3.0: keep the credit in the footer. Don't use
 screenshots of commercial films.
