@@ -91,7 +91,8 @@ export class Catalog {
 
   constructor(
     readonly roots: string[],
-    private readonly rescanMs = 5 * 60_000,
+    // A scan reuses unchanged manifests (by modified time), so it is cheap: a home library takes about a second.
+    private readonly rescanMs = 30_000,
   ) {
     this.roots = roots.map((r) => resolve(r));
   }

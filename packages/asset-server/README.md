@@ -6,7 +6,7 @@ A small, **read-only** server that runs next to your Plex server and hands menu 
 
 ## What it does and doesn't do
 
-- Scans your media folders for `*.openvideomenu.json` manifests.
+- Scans your media folders for `*.openvideomenu.json` manifests and `.ovmz` bundles, and again every 30 seconds, so new or removed menus show up within half a minute.
 - Serves **only** those manifests and the menu art they name: backgrounds, highlights, menu music, transitions, chapter thumbnails.
 - **Never serves your media.** Films, episodes and extras are refused. Any file no manifest names as menu art can't be reached at all.
 - **Never writes anything.** Mount your media read-only.
