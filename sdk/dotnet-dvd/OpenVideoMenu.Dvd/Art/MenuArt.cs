@@ -18,6 +18,12 @@ public sealed class MenuArtSet
 
     /// <summary>Seconds into <see cref="Video"/> where the loop starts (after an intro cell).</summary>
     public double? LoopStart { get; set; }
+
+    /// <summary>
+    /// The cell holds when its video ends (a still time, timed or infinite): the video and the music play once
+    /// and the last frame stays, as on the disc. False: the cell runs on, so the menu's video loops.
+    /// </summary>
+    public bool PlaysOnce { get; set; }
     public Dictionary<int, (string? Selected, string? Activated)> Buttons { get; } = new();
 
     /// <summary>
@@ -199,14 +205,20 @@ public sealed class MenuArtMaker
         await File.WriteAllBytesAsync(vob, cellBytes, ct);
 
         var seconds = cell?.Duration.TotalSeconds ?? 0;
-        var isStill = cell is null || cell.StillTime == 0xFF || seconds < 2;
+        // One rule for every cell: motion is a video with more than a picture or two (a still is sometimes
+        // the same picture repeated briefly), whatever its length and whatever follows it.
+        var isStill = cell is null || MenuStreams.CountPictures(cellBytes, upTo: 3) < 3;
         var buttonsAt = menu.Highlight.ButtonsAt.TotalSeconds;
+        // What follows the video: a hold (still time) keeps the last frame; otherwise the cell runs on and the
+        // video loops. With an intro running into a loop cell, the loop cell decides.
+        var lastCell = loop is null ? cell : _disc.GetPgc(loop.Domain, loop.Vtsn, loop.Pgcn, loop.MenuUnit)?.Cells.ElementAtOrDefault(loop.Cell - 1);
+        art.PlaysOnce = lastCell is { StillTime: not 0 };
 
-        // The background: a still menu shows its last frame; a motion menu's poster is the frame the
-        // buttons appear on.
+        // The background: a still menu shows its last frame, and so does motion that plays once and holds;
+        // a looping motion menu's poster is the frame the buttons appear on.
         // Backgrounds are video frames: JPEG (the spec allows it) is a tenth of a PNG's size. Highlights stay PNG for alpha.
         var image = $"{Folder}/{id}.jpg";
-        var at = isStill ? (double?)null : Math.Clamp(buttonsAt > 0 ? buttonsAt : 1, 0, Math.Max(0, seconds - 0.2));
+        var at = isStill || art.PlaysOnce && loop is null ? (double?)null : Math.Clamp(buttonsAt > 0 ? buttonsAt : 1, 0, Math.Max(0, seconds - 0.2));
         if (decoder is not null && kinds.HasFlag(MenuArtKinds.Stills))
         {
             if (await Decoded(decoder.StillAsync(vob, Path.Combine(_assetRoot, image), at, ct))) art.Image = image;
@@ -234,7 +246,7 @@ public sealed class MenuArtMaker
                 if (source != vob) ArtProcess.TryDelete(source);
                 if (buttonsAt > 0.2) art.ButtonsAt = Math.Round(buttonsAt, 2);
             }
-            else if (isStill && kinds.HasFlag(MenuArtKinds.Music) && seconds >= 2 && MenuStreams.HasAudio(cellBytes))
+            else if (isStill && kinds.HasFlag(MenuArtKinds.Music) && seconds > 0 && MenuStreams.HasAudio(cellBytes))
             {
                 var audio = $"{Folder}/{id}.m4a";
                 if (await Decoded(decoder.AudioAsync(vob, Path.Combine(_assetRoot, audio), ct))) art.Audio = audio;

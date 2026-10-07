@@ -38,9 +38,41 @@ public static class MenuStreams
                 }
                 else if (id is >= 0xC0 and <= 0xDF)
                     yield return new Packet(id, 0, body, len, p / Sector);
+                else if (id is >= 0xE0 and <= 0xEF)
+                {
+                    var hdr = body + 3 + b[body + 2]; // MPEG-2 PES header
+                    if (hdr < body + len) yield return new Packet(id, 0, hdr, body + len - hdr, p / Sector);
+                }
                 o = body + len;
             }
         }
+    }
+
+    /// <summary>
+    /// How many pictures the cell's video has (MPEG-2 picture start codes), counting up to <paramref name="upTo"/>.
+    /// One picture is a still; a few more can be the same still repeated; more is motion.
+    /// </summary>
+    public static int CountPictures(byte[] cell, int upTo = int.MaxValue)
+    {
+        var count = 0;
+        var zeros = 0; // zero bytes just before, carried across packets (a start code can straddle two)
+        var afterPrefix = false;
+        foreach (var pk in Packets(cell))
+        {
+            if (pk.Id is < 0xE0 or > 0xEF) continue;
+            for (var i = pk.Offset; i < pk.Offset + pk.Length; i++)
+            {
+                var v = cell[i];
+                if (afterPrefix)
+                {
+                    afterPrefix = false;
+                    if (v == 0x00 && ++count >= upTo) return count;
+                }
+                if (v == 0x01 && zeros >= 2) afterPrefix = true;
+                zeros = v == 0 ? zeros + 1 : 0;
+            }
+        }
+        return count;
     }
 
     /// <summary>The cell has an audio stream (AC-3/DTS/LPCM in private stream 1, or MPEG audio).</summary>

@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Self-describing members (Label, Width, Vtsn…) carry no comment of their own. -->
     <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <PackageId>OpenVideoMenu.Dvd</PackageId>
     <Authors>Tyson Treasure</Authors>
     <Description>DVD to Open Video Menu: read a DVD (ISO or VIDEO_TS), run its menus and programs, translate them into a faithful Open Video Menu manifest over the ripped files, make the menu art, and verify the result against the disc.</Description>

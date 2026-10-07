@@ -412,8 +412,9 @@ public sealed class MenuManifestBuilder
             Prohibits = DvdMenuCompiler.Prohibits(_disc.CellUops(m.Key.Domain, m.Key.Vtsn, m.Key.Pgcn, m.Key.Cell, m.Key.Unit)),
             Keys = _compiler.KeysFor(m.Key.Domain, m.Key.Vtsn),
         };
-        if (art?.Video is { } video) menu.Background.Video = new LoopingMedia { Src = video, LoopStart = art.LoopStart };
-        if (art?.Audio is { } audio) menu.Background.Audio = new LoopingMedia { Src = audio };
+        // A cell that holds when its video ends plays it (and its music) once and keeps the last frame.
+        if (art?.Video is { } video) menu.Background.Video = new LoopingMedia { Src = video, LoopStart = art.LoopStart, Loop = art.PlaysOnce ? false : null };
+        if (art?.Audio is { } audio) menu.Background.Audio = new LoopingMedia { Src = audio, Loop = art.PlaysOnce ? false : null };
         if (art?.Video is not null && art.ButtonsAt is { } at) menu.ButtonsAt = at;
 
         var numbers = m.Highlight.Buttons.Select(b => b.Number).ToHashSet();
