@@ -186,7 +186,24 @@ fun VideoPlayer(
                 if (isPlaying) started = true
                 if (player.playbackState != Player.STATE_ENDED) report(if (isPlaying) "playing" else "paused")
             }
+            // Playback that breaks off partway (the server closed the connection during a long pause)
+            // is opened again where it was, twice at most in a row, before the error is shown.
+            private var reopens = 0
+            private var reopenedAt = 0L
+
             override fun onPlayerError(error: PlaybackException) {
+                val network = error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED..PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - reopenedAt > 60_000) reopens = 0
+                if (started && network && reopens < 2) {
+                    reopens++
+                    reopenedAt = now
+                    android.util.Log.i("ovmplayer", "playback broke off (${error.errorCodeName}) at ${player.currentPosition} ms: opening it again (try $reopens)")
+                    // The player keeps its item and position after an error: preparing again reconnects there.
+                    player.prepare()
+                    player.play()
+                    return
+                }
                 onError(
                     when (error.errorCode) {
                         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,

@@ -294,7 +294,7 @@ end function
 ' own apps do), so it applies to direct play and transcode alike.
 sub plexPlay(req as object, target as object)
     parts = target.source.Split(":")
-    m.playing = { kind: "plex", req: req, item: target.item, source: target.source, path: target.path, partKey: target.part["key"], mediaIndex: parts[0], partIndex: parts[1], session: CreateObject("roDeviceInfo").GetRandomUUID(), method: "DirectPlay", started: false, offset: 0 }
+    m.playing = { kind: "plex", req: req, item: target.item, source: target.source, path: target.path, partKey: target.part["key"], mediaIndex: parts[0], partIndex: parts[1], session: CreateObject("roDeviceInfo").GetRandomUUID(), method: "DirectPlay", started: false, offset: 0, target: target }
     audio = plexStream(target.part, req.audio, 2)
     m.playing.audioCodec = msOr(target.media["audioCodec"], "")
     ' The menu's soundtrack and subtitle choices are set on the part, as Plex's own apps do.

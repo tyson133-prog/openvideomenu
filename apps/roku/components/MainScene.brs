@@ -886,6 +886,7 @@ end sub
 ' Play what the menus asked for: { media, start, audio?, subtitle?, angle?, end?, cues? }.
 sub playMenuRequest(req as object)
     m.menuReq = req
+    m.recoverClock = invalid
     ' A cue started this while a title plays (it returns there afterwards): that one stops first.
     if m.player <> invalid
         if m.playing <> invalid then rememberStop(msOr(m.playing.stopItem, m.playing.item), playerPosition(), m.playing.req)
@@ -924,7 +925,7 @@ sub startTitle(req as object, target as object)
         plexPlay(req, target)
         return
     end if
-    m.playing = { req: req, item: target.item, source: target.source, path: target.path, session: invalid, method: "DirectPlay", started: false }
+    m.playing = { req: req, item: target.item, source: target.source, path: target.path, session: invalid, method: "DirectPlay", started: false, target: target }
     body = { "UserId": m.login.userId, "MediaSourceId": target.source, "DeviceProfile": m.profile, "EnableDirectPlay": true, "EnableDirectStream": true, "EnableTranscoding": true, "AutoOpenLiveStream": true, "IsPlayback": true }
     ' Always name the audio track that will play (the menu's choice, else the file's default, else
     ' its first). Jellyfin only checks an explicitly requested track against the device profile;
@@ -997,6 +998,12 @@ sub openPlayer(content as object)
         req = m.playing.req
         if m.segPlay <> invalid
             m.cueClock = m.segClock
+            m.player.notificationInterval = 0.25
+            m.player.observeField("position", "onPlayerPosition")
+        else if m.recoverClock <> invalid
+            ' The same title reopened after it broke off: its cues go on from where they were.
+            m.cueClock = m.recoverClock
+            m.recoverClock = invalid
             m.player.notificationInterval = 0.25
             m.player.observeField("position", "onPlayerPosition")
         else if req.cues <> invalid or req["end"] <> invalid or req.holds <> invalid
@@ -1235,8 +1242,12 @@ sub onPlayerState()
         applySubtitles()
         report("/Sessions/Playing")
         m.progressTimer.control = "start"
+        ' Reopened while a frame was held: it holds again.
+        if m.cueClock <> invalid and m.cueClock.holding <> invalid then m.player.control = "pause"
     else if (state = "paused" or state = "playing") and m.playing.started
         reportProgress()
+    else if state = "finished" and endedEarly()
+        if not reopenPlayback("the stream ended early") then playbackFailed("The stream ended before the title did.")
     else if state = "finished" and m.segPlay <> invalid
         nextSegment()
     else if state = "finished"
@@ -1244,10 +1255,79 @@ sub onPlayerState()
         finishTitle()
     else if state = "error"
         print "ovmplayer: playback error "; m.player.errorCode; " msg "; m.player.errorMsg; " info "; FormatJson(m.player.errorInfo)
-        setStatus("Couldn't play this title: " + m.player.errorMsg)
-        closePlayer()
-        titleStopped(m.playing.req.start)
+        if not reopenPlayback("playback error") then playbackFailed("Couldn't play this title: " + m.player.errorMsg)
     end if
+end sub
+
+' The file's length in seconds, as the server gives it (0 when it doesn't).
+function itemDuration(item as object) as float
+    if isPlex() then return msOr(item["duration"], 0) / 1000
+    return msOr(item["RunTimeTicks"], 0) / 10000000
+end function
+
+' "finished" well before the file's end: the stream broke off (after a long pause, Plex may have ended
+' its transcode), it didn't really end.
+function endedEarly() as boolean
+    if m.playing = invalid or not m.playing.started then return false
+    duration = itemDuration(m.playing.item)
+    return duration > 0 and playerPosition() < duration - 10
+end function
+
+' Playback broke off partway through, which happens after a long pause: the server has closed the
+' connection or dropped its transcode. Open the same title again where it was, with a new session (a new
+' playback decision), as Plex's and Jellyfin's own apps do. Twice at most in a row; true when reopening.
+function reopenPlayback(why as string) as boolean
+    p = m.playing
+    if p = invalid or not p.started or p.target = invalid then return false
+    ' A minute of good playback since the last reopen starts the count again.
+    if m.reopenTries = invalid or UpTime(0) - msOr(m.reopenedAt, 0) > 60 then m.reopenTries = 0
+    if m.reopenTries >= 2 then return false
+    m.reopenTries = m.reopenTries + 1
+    m.reopenedAt = UpTime(0)
+    position = playerPosition()
+    print "ovmplayer: "; why; " at "; position; " s: opening it again (try "; m.reopenTries; ")"
+    rememberStop(msOr(p.stopItem, p.item), position, p.req)
+    onTitle = titlePosition()
+    report("/Sessions/Playing/Stopped")
+    clock = m.cueClock
+    closePlayer()
+    if m.segPlay <> invalid
+        ' A title made of segments: the same segment, from where it was. Its clock is kept, and ignores
+        ' readings before the restart, as below.
+        if m.segClock <> invalid then m.segClock.floor = onTitle
+        playSegment(m.segPlay.index, position - m.segPlay.pieces[m.segPlay.index].start)
+    else
+        if clock <> invalid
+            ' The player reads 0 until its seek lands: the clock ignores readings before the restart.
+            clock.floor = position
+            m.recoverClock = clock
+        end if
+        req = {}
+        for each key in p.req
+            req[key] = p.req[key]
+        end for
+        req.start = position
+        startTitle(req, p.target)
+    end if
+    if m.playing <> invalid then m.playing.stopItem = p.stopItem
+    return true
+end function
+
+' Playback couldn't go on: back to the menu or the library, keeping where the viewer got to (never as if
+' the title had been watched to the end).
+sub playbackFailed(message as string)
+    setStatus(message)
+    p = m.playing
+    if p = invalid or not p.started
+        closePlayer()
+        if p <> invalid then titleStopped(p.req.start)
+        return
+    end if
+    rememberStop(msOr(p.stopItem, p.item), playerPosition(), p.req)
+    stoppedAt = titlePosition()
+    report("/Sessions/Playing/Stopped")
+    closePlayer()
+    titleStopped(stoppedAt)
 end sub
 
 sub stopTitle()
@@ -1264,6 +1344,7 @@ end sub
 ' resume point and watched mark are updated here, as the server now has them).
 sub titleStopped(position as float)
     m.segPlay = invalid
+    m.recoverClock = invalid
     if m.menu <> invalid
         m.menu.playbackStopped = position
     else
@@ -1273,6 +1354,7 @@ end sub
 
 sub titleEnded()
     m.segPlay = invalid
+    m.recoverClock = invalid
     if m.menu <> invalid
         m.menu.playbackEnded = true
     else
