@@ -19,6 +19,13 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import com.ovmplayer.tv.assets.AssetServerClient
 import com.ovmplayer.tv.assets.CatalogEntry
+import com.ovmplayer.tv.store.KeptSession
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.put
 import com.ovmplayer.tv.assets.discoverAssetServers
 import com.ovmplayer.tv.jellyfin.FoundJellyfin
 import com.ovmplayer.tv.jellyfin.JellyfinAccount
@@ -88,6 +95,12 @@ data class OpenMenu(
     val lastStop: LastStop?,
     /** Level 2: media id → its angle 2, 3, … files (null where the library has no match). */
     val angles: Map<String, List<Playable?>> = emptyMap(),
+    /** Level 3: the session kept from an earlier viewing of this menu (spec §6.5.1), if any. */
+    val kept: KeptSession? = null,
+    /** The session the menu starts with: [kept], with the resume point this opening wants. */
+    val session: JsonObject? = null,
+    /** Start by resuming [session]'s resume point (the prompt's "Resume …"), not the first play. */
+    val resume: Boolean = false,
 )
 
 data class ShowState(val show: Item, val seasons: List<Item>, val season: Item?, val episodes: List<Item>, val manifests: List<Tile.Manifest>)
@@ -686,7 +699,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val others = all.filter { it !== filmEntry && it.position > 0 }.sortedByDescending { it.playedAtMs }
         val resumes = ((if (filmEntry != null && (filmEntry.position > 0 || others.isNotEmpty())) listOf(filmEntry) else emptyList()) + others).take(4)
         val newest = resumes.filter { it.position > 0 }.maxByOrNull { it.playedAtMs }
-        val open = OpenMenu(title, entry, media, newest?.let { LastStop(it.mediaId, it.position) }, angles)
+        val lastStop = newest?.let { LastStop(it.mediaId, it.position) }
+        val kept = settings.sessionOf(sessionKey(entry))
+        val open = OpenMenu(title, entry, media, lastStop, angles, kept, kept?.let { menuSession(it.session, lastStop) })
         val justTheFilm = resumes.size == 1 && filmEntry != null && resumes[0] === filmEntry
         go(if (newest != null) Screen.ResumeAsk(open, resumes, justTheFilm) else Screen.Menu(open))
     }
@@ -733,11 +748,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return "${server ?: "server"}|${item.id}"
     }
 
-    /** The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the menu. */
+    /**
+     * The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the menu. With a kept
+     * session, a title resumes through the menu, as a disc does, with the settings its menus had (the
+     * variables, a viewing mode, the resume point's queue and after-action), so its cues and buttons work.
+     */
     fun resumeChosen(resume: Resume?) {
         val ask = _screen.value as? Screen.ResumeAsk ?: return
-        if (resume != null) play(resume.item, resume.position, resume.audio, resume.subtitle) else _screen.value = Screen.Menu(ask.open)
+        val kept = ask.open.kept
+        when {
+            resume != null && kept != null -> _screen.value = Screen.Menu(ask.open.copy(session = resumeSession(kept.session, resume), resume = true))
+            resume != null -> play(resume.item, resume.position, resume.audio, resume.subtitle)
+            else -> _screen.value = Screen.Menu(ask.open)
+        }
     }
+
+    private fun sessionKey(entry: CatalogEntry): String {
+        val server = if (settings.sourceKind == "jellyfin") settings.jellyfin?.serverId else settings.serverId
+        return "${server ?: "server"}|${entry.id}"
+    }
+
+    /** Level 3: the menu page reported its session (spec §6.5.1): keep it for the next viewing. */
+    fun rememberSession(open: OpenMenu, version: String, session: JsonObject) =
+        settings.rememberSession(sessionKey(open.entry), KeptSession(version, session, System.currentTimeMillis()))
 
     private suspend fun openShow(show: Item) {
         val src = source ?: return
@@ -914,3 +947,35 @@ inline fun <T> attempt(block: () -> T): Result<T> = try {
 } catch (e: Throwable) {
     Result.failure(e)
 }
+
+/** A session with [media] at [position] as its resume point (no queue or after-action: a title on its own). */
+private fun JsonObject.withLastStop(media: String, position: Double) =
+    JsonObject(this + ("lastStop" to buildJsonObject { put("media", media); put("position", position) }))
+
+/** Whether [session]'s resume point is the stop at [media], [position] (give or take the rounding of a stop record). */
+private fun resumesAt(session: JsonObject, media: String, position: Double): Boolean {
+    val point = session["lastStop"] as? JsonObject ?: return false
+    val pointMedia = (point["media"] as? JsonPrimitive)?.contentOrNull
+    val pointPosition = (point["position"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
+    return pointMedia == media && kotlin.math.abs(pointPosition - position) <= 2
+}
+
+/**
+ * The session for resuming [r]: the kept one, with its resume point when that's the stop the prompt
+ * offers, else [r]'s title from [r]'s position (another title, or the server's position when it was
+ * watched elsewhere). The tracks are the ones the viewer had, as the prompt's plain resume uses.
+ */
+private fun resumeSession(kept: JsonObject, r: Resume): JsonObject {
+    val session = if (resumesAt(kept, r.mediaId, r.position)) kept else kept.withLastStop(r.mediaId, r.position)
+    val player = (session["player"] as? JsonObject).orEmpty().toMutableMap()
+    r.audio?.let { player["@audio"] = JsonPrimitive(it) }
+    r.subtitle?.let { player["@subtitle"] = JsonPrimitive(it) }
+    return JsonObject(session + ("player" to JsonObject(player)))
+}
+
+/**
+ * The session for opening the menus: the kept one, with the newest stop this app recorded when the kept
+ * one has no resume point or another one (a title played from its tile since).
+ */
+private fun menuSession(kept: JsonObject, lastStop: LastStop?): JsonObject =
+    if (lastStop == null || resumesAt(kept, lastStop.media, lastStop.position)) kept else kept.withLastStop(lastStop.media, lastStop.position)

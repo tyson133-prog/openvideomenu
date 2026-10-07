@@ -1,8 +1,23 @@
-import { parseManifest } from "@openvideomenu/core";
+import { parseManifest, type Session } from "@openvideomenu/core";
 import { MenuPlayer, type PlayerOptions } from "./player.js";
 import { injectStyles } from "./styles.js";
 
-export type LoadOptions = Omit<PlayerOptions, "manifest" | "manifestUrl">;
+export type LoadOptions = Omit<PlayerOptions, "manifest" | "manifestUrl" | "onSession"> & {
+  /** The version of the manifest `session` was kept for (from `onSession`). Another version drops it (spec §6.5.1). */
+  sessionVersion?: string;
+  /** Level 3: the session changed; keep it with the manifest's version, to pass back as session and sessionVersion. */
+  onSession?: (session: Session, version: string) => void;
+};
+
+/** A manifest's version for kept sessions: a hash of its text (FNV-1a, 32 bits) and its length. */
+export function manifestVersion(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${hash.toString(16).padStart(8, "0")}-${text.length.toString(16)}`;
+}
 
 /**
  * Fetch, validate and start a manifest. Validation problems are shown on screen instead of a menu,
@@ -25,7 +40,16 @@ export async function loadPlayer(container: HTMLElement, manifestUrl: string, op
     showProblems(container, "This menu file has problems", result.errors.map((e) => `${e.path || "/"}: ${e.message}`));
     return undefined;
   }
-  const player = new MenuPlayer(container, { ...options, manifest: result.manifest!, manifestUrl: absolute });
+  // A session kept for another version of the manifest means nothing to this one.
+  const version = manifestVersion(text);
+  const { sessionVersion, onSession, ...rest } = options;
+  const player = new MenuPlayer(container, {
+    ...rest,
+    session: sessionVersion === version ? rest.session : undefined,
+    onSession: onSession && ((session) => onSession(session, version)),
+    manifest: result.manifest!,
+    manifestUrl: absolute,
+  });
   player.start();
   return player;
 }

@@ -55,6 +55,8 @@ sealed interface PageMessage {
     /** Level 2: an overlay's buttons show over the video: show the page over it and give it the keys. */
     data class Overlay(val showing: Boolean) : PageMessage
     data object Exit : PageMessage
+    /** Level 3: the session changed (spec §6.5.1); keep it with the manifest [version] the page saw. */
+    data class Session(val version: String, val session: JsonObject) : PageMessage
     data class Error(val message: String) : PageMessage
 }
 
@@ -147,11 +149,20 @@ class MenuWebView(
         if (behind) clearFocus() else requestFocus()
     }
 
-    /** Tell the page which manifest to show. [manifestPath] is the asset server path, e.g. /v1/files/0/... */
-    fun init(manifestPath: String, lastStop: LastStop?) = send(buildJsonObject {
+    /**
+     * Tell the page which manifest to show. [manifestPath] is the asset server path, e.g. /v1/files/0/...
+     * Level 3: [session] is one kept for manifest version [sessionVersion] (the page drops it if the manifest
+     * changed); [resume] starts by resuming it.
+     */
+    fun init(manifestPath: String, lastStop: LastStop?, session: JsonObject? = null, sessionVersion: String? = null, resume: Boolean = false) = send(buildJsonObject {
         put("type", "init")
         put("manifestUrl", "$ORIGIN/asset-server$manifestPath")
         if (lastStop != null) put("lastStop", json.encodeToJsonElement(LastStop.serializer(), lastStop))
+        if (session != null && sessionVersion != null) {
+            put("session", session)
+            put("sessionVersion", sessionVersion)
+        }
+        if (resume) put("resume", true)
     })
 
     fun ended() = send(buildJsonObject { put("type", "ended") })
@@ -221,6 +232,10 @@ class MenuWebView(
             "seek" -> str("position")?.toDoubleOrNull()?.let { onMessage(PageMessage.Seek(it)) }
             "overlay" -> onMessage(PageMessage.Overlay(str("showing") == "true"))
             "exit" -> onMessage(PageMessage.Exit)
+            "session" -> {
+                val session = msg["session"] as? JsonObject ?: return
+                onMessage(PageMessage.Session(str("version") ?: return, session))
+            }
             "error" -> onMessage(PageMessage.Error(str("message") ?: "Menu error"))
         }
     }

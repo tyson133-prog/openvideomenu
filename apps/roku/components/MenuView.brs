@@ -49,9 +49,17 @@ sub onControl()
     if m.top.control <> "start" then return
     m.manifest = m.top.manifest
     m.nav = msNavInitialState()
-    seed = m.top.lastStop
-    if seed <> invalid and seed.media <> invalid then m.nav.lastStop = { media: seed.media, position: seed.position }
-    stepWith({ type: "start", player: playerState(), seed: Rnd(2147483646) })
+    m.sessionJson = invalid
+    start = { type: "start", player: playerState(), seed: Rnd(2147483646) }
+    if m.top.session <> invalid
+        ' A kept session (spec 6.5.1): the variables, player state and resume point the menus had.
+        start.session = m.top.session
+        start.resume = m.top.resume = true
+    else
+        seed = m.top.lastStop
+        if seed <> invalid and seed.media <> invalid then m.nav.lastStop = { media: seed.media, position: seed.position }
+    end if
+    stepWith(start)
     m.top.setFocus(true)
 end sub
 
@@ -88,6 +96,13 @@ sub stepWith(event as object)
     for each effect in result.effects
         apply(effect)
     end for
+    ' What's worth keeping between viewings, for the scene to store when it changed.
+    session = msNavSessionOf(m.nav)
+    json = FormatJson(session)
+    if json <> m.sessionJson
+        m.sessionJson = json
+        m.top.sessionOut = session
+    end if
 end sub
 
 sub apply(effect as object)

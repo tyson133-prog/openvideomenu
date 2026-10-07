@@ -22,9 +22,14 @@
  *   {type:"overlay", showing}                            an overlay's buttons show over the video (Level 2):
  *                                                        show the page over it and send it the arrows and Enter
  *   {type:"exit"}                                        Back pressed at the top menu
+ *   {type:"session", version, session}                   Level 3: what's worth keeping between viewings changed
+ *                                                        (spec §6.5.1); keep it with version, the manifest's
  *   {type:"error", message}                              manifest couldn't be loaded or is invalid
  * native → page
- *   {type:"init", manifestUrl, lastStop?, view?, showHidden?}
+ *   {type:"init", manifestUrl, lastStop?, view?, showHidden?, session?, sessionVersion?, resume?}
+ *                                                        session: one kept from a "session" message, for the
+ *                                                        manifest version sessionVersion (another version is
+ *                                                        dropped); resume: start by resuming
  *   {type:"ended"}                                       the item played to the end
  *   {type:"stopped", position}                           the viewer stopped early (seconds)
  *   {type:"playError", message}                          the item couldn't be played
@@ -32,7 +37,7 @@
  *                                                        Level 2: Menu/Title during playback, with the position
  *   {type:"cue", id} / {type:"cueEnd", id}               playback passed a cue the play message listed (Level 2)
  */
-import type { Key } from "@openvideomenu/core";
+import type { Key, Session } from "@openvideomenu/core";
 import { KeyboardInput, type InputAdapter, type PlaybackAdapter, type PlayRequest } from "./adapters.js";
 import { loadPlayer } from "./load.js";
 import type { MenuPlayer } from "./player.js";
@@ -43,7 +48,16 @@ export interface HostPort {
 }
 
 type HostMessage =
-  | { type: "init"; manifestUrl: string; lastStop?: { media: string; position: number }; view?: "menu" | "fallback"; showHidden?: boolean }
+  | {
+      type: "init";
+      manifestUrl: string;
+      lastStop?: { media: string; position: number };
+      view?: "menu" | "fallback";
+      showHidden?: boolean;
+      session?: Session;
+      sessionVersion?: string;
+      resume?: boolean;
+    }
   | { type: "ended" }
   | { type: "stopped"; position: number }
   | { type: "playError"; message: string }
@@ -129,6 +143,10 @@ export function runInHost(port: HostPort, container: HTMLElement = document.body
           view: msg.view,
           showHidden: msg.showHidden,
           initialLastStop: msg.lastStop,
+          session: msg.session,
+          sessionVersion: msg.sessionVersion,
+          resume: msg.resume,
+          onSession: (session, version) => send({ type: "session", version, session }),
           onExit: () => send({ type: "exit" }),
           onOverlay: (showing) => send({ type: "overlay", showing }),
         }).then((p) => {

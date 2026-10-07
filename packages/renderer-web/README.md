@@ -47,6 +47,9 @@ player.start();
 | `level` | The highest level your host supports (0–3, default 3). A manifest that needs more shows its plain list. |
 | `view` | `"fallback"` shows the plain list even when there are menus. |
 | `initialLastStop` | `{ media, position }`: where the viewer last stopped, for "resume" buttons. |
+| `session`, `sessionVersion` | Level 3: a session kept from an earlier viewing (spec §6.5.1): variables, player state and resume point, restored at the start. `sessionVersion` is the manifest version `onSession` gave with it; a session kept for another version is dropped. |
+| `resume` | Start by resuming the session's (or `initialLastStop`'s) resume point instead of the first play. |
+| `onSession` | `(session, version) => void`: what's worth keeping changed; store both to pass back later. |
 | `player` | What you know of the viewer's setup as `@` player state, e.g. `{ "@audioLanguage": "fr" }`. Default: the browser's language. |
 | `answerParental`, `parentalLevel` | Level 3: answer a menu's request for a higher parental level, or the highest level allowed without asking (default 8). |
 | `onExit`, `onStateChange`, `onOverlay` | Back at the top menu; every navigator state; an overlay's buttons showing during playback. |

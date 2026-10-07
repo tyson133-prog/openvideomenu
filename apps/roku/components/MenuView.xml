@@ -12,6 +12,13 @@
     <field id="authHeaders" type="assocarray" />
     <!-- in (optional): { media, position } the viewer stopped at last time, for the menu's resume -->
     <field id="lastStop" type="assocarray" />
+    <!-- in (optional, Level 3): a kept session { vars, player, lastStop? } to restore (spec 6.5.1); it
+         replaces lastStop -->
+    <field id="session" type="assocarray" />
+    <!-- in (optional): with a session, start by resuming its resume point instead of the first play -->
+    <field id="resume" type="boolean" />
+    <!-- out: the session, whenever what's worth keeping of it changed -->
+    <field id="sessionOut" type="assocarray" alwaysNotify="true" />
     <!-- in: set to start (after the fields above) -->
     <field id="control" type="string" onChange="onControl" />
     <!-- out: { media, start, audio?, subtitle? } -->

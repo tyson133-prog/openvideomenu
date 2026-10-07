@@ -7,6 +7,7 @@ import {
   overlayOf,
   resolveMedia,
   resolvePath,
+  sessionOf,
   startTime,
   step,
   type Button,
@@ -22,6 +23,7 @@ import {
   type NavEvent,
   type NavState,
   type PlayItem,
+  type Session,
 } from "@openvideomenu/core";
 import { Html5Playback, KeyboardInput, type InputAdapter, type PlaybackAdapter, type SegmentRequest } from "./adapters.js";
 import { injectStyles } from "./styles.js";
@@ -57,6 +59,16 @@ export interface PlayerOptions {
   activatedFlashMs?: number;
   /** Where the viewer last stopped (e.g. the server's saved resume point), used by "resume" actions. */
   initialLastStop?: { media: string; position: number };
+  /**
+   * Level 3: a session kept from an earlier viewing of this manifest (spec §6.5.1): its variables,
+   * player state and resume point are restored at the start. Without a resume point of its own, it
+   * takes `initialLastStop`. Only for the same version of the manifest (`loadPlayer` checks).
+   */
+  session?: Session;
+  /** With `session` or `initialLastStop`: start by resuming instead of the first play or root menu. */
+  resume?: boolean;
+  /** Level 3: the session changed (variables, player state or resume point); keep it to restore later. */
+  onSession?: (session: Session) => void;
   /**
    * Level 3: answer a disc's request for a higher parental level (spec 6.8), e.g. after asking for a PIN.
    * Without it, levels up to `parentalLevel` are allowed.
@@ -191,6 +203,10 @@ export class MenuPlayer {
         type: "start",
         player: { ...defaultPlayerState(), ...(this.options.player ?? {}) },
         seed: 1 + Math.floor(Math.random() * 2147483646),
+        ...(this.options.session
+          ? { session: this.options.session.lastStop || !this.options.initialLastStop ? this.options.session : { ...this.options.session, lastStop: this.options.initialLastStop } }
+          : {}),
+        ...(this.options.resume ? { resume: true } : {}),
       });
   }
 
@@ -213,6 +229,18 @@ export class MenuPlayer {
     return this.state;
   }
 
+  private sessionJson?: string;
+
+  /** Tells the host when the part of the state worth keeping between viewings changed. */
+  private reportSession() {
+    if (!this.options.onSession) return;
+    const session = sessionOf(this.state);
+    const json = JSON.stringify(session);
+    if (json === this.sessionJson) return;
+    this.sessionJson = json;
+    this.options.onSession(session);
+  }
+
   /** Feed a navigator event (also used by hosts with custom input). Returns false while busy. */
   dispatch(event: NavEvent): boolean {
     if (this.busy) return false;
@@ -229,6 +257,7 @@ export class MenuPlayer {
       if (state.mode !== "menu") clearTimeout(this.menuTimer); // the countdown belongs to a menu on screen
       for (const effect of effects) this.perform(effect);
       this.options.onStateChange?.(state);
+      this.reportSession();
     };
     const flashMs = this.options.activatedFlashMs ?? 180;
     const flashes = !!flash && ("menu" in flash ? flash.menu === this.renderedMenu : flash.cue === this.renderedOverlay);

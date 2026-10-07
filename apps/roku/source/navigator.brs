@@ -16,7 +16,9 @@ end function
 ' state and the resume point, as plain JSON-able values. Give it back with start's "session".
 function msNavSessionOf(state as object) as object
     session = { vars: ParseJson(FormatJson(state.vars)), player: ParseJson(FormatJson(state.player)) }
-    if state.lastStop <> invalid then session.lastStop = ParseJson(FormatJson(state.lastStop))
+    ' Bracketed so the key keeps its case: dot syntax lowercases it, and a stored session is read back
+    ' with ParseJson, which is case-sensitive.
+    if state.lastStop <> invalid then session["lastStop"] = ParseJson(FormatJson(state.lastStop))
     return session
 end function
 

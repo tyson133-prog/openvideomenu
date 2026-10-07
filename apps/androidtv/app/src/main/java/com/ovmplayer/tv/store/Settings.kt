@@ -74,6 +74,20 @@ class Settings(context: Context) {
     private fun stops(): Map<String, Stop> =
         prefs.getString("stops", null)?.let { runCatching { com.ovmplayer.tv.net.json.decodeFromString(STOPS, it) }.getOrNull() } ?: emptyMap()
 
+    /** Level 3: the session kept for a menu (spec §6.5.1), with the manifest version it belongs to. */
+    fun sessionOf(key: String): KeptSession? = sessions()[key]
+
+    fun rememberSession(key: String, kept: KeptSession) {
+        val all = sessions().toMutableMap()
+        all[key] = kept
+        // Keep the 50 most recent.
+        val recent = all.entries.sortedByDescending { it.value.atMs }.take(50).associate { it.key to it.value }
+        prefs.edit().putString("sessions", com.ovmplayer.tv.net.json.encodeToString(SESSIONS, recent)).apply()
+    }
+
+    private fun sessions(): Map<String, KeptSession> =
+        prefs.getString("sessions", null)?.let { runCatching { com.ovmplayer.tv.net.json.decodeFromString(SESSIONS, it) }.getOrNull() } ?: emptyMap()
+
     fun signOut() = prefs.edit().remove("plexToken").remove("serverId").remove("lastServer").remove("jellyfin").remove("sourceKind").apply()
 }
 
@@ -86,6 +100,16 @@ class Settings(context: Context) {
 data class Stop(val position: Double, val audio: Int? = null, val subtitle: Int? = null, val atMs: Long, val touchedAtMs: Long = atMs)
 
 private val STOPS = MapSerializer(String.serializer(), Stop.serializer())
+
+/**
+ * Level 3: what a menu's navigation had worth keeping between viewings (spec §6.5.1): its variables,
+ * player state and resume point, as the menu page reported them, for the manifest [version] the page
+ * saw. The page drops it when the manifest has changed since.
+ */
+@kotlinx.serialization.Serializable
+data class KeptSession(val version: String, val session: kotlinx.serialization.json.JsonObject, val atMs: Long)
+
+private val SESSIONS = MapSerializer(String.serializer(), KeptSession.serializer())
 
 @kotlinx.serialization.Serializable
 data class JellyfinLogin(val url: String, val serverId: String, val name: String, val userId: String, val token: String)

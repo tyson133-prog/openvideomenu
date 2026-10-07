@@ -6,3 +6,4 @@ export { runInHost, BridgePlayback, HostInput } from "./host.js";
 export type { HostPort } from "./host.js";
 export { loadPlayer } from "./load.js";
 export type { LoadOptions } from "./load.js";
+export { manifestVersion } from "./load.js";

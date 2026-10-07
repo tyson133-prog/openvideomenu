@@ -575,6 +575,8 @@ sub onManifest(res as object, ctx as dynamic)
         return
     end if
     m.opening.manifest = res.json
+    ' The manifest's version, so a kept session of an older one is discarded (spec 6.5.1).
+    m.opening.stamp = manifestStamp(msOr(res.body, ""))
     openWhenReady()
 end sub
 
@@ -598,6 +600,7 @@ sub openWhenReady()
     ' menu the film always leads the list ("Play …" when it wasn't started), so it's one press away.
     ' The menu's own Resume button gets the newest.
     m.opening.resumes = menuResumes(m.opening.manifest, m.menuMedia, m.opening.movie)
+    m.opening.session = sessionRead(m.opening.entry["id"], m.opening.stamp)
     m.opening.lastStop = invalid
     newest = invalid
     for each r in m.opening.resumes
@@ -607,7 +610,7 @@ sub openWhenReady()
         m.opening.lastStop = { media: newest.media, position: newest.position }
         askResume()
     else
-        startMenu()
+        startMenu(menuSession(m.opening.session, invalid))
     end if
 end sub
 
@@ -692,7 +695,12 @@ sub onResumeChosen()
     choice = m.top.dialog.buttonSelected
     m.top.dialog.close = true
     if m.opening = invalid then return
-    if choice < m.opening.resumes.Count()
+    if choice < m.opening.resumes.Count() and m.opening.session <> invalid
+        ' With a kept session: resume through the menus, as a disc does, with the settings they had
+        ' (variables, the viewing mode, the resume point's queue and after-action), so the title's
+        ' cues and buttons work too.
+        startMenu(resumeSession(m.opening.session, m.opening.resumes[choice]), true)
+    else if choice < m.opening.resumes.Count()
         ' Straight to where they stopped; afterwards back to the tile, as for any title.
         r = m.opening.resumes[choice]
         tile = invalid
@@ -701,8 +709,96 @@ sub onResumeChosen()
         m.opening = invalid
         startTitle({ start: r.position, audio: r.audio, subtitle: r.subtitle }, m.menuMedia[r.media])
     else
-        startMenu()
+        startMenu(menuSession(m.opening.session, m.opening.lastStop))
     end if
+end sub
+
+' The session for resuming the prompt's title r: the kept one, with its resume point when that's
+' the stop the prompt offers, else r's title from r's position (another title, or the server's
+' position when it was watched elsewhere). The tracks are the ones the viewer had, as the prompt's
+' plain resume uses.
+function resumeSession(kept as object, r as object) as object
+    session = ParseJson(FormatJson(kept))
+    point = session["lastStop"]
+    if point = invalid or point["media"] <> r.media or Abs(msOr(point["position"], 0) - r.position) > 2
+        session["lastStop"] = { media: r.media, position: r.position }
+    end if
+    if session["player"] = invalid then session["player"] = {}
+    session["player"]["@audio"] = r.audio
+    session["player"]["@subtitle"] = r.subtitle
+    return session
+end function
+
+' The session for opening the menus: the kept one (invalid: none), with the newest stop this app
+' recorded when the kept one has no resume point or another one (a title played from its tile since).
+function menuSession(kept as dynamic, lastStop as dynamic) as dynamic
+    if kept = invalid then return invalid
+    session = ParseJson(FormatJson(kept))
+    point = session["lastStop"]
+    if lastStop <> invalid and (point = invalid or point["media"] <> lastStop.media or Abs(msOr(point["position"], 0) - lastStop.position) > 2)
+        session["lastStop"] = { media: lastStop.media, position: lastStop.position }
+    end if
+    return session
+end function
+
+' --- kept sessions (spec 6.5.1) ------------------------------------------------------------------
+' One per menu and server, in their own registry section: { stamp, at, session }. The registry holds
+' 32 KB in all, shared with the stops and the sign-in, so only the most recent few are kept.
+
+' A manifest's version: the MD5 of its text.
+function manifestStamp(text as string) as string
+    bytes = CreateObject("roByteArray")
+    bytes.FromAsciiString(text)
+    digest = CreateObject("roEVPDigest")
+    digest.Setup("md5")
+    return digest.Process(bytes)
+end function
+
+function sessionKey(entryId as string) as string
+    return msOr(m.login.machineId, msOr(m.login.serverId, m.login.url)) + "|" + entryId
+end function
+
+' The kept session for this menu, or invalid. One kept for another version of the manifest is
+' discarded: its variables and resume point mean nothing to this one.
+function sessionRead(entryId as string, stamp as dynamic) as dynamic
+    section = CreateObject("roRegistrySection", "ovmplayer-sessions")
+    key = sessionKey(entryId)
+    if not section.Exists(key) then return invalid
+    kept = ParseJson(section.Read(key))
+    if kept <> invalid and kept.stamp = stamp and kept.session <> invalid then return kept.session
+    section.Delete(key)
+    section.Flush()
+    return invalid
+end function
+
+' Keep a session. A write that fails (no space left) never stops the menus or playback.
+sub sessionWrite(key as dynamic, stamp as dynamic, session as dynamic)
+    if key = invalid or stamp = invalid or session = invalid then return
+    section = CreateObject("roRegistrySection", "ovmplayer-sessions")
+    section.Write(key, FormatJson({ stamp: stamp, at: CreateObject("roDateTime").AsSeconds(), session: session }))
+    ' The ten most recent, and at least 4 KB of the registry left free for everything else.
+    registry = CreateObject("roRegistry")
+    keys = section.GetKeyList()
+    while keys.Count() > 1 and (keys.Count() > 10 or registry.GetSpaceAvailable() < 4096)
+        oldest = invalid
+        oldestAt = invalid
+        for each k in keys
+            if k <> key
+                kept = ParseJson(section.Read(k))
+                at = 0
+                if kept <> invalid then at = msOr(kept.at, 0)
+                if oldest = invalid or at < oldestAt
+                    oldest = k
+                    oldestAt = at
+                end if
+            end if
+        end for
+        if oldest = invalid then exit while
+        section.Delete(oldest)
+        section.Flush()
+        keys = section.GetKeyList()
+    end while
+    section.Flush()
 end sub
 
 sub onResumeClosed()
@@ -724,9 +820,18 @@ function twoDigits(n as integer) as string
     return Right("0" + n.ToStr(), 2)
 end function
 
-sub startMenu()
+' session: a kept session to restore (spec 6.5.1), or invalid; resume: start by resuming it.
+sub startMenu(session = invalid as dynamic, resume = false as boolean)
     m.menu = CreateObject("roSGNode", "MenuView")
     if m.opening.lastStop <> invalid then m.menu.lastStop = m.opening.lastStop
+    if session <> invalid
+        m.menu.session = session
+        m.menu.resume = resume
+    end if
+    ' Where the menus' session is kept, whatever happens in them from here.
+    m.sessionKey = sessionKey(m.opening.entry["id"])
+    m.sessionStamp = m.opening.stamp
+    m.menu.observeField("sessionOut", "onSessionOut")
     m.menu.manifest = m.opening.manifest
     m.menu.manifestUrl = m.menuBase + m.opening.entry["url"]
     m.menu.authHeaders = assetHeaders()
@@ -744,6 +849,10 @@ sub startMenu()
     m.top.appendChild(m.menu)
     m.menu.control = "start"
     m.opening = invalid
+end sub
+
+sub onSessionOut()
+    if m.menu <> invalid then sessionWrite(m.sessionKey, m.sessionStamp, m.menu.sessionOut)
 end sub
 
 sub onMenuExit()
