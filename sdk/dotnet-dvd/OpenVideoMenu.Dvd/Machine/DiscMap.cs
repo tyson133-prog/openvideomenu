@@ -123,6 +123,9 @@ public enum Reachability
     Unreferenced,
 }
 
+/// <summary>A title cell: where it is (title set, PGC, cell number), its sectors and the disc's playback time for it.</summary>
+public sealed record DvdCellRef(int Vtsn, int Pgcn, int Cell, uint FirstSector, uint LastSector, TimeSpan Duration);
+
 /// <summary>One DVD title (from the title search table) plus how the navigation reaches it.</summary>
 public sealed class DvdTitleInfo
 {
@@ -141,8 +144,22 @@ public sealed class DvdTitleInfo
     /// <summary>Chapters that menu buttons start at (episode starts inside a "play all" title).</summary>
     public SortedSet<int> TargetedChapters { get; } = new();
 
-    /// <summary>Set when another, lower-numbered title plays exactly the same content.</summary>
+    /// <summary>
+    /// Set when another, lower-numbered title plays the same video, so its file can play this title too: exactly the
+    /// same cells, or (a near duplicate) nearly all of them plus a few of this title's own, listed in
+    /// <see cref="OwnCells"/>.
+    /// </summary>
     public int? DuplicateOf { get; internal set; }
+
+    /// <summary>
+    /// For a near duplicate, the cells this title plays that <see cref="DuplicateOf"/> doesn't: the same film with
+    /// short pieces of its own (a "white rabbit" mode's copies of its rabbit scenes). A ripper that rips only the
+    /// original has to rip these too, or playback of this title skips them. Empty otherwise.
+    /// </summary>
+    public IReadOnlyList<DvdCellRef> OwnCells { get; internal set; } = Array.Empty<DvdCellRef>();
+
+    /// <summary>A duplicate with cells of its own (<see cref="OwnCells"/>).</summary>
+    public bool IsNearDuplicate => DuplicateOf is not null && OwnCells.Count > 0;
 
     /// <summary>Non-null when the title is likely filler (a few frames, a black gap).</summary>
     public string? JunkReason { get; internal set; }
@@ -401,6 +418,31 @@ public static class DiscMapBuilder
         return sb.ToString();
     }
 
+    /// <summary>The cells <paramref name="t"/> plays that <paramref name="original"/> doesn't, in play order (first angle only).</summary>
+    private static List<DvdCellRef> OwnCells(DvdDisc disc, DvdTitleInfo t, DvdTitleInfo original)
+    {
+        var theirs = original.Pgcns
+            .Select(p => disc.GetPgc(DvdDomain.Title, original.Vtsn, p))
+            .Where(p => p is not null)
+            .SelectMany(p => p!.Cells.Where(c => !c.IsAngleBlock || c.BlockMode == 1))
+            .Select(c => (c.FirstSector, c.LastSector))
+            .ToHashSet();
+        var own = new List<DvdCellRef>();
+        foreach (var pgcn in t.Pgcns)
+        {
+            var pgc = disc.GetPgc(DvdDomain.Title, t.Vtsn, pgcn);
+            if (pgc is null) continue;
+            for (var i = 0; i < pgc.Cells.Count; i++)
+            {
+                var c = pgc.Cells[i];
+                if (c.IsAngleBlock && c.BlockMode != 1) continue;
+                if (theirs.Contains((c.FirstSector, c.LastSector)) || own.Any(o => o.FirstSector == c.FirstSector && o.LastSector == c.LastSector)) continue;
+                own.Add(new DvdCellRef(t.Vtsn, pgcn, i + 1, c.FirstSector, c.LastSector, c.Duration));
+            }
+        }
+        return own;
+    }
+
     /// <summary>Fraction of sectors the two titles have in common (by identical cells).</summary>
     private static double CellOverlap(DvdDisc disc, DvdTitleInfo a, DvdTitleInfo b)
     {
@@ -528,7 +570,13 @@ public static class DiscMapBuilder
                         ?? map.Titles.FirstOrDefault(o => o.Ttn < t.Ttn && o.Vtsn == t.Vtsn && o.DuplicateOf is null &&
                                                           (o.Duration - t.Duration).Duration() <= TimeSpan.FromSeconds(2) &&
                                                           CellOverlap(disc, o, t) >= 0.9);
-            if (first is not null && sig.Length > 0) t.DuplicateOf = first.DuplicateOf ?? first.Ttn;
+            if (first is not null && sig.Length > 0)
+            {
+                t.DuplicateOf = first.DuplicateOf ?? first.Ttn;
+                // Not the same cells: the ones only this title plays.
+                if (ContentSignature(disc, map.GetTitle(t.DuplicateOf.Value)!) != sig)
+                    t.OwnCells = OwnCells(disc, t, map.GetTitle(t.DuplicateOf.Value)!);
+            }
 
             if (t.Duration < TimeSpan.FromSeconds(3))
                 t.JunkReason = "shorter than 3 seconds";

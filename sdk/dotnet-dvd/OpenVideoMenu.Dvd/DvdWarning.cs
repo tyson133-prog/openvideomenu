@@ -58,6 +58,12 @@ public enum DvdWarningCode
 
     /// <summary>The bundle didn't pass its own check; nothing was written.</summary>
     BundleInvalid,
+
+    /// <summary>
+    /// A title plays cells no file holds, inside video that was ripped (a near-duplicate title's own cells, such as
+    /// a "white rabbit" mode's): playback skips them.
+    /// </summary>
+    CellsNotRipped,
 }
 
 /// <summary>A warning: what it's about, and a sentence for people.</summary>

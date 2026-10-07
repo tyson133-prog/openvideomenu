@@ -23,14 +23,15 @@ public static class SyntheticDisc
     /// <summary>The disc, opened. Dispose it when done.</summary>
     /// <param name="pal">The title set's video is PAL (default NTSC).</param>
     /// <param name="repeatCell">Title 2 lists its one cell twice (5 min each), as discs do for cell commands to pick from.</param>
-    public static DvdDisc Open(bool pal = false, bool repeatCell = false) =>
-        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell)));
+    /// <param name="second">What title 2 plays (default: video of its own).</param>
+    public static DvdDisc Open(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own) =>
+        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell, second)));
 
-    public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false) => new(StringComparer.OrdinalIgnoreCase)
+    public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own) => new(StringComparer.OrdinalIgnoreCase)
     {
         [@"\VIDEO_TS\VIDEO_TS.IFO"] = Vmg(),
         [@"\VIDEO_TS\VIDEO_TS.VOB"] = MenuVob(),
-        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell),
+        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell, second),
         [@"\VIDEO_TS\VTS_01_1.VOB"] = new byte[2 * 2048],
     };
 
@@ -75,7 +76,7 @@ public static class SyntheticDisc
         return b;
     }
 
-    private static byte[] Vts(bool pal, bool repeatCell)
+    private static byte[] Vts(bool pal, bool repeatCell, SecondTitle second)
     {
         var b = new byte[4 * 2048];
         Ascii(b, 0, "DVDVIDEO-VTS");
@@ -102,7 +103,12 @@ public static class SyntheticDisc
             var e = pgcit + 8 + i * 8;
             b[e] = (byte)(0x80 | (i + 1));   // entry PGC of title set title i+1
             U32(b, e + 4, at);
-            var cells = repeatCell && i == 1
+            // Title 1 as two cells (590 s + 10 s) when title 2 shares them: all of them, or all but the last,
+            // which it has its own 10 s copy of (a "white rabbit" mode).
+            var shared = new Cell(Seconds: 590, Still: 0, First: 0, Last: 99);
+            var cells = second != SecondTitle.Own
+                ? new[] { shared, i == 1 && second == SecondTitle.NearlySameCells ? new Cell(10, 0, 110, 119) : new Cell(10, 0, 100, 109) }
+                : repeatCell && i == 1
                 ? new[] { new Cell(Seconds: 300, Still: 0, First: 1, Last: 1), new Cell(Seconds: 300, Still: 0, First: 1, Last: 1) }
                 : new[] { new Cell(Seconds: 600 * (i + 1), Still: 0, First: (uint)i, Last: (uint)i) };
             at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { CallMenu }, cells: cells);
@@ -228,4 +234,17 @@ public sealed class MemoryFileSystem(Dictionary<string, byte[]> files) : IDvdFil
     public string? VolumeLabel => "SYNTHETIC";
 
     public void Dispose() { }
+}
+
+/// <summary>What the synthetic disc's title 2 plays.</summary>
+public enum SecondTitle
+{
+    /// <summary>Video of its own (20 min).</summary>
+    Own,
+
+    /// <summary>Exactly title 1's cells: a duplicate.</summary>
+    SameCells,
+
+    /// <summary>Title 1's cells but the last, which it has its own copy of: a near duplicate.</summary>
+    NearlySameCells,
 }

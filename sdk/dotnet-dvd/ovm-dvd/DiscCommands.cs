@@ -45,11 +45,15 @@ internal static class DiscCommands
         Console.WriteLine("== Titles ==");
         foreach (var t in map.Titles)
         {
-            var extra = t.DuplicateOf is { } d ? $" DUPLICATE of {d}" : "";
+            var extra = t.DuplicateOf is not { } d ? ""
+                : t.IsNearDuplicate ? $" NEAR DUPLICATE of {d} (+{t.OwnCells.Count} cells of its own, {t.OwnCells.Sum(c => c.Duration.TotalSeconds):0.#} s)"
+                : $" DUPLICATE of {d}";
             if (t.JunkReason is not null) extra += $" JUNK ({t.JunkReason})";
             Console.WriteLine($"  Title {t.Ttn,2}  vts{t.Vtsn} ttn{t.VtsTtn}  {t.Duration:hh\\:mm\\:ss}  {t.ChapterCount,3} ch  {t.Reach}{extra}");
             if (t.TargetedChapters.Count > 0)
                 Console.WriteLine($"            buttons start chapters: {string.Join(",", t.TargetedChapters)}");
+            if (t.IsNearDuplicate)
+                Console.WriteLine($"            own cells: {string.Join(", ", t.OwnCells.Select(c => $"pgc{c.Pgcn} c{c.Cell} {c.FirstSector}-{c.LastSector} {c.Duration.TotalSeconds:0.#}s"))}");
             foreach (var s in t.Sources.Distinct().Take(verbose ? 50 : 4))
                 Console.WriteLine($"            <- {s}");
         }

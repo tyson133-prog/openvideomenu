@@ -36,6 +36,9 @@ public sealed class MenuManifestBuilder
     /// <summary>Titles the menus play that no file holds (not counting short warnings and logos that are skipped).</summary>
     public IReadOnlyCollection<int> MissingTitles => _compiler.MissingTitles;
 
+    /// <summary>Cells inside played titles that no file holds (title set, PGC, cell): playback skips them.</summary>
+    public IReadOnlyCollection<(int Vtsn, int Pgcn, int Cell)> CellsNotRipped => _compiler.CellsNotRipped;
+
     /// <summary>Art per menu (Still and up); filled by the exporter before <see cref="Build"/>.</summary>
     public Dictionary<MenuNode, MenuArtSet> Art { get; } = new();
 

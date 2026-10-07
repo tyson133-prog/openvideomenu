@@ -131,6 +131,29 @@ public sealed class DvdMenuCompiler
     /// <summary>Unripped titles that left a button or a path with nothing to play (not just a skipped warning).</summary>
     public SortedSet<int> MissingTitles { get; } = new();
 
+    /// <summary>
+    /// Cells inside a played run that no file holds, by title set, PGC and cell: playback skips them (see
+    /// <see cref="DvdWarningCode.CellsNotRipped"/>).
+    /// </summary>
+    public SortedSet<(int Vtsn, int Pgcn, int Cell)> CellsNotRipped { get; } = new();
+
+    /// <summary>
+    /// A run that plays from the rip but has cells no file holds: the play goes on without them, as before, so a
+    /// film missing a few short pieces still plays; but it isn't the disc, so say which cells, once each.
+    /// </summary>
+    private void WarnCellsNotRipped(TitleRun run, PlaybackPlan plan)
+    {
+        var missing = new List<PlayedCell>();
+        for (var i = 0; i < run.Cells.Count && i < plan.CellEnds.Count; i++)
+            if (plan.CellEnds[i] is null && CellsNotRipped.Add((run.Cells[i].Vtsn, run.Cells[i].Pgcn, run.Cells[i].Cell)))
+                missing.Add(run.Cells[i]);
+        if (missing.Count == 0 || Warnings.Count >= 200) return;
+        var where = string.Join(", ", missing.GroupBy(c => (c.Vtsn, c.Pgcn)).Select(g => $"VTS {g.Key.Vtsn} title PGC {g.Key.Pgcn} cell{(g.Count() > 1 ? "s" : "")} {string.Join(", ", g.Select(c => c.Cell))}"));
+        var titles = TitlesOf(missing).Distinct().ToList();
+        Warnings.Add(DvdWarningCode.CellsNotRipped,
+            $"{where} ({missing.Sum(c => c.Seconds):0.#} s{(titles.Count > 0 ? $", title {string.Join(", ", titles)}" : "")}) {(missing.Count > 1 ? "aren't in any file, so playback skips them. Rip them" : "isn't in any file, so playback skips it. Rip it")} to keep {(missing.Count > 1 ? "them" : "it")}.");
+    }
+
     /// <summary>Conditions moved to the start of playback although a register they read changes during it.</summary>
     public int ApproximatedConditions { get; private set; }
 
@@ -2684,6 +2707,7 @@ public sealed class DvdMenuCompiler
             return;
         }
 
+        WarnCellsNotRipped(run, plan);
         plan = RecordPositions(run, plan);
         PlaceResumes(run.Cues.SelectMany(c => c.Actions), run, plan, playing: true);
         // What follows the run's cells: run by a cue while the title still plays (a call out of it, a loop), saves
