@@ -48,6 +48,7 @@ send({ type: "press", key: "enter" });
 | `validateManifest(data)` | The same, for an object you have already parsed. |
 | `initialState()` | A navigator state before `start`. |
 | `step(manifest, state, event)` | Apply one event (a key, the end of playback, a cue…). Returns `{ state, effects }`. |
+| `sessionOf(state)` | Level 3: what to keep between viewings (variables, player state, resume point), as plain JSON. Give it back with `{ type: "start", session, resume? }` (spec §6.5.1). |
 | `levelUsed(manifest)` | The conformance level (0–3) the manifest's menus use. |
 | `resolveMedia(ref, manifestUrl, resolvers?)` | Turn a media ref into a URL. Paths in a bundle's manifest resolve beside the bundle. Refs like `{ scheme, id }` go to your resolvers. |
 | `resolvePath(path, manifestUrl)` | Resolve a menu asset path against the manifest. |

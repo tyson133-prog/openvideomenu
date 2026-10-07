@@ -98,7 +98,7 @@ never going back), which Level 3 timers and counters read.
 
 | Event | When |
 |---|---|
-| `{ "type": "start", "player"?, "seed"? }` | Begin: run `firstPlay` or open the root menu. `player` holds `@` player state (languages, region, …); `seed` seeds random play. |
+| `{ "type": "start", "player"?, "seed"?, "session"?, "resume"? }` | Begin: run `firstPlay` or open the root menu. `player` holds `@` player state (languages, region, …); `seed` seeds random play. Level 3: `session` is one kept from an earlier viewing (`vars`, `player`, `lastStop`), restored first; `resume: true` starts with the resume point instead (spec §6.5.1). |
 | `{ "type": "press", "key", "position"? }` | A remote key: `up`, `down`, `left`, `right`, `enter`, `back`, and at Level 2 the menu keys `menu`, `title`, `audioMenu`, `subtitleMenu`, `angleMenu`, `chapterMenu`. During playback, a menu key carries the `position` it was pressed at. |
 | `{ "type": "select", "button" }` | A pointer moved onto a button. |
 | `{ "type": "activate", "button" }` | A pointer clicked a button. |

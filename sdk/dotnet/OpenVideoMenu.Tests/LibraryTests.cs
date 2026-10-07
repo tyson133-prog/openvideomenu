@@ -293,4 +293,15 @@ public sealed class LibraryTests : IDisposable
         Assert.True(result.Ok, string.Join("\n", result.Errors));
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(text), JsonNode.Parse(result.Manifest!.ToJson())));
     }
+
+    [Fact]
+    public void A_session_round_trips_as_json_in_the_same_shape_as_typescript()
+    {
+        var json = """{"vars":{"rabbit":1},"player":{"@audio":2},"lastStop":{"media":"film","position":120,"after":{"type":"goto","menu":"end"}}}""";
+        var session = NavSession.FromJson(json)!;
+        Assert.Equal(new Scalar(1), session.Vars["rabbit"]);
+        Assert.Equal(120, session.LastStop!.Position);
+        Assert.Equal("goto", session.LastStop.After!.Type);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(session.ToJson())));
+    }
 }

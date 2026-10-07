@@ -1,0 +1,121 @@
+{
+  "description": "A session kept between viewings (spec §6.5.1). start with a session restores its variables and resume point: the menus read the variables, and the menu's Resume plays the point. start with resume: true begins with the resume point (its position, then its after-action) instead of the root menu, and without a resume point starts as usual. start without a session begins from the manifest's own values.",
+  "level": 3,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "level": 3,
+    "title": { "name": "Kept Session" },
+    "vars": { "rabbit": 0 },
+    "media": {
+      "film": { "ref": "Film.mkv", "kind": "feature" },
+      "rabbit": { "ref": "Rabbit.mkv", "kind": "featurette" }
+    },
+    "menus": {
+      "main": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [
+          {
+            "id": "play",
+            "rect": [100, 100, 200, 40],
+            "nav": { "down": "resume" },
+            "action": {
+              "type": "if",
+              "test": { "var": "rabbit", "eq": 1 },
+              "then": { "type": "play", "media": "rabbit" },
+              "else": { "type": "play", "media": "film" }
+            }
+          },
+          {
+            "id": "resume",
+            "rect": [100, 160, 200, 40],
+            "nav": { "up": "play" },
+            "action": { "type": "resume", "otherwise": { "type": "goto", "menu": "end" } }
+          }
+        ]
+      },
+      "end": {
+        "canvas": { "width": 720, "height": 480 },
+        "buttons": [{ "id": "again", "rect": [100, 100, 200, 40], "action": { "type": "goto", "menu": "main" } }]
+      }
+    },
+    "rootMenu": "main",
+    "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "film" } }] }]
+  },
+  "steps": [
+    {
+      "event": { "type": "start", "session": { "vars": { "rabbit": 1 }, "player": {} } },
+      "expect": { "mode": "menu", "menu": "main", "focus": "play" }
+    },
+    {
+      "event": { "type": "press", "key": "enter" },
+      "expect": {
+        "mode": "playing",
+        "effects": [
+          { "type": "activated", "menu": "main", "button": "play" },
+          { "type": "play", "media": "rabbit", "start": 0 }
+        ]
+      }
+    },
+    {
+      "event": { "type": "start" },
+      "expect": { "mode": "menu", "menu": "main", "focus": "play" }
+    },
+    {
+      "event": { "type": "press", "key": "enter" },
+      "expect": {
+        "mode": "playing",
+        "effects": [
+          { "type": "activated", "menu": "main", "button": "play" },
+          { "type": "play", "media": "film", "start": 0 }
+        ]
+      }
+    },
+    {
+      "event": {
+        "type": "start",
+        "session": {
+          "vars": { "rabbit": 1 },
+          "player": {},
+          "lastStop": { "media": "film", "position": 120, "after": { "type": "goto", "menu": "end" } }
+        }
+      },
+      "expect": { "mode": "menu", "menu": "main", "focus": "play" }
+    },
+    {
+      "event": { "type": "press", "key": "down" },
+      "expect": { "focus": "resume" }
+    },
+    {
+      "event": { "type": "press", "key": "enter" },
+      "expect": {
+        "mode": "playing",
+        "effects": [
+          { "type": "activated", "menu": "main", "button": "resume" },
+          { "type": "play", "media": "film", "start": 120 }
+        ]
+      }
+    },
+    {
+      "event": {
+        "type": "start",
+        "resume": true,
+        "session": {
+          "vars": { "rabbit": 1 },
+          "player": {},
+          "lastStop": { "media": "film", "position": 300, "after": { "type": "goto", "menu": "end" } }
+        }
+      },
+      "expect": { "mode": "playing", "effects": [{ "type": "play", "media": "film", "start": 300 }] }
+    },
+    {
+      "event": { "type": "ended" },
+      "expect": { "mode": "menu", "menu": "end", "focus": "again" }
+    },
+    {
+      "event": { "type": "start", "resume": true },
+      "expect": { "mode": "menu", "menu": "main", "focus": "play" }
+    }
+  ]
+}

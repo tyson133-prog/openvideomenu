@@ -22,7 +22,15 @@ type NavEventBody =
    * Begin: run firstPlay, or open the root menu. Players pass what they know of the viewer's setup as
    * "@" player state (languages, region, …) and a random seed.
    */
-  | { type: "start"; player?: Record<string, Scalar>; seed?: number }
+  | {
+      type: "start";
+      player?: Record<string, Scalar>;
+      seed?: number;
+      /** Level 3: a session the host kept from an earlier viewing of this manifest (sessionOf, spec §6.5.1), restored first. */
+      session?: Session;
+      /** Level 3: begin with the resume point (as the "resume" action) instead of firstPlay or the root menu. */
+      resume?: boolean;
+    }
   /** Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack). */
   | { type: "player"; values: Record<string, Scalar> }
   /**
@@ -193,6 +201,22 @@ export interface NavState {
   seq: number;
 }
 
+/**
+ * Level 3: what a host may keep of a manifest's state between viewings (spec §6.5.1): the variables, the
+ * player state, and the resume point. Plain JSON. Take it with sessionOf; give it back with start's `session`.
+ */
+export interface Session {
+  vars: Record<string, Scalar>;
+  player: Record<string, Scalar>;
+  lastStop?: ResumePoint;
+}
+
+/** Level 3: the part of a state a host may keep between viewings (spec §6.5.1). */
+export function sessionOf(state: NavState): Session {
+  const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+  return { vars: copy(state.vars), player: copy(state.player), ...(state.lastStop ? { lastStop: copy(state.lastStop) } : {}) };
+}
+
 export interface ResumePoint {
   media: string;
   position: number;
@@ -238,13 +262,17 @@ export function step(manifest: Manifest, state: NavState, event: NavEvent): Step
     case "start":
       s.history = [];
       s.playing = undefined;
-      s.vars = { ...(manifest.vars ?? {}) };
+      // A kept session's variables, over the manifest's starting values (§6.5.1).
+      s.vars = { ...(manifest.vars ?? {}), ...(event.session?.vars ?? {}) };
       // Level 3: counters start counting now; the navigation timer starts stopped.
       s.counters = manifest.counters?.length ? Object.fromEntries(manifest.counters.map((name) => [name, s.now ?? 0])) : undefined;
       s.navTimer = undefined;
-      s.player = { ...(s.player ?? {}), ...(event.player ?? {}) };
+      // What the player reports now wins over the kept session's player state (the TV may have changed).
+      s.player = { ...(s.player ?? {}), ...(event.session?.player ?? {}), ...(event.player ?? {}) };
+      if (event.session) s.lastStop = event.session.lastStop;
       if (event.seed !== undefined) s.seed = event.seed;
-      if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
+      if (event.resume && s.lastStop) run(manifest, s, { type: "resume" }, effects, { pushHistory: false });
+      else if (manifest.firstPlay) run(manifest, s, manifest.firstPlay, effects, { pushHistory: false });
       else openRoot(manifest, s, effects);
       break;
 

@@ -46,8 +46,10 @@ public abstract record NavEvent
     /// <summary>
     /// Begin: run firstPlay, or open the root menu. <paramref name="Player"/> is what the player knows of
     /// the viewer's setup as "@" player state; <paramref name="Seed"/> seeds random (Level 2).
+    /// <paramref name="Session"/> (Level 3) is a session kept from an earlier viewing of this manifest, restored
+    /// first; with <paramref name="Resume"/> it begins with the resume point instead (spec §6.5.1).
     /// </summary>
-    public sealed record Start(IReadOnlyDictionary<string, Scalar>? Player = null, long? Seed = null) : NavEvent;
+    public sealed record Start(IReadOnlyDictionary<string, Scalar>? Player = null, long? Seed = null, NavSession? Session = null, bool Resume = false) : NavEvent;
 
     /// <summary>Level 2: player state changed outside the menus (e.g. the viewer picked another soundtrack).</summary>
     public sealed record PlayerChanged(IReadOnlyDictionary<string, Scalar> Values) : NavEvent;
@@ -227,6 +229,32 @@ public sealed record OverlayFocus(string Cue, string Focus);
 public sealed record LastStop(string Media, double Position, PlayItem? Item = null, IReadOnlyList<PlayItem>? Queue = null, MenuAction? After = null, int? Chapter = null);
 
 /// <summary>
+/// Level 3: what a host may keep of a manifest's state between viewings (spec §6.5.1): the variables, the player
+/// state, and the resume point. Take it with <see cref="Of"/>; give it back with <see cref="NavEvent.Start"/>.
+/// <see cref="ToJson"/> and <see cref="FromJson"/> store it as plain JSON (the same shape as TypeScript's Session).
+/// </summary>
+public sealed record NavSession
+{
+    public IReadOnlyDictionary<string, Scalar> Vars { get; init; } = new Dictionary<string, Scalar>();
+
+    public IReadOnlyDictionary<string, Scalar> Player { get; init; } = new Dictionary<string, Scalar>();
+
+    public LastStop? LastStop { get; init; }
+
+    /// <summary>The part of <paramref name="state"/> a host may keep.</summary>
+    public static NavSession Of(NavState state) => new()
+    {
+        Vars = new Dictionary<string, Scalar>(state.Vars),
+        Player = new Dictionary<string, Scalar>(state.Player),
+        LastStop = state.LastStop,
+    };
+
+    public string ToJson() => System.Text.Json.JsonSerializer.Serialize(this, Manifest.JsonOptions);
+
+    public static NavSession? FromJson(string json) => System.Text.Json.JsonSerializer.Deserialize<NavSession>(json, Manifest.JsonOptions);
+}
+
+/// <summary>
 /// Level 3: after a resume, @lastChapter keeps the chapter the resume point was saved in until playback of
 /// <paramref name="Media"/> reaches <paramref name="Until"/> seconds (the next chapter's start).
 /// </summary>
@@ -324,13 +352,32 @@ public static class Navigator
             case NavEvent.Start start:
                 s.History.Clear();
                 s.Playing = null;
-                s.Vars = new Dictionary<string, Scalar>(manifest.Vars ?? []);
+                // A kept session's variables, over the manifest's starting values (§6.5.1).
+                var vars = new Dictionary<string, Scalar>(manifest.Vars ?? []);
+                foreach (var (k, v) in start.Session?.Vars ?? new Dictionary<string, Scalar>())
+                {
+                    vars[k] = v;
+                }
+
+                s.Vars = vars;
+
                 // Level 3: counters start counting now; the navigation timer starts stopped.
                 s.Counters = manifest.Counters is { Count: > 0 } counters ? counters.Distinct().ToDictionary(c => c, _ => s.Now ?? 0) : null;
                 s.NavTimer = null;
+                // What the player reports now wins over the kept session's player state (the TV may have changed).
+                foreach (var (k, v) in start.Session?.Player ?? new Dictionary<string, Scalar>())
+                {
+                    s.Player[k] = v;
+                }
+
                 foreach (var (k, v) in start.Player ?? new Dictionary<string, Scalar>())
                 {
                     s.Player[k] = v;
+                }
+
+                if (start.Session is { } session)
+                {
+                    s.LastStop = session.LastStop;
                 }
 
                 if (start.Seed is { } seed)
@@ -338,7 +385,11 @@ public static class Navigator
                     s.Seed = seed;
                 }
 
-                if (manifest.FirstPlay is { } firstPlay)
+                if (start.Resume && s.LastStop is not null)
+                {
+                    Run(manifest, s, new ResumeAction(), effects, pushHistory: false);
+                }
+                else if (manifest.FirstPlay is { } firstPlay)
                 {
                     Run(manifest, s, firstPlay, effects, pushHistory: false);
                 }

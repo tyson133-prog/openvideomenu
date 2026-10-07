@@ -12,6 +12,14 @@ function msNavInitialState() as object
 end function
 
 ' Level 3: the most actions one event runs (spec 6.4), so a named action that runs itself still ends.
+' Level 3: the part of a state a host may keep between viewings (spec 6.5.1): the variables, the player
+' state and the resume point, as plain JSON-able values. Give it back with start's "session".
+function msNavSessionOf(state as object) as object
+    session = { vars: ParseJson(FormatJson(state.vars)), player: ParseJson(FormatJson(state.player)) }
+    if state.lastStop <> invalid then session.lastStop = ParseJson(FormatJson(state.lastStop))
+    return session
+end function
+
 function msNavStepBudget() as integer
     return 10000
 end function
@@ -31,7 +39,15 @@ function msNavStep(manifest as object, state as object, event as object) as obje
     if t = "start"
         s.history = []
         s.playing = invalid
-        s.vars = msNavCopyVars(msOr(manifest["vars"], {}))
+        ' A kept session's variables, over the manifest's starting values (Level 3, spec 6.5.1).
+        session = event["session"]
+        vars = msNavCopyVars(msOr(manifest["vars"], {}))
+        if session <> invalid and session["vars"] <> invalid
+            for each key in session["vars"]
+                vars[key] = session["vars"][key]
+            end for
+        end if
+        s.vars = vars
         ' Level 3: counters start counting now; the navigation timer starts stopped.
         s.counters = invalid
         if manifest["counters"] <> invalid
@@ -42,11 +58,16 @@ function msNavStep(manifest as object, state as object, event as object) as obje
         end if
         s.navTimer = invalid
         ' What the player knows of the viewer's setup ("@" player state) and a random seed (Level 2).
+        ' What the player reports now wins over the kept session's player state (the TV may have changed).
         player = msNavCopyVars(s.player)
+        if session <> invalid and session["player"] <> invalid then player.Append(session["player"])
         if event["player"] <> invalid then player.Append(event["player"])
         s.player = player
+        if session <> invalid then s.lastStop = session["lastStop"]
         if event["seed"] <> invalid then s.seed = event["seed"] + 0&
-        if manifest["firstPlay"] <> invalid
+        if event["resume"] = true and s.lastStop <> invalid
+            msNavRun(manifest, s, { type: "resume" }, effects, false)
+        else if manifest["firstPlay"] <> invalid
             msNavRun(manifest, s, manifest["firstPlay"], effects, false)
         else
             msNavOpenRoot(manifest, s, effects)

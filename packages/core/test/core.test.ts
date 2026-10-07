@@ -102,3 +102,25 @@ describe("menuAssets", () => {
     expect(menuAssets(manifest as never)).toEqual(["menus/back.mp4"]);
   });
 });
+
+describe("sessionOf (spec §6.5.1)", () => {
+  it("keeps the variables, player state and resume point as plain JSON, and nothing about the screen", async () => {
+    const { sessionOf, initialState } = await import("../src/index.js");
+    const state = {
+      ...initialState(),
+      mode: "menu" as const,
+      menu: "main",
+      focus: "play",
+      history: [{ menu: "root", focus: "go" }],
+      vars: { rabbit: 1 },
+      player: { "@audio": 2 },
+      lastStop: { media: "film", position: 120, after: { type: "goto" as const, menu: "end" } },
+    };
+    const session = sessionOf(state);
+    expect(session).toEqual({ vars: { rabbit: 1 }, player: { "@audio": 2 }, lastStop: { media: "film", position: 120, after: { type: "goto", menu: "end" } } });
+    expect(JSON.parse(JSON.stringify(session))).toEqual(session);
+    // A copy: changing the state afterwards doesn't change the kept session.
+    state.vars.rabbit = 0;
+    expect(session.vars.rabbit).toBe(1);
+  });
+});

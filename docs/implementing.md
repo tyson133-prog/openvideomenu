@@ -140,6 +140,13 @@ shows the fallback list ([§10](../spec/openvideomenu-v0.1.md#10-conformance-lev
 
 With a library, most of this is more events to send and effects to carry out; the navigator does the logic.
 
+At Level 3, keep the session when the viewer stops: `sessionOf(state)` gives the variables, player state and
+resume point as plain JSON. Store it with the title, with the manifest's version, and give it back next time
+with `{ type: "start", session }`, or `{ type: "start", session, resume: true }` to carry on from where they
+stopped. A disc's settings (a viewing mode, a commentary) then survive the app closing, as they survive a
+stop on a DVD player. Drop the session if the manifest changed
+([§6.5.1](../spec/openvideomenu-v0.1.md#651-keeping-the-session-between-viewings)).
+
 ## Check your player
 
 Run the [conformance suite](../conformance/README.md). When your player passes the cases for a level, it is

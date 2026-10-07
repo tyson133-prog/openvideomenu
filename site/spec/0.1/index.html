@@ -543,6 +543,28 @@ playback from a cue keeps the chapter the cue&#39;s logic read.</li>
 <li>Hosts MAY restore a point from their own records (the viewer&#39;s last position from the media server) as
 just media and position.</li>
 </ul>
+<h4 id="651-keeping-the-session-between-viewings"><a class="anchor" href="#651-keeping-the-session-between-viewings">6.5.1 Keeping the session between viewings</a></h4>
+<p>A disc player keeps its registers and its resume point until the disc comes out: stop the film, come
+back later, and Resume carries on with the settings the menus chose (a commentary, a viewing mode). A
+player MAY keep the same for each manifest between viewings, as a <strong>session</strong>:</p>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>What it holds</th></tr></thead><tbody><tr><td><code>vars</code></td><td>The variables (§6.1), as they were.</td></tr>
+<tr><td><code>player</code></td><td>The player state (<code>@audio</code>, <code>@subtitle</code>, <code>@angle</code>, …), as the navigator last had it.</td></tr>
+<tr><td><code>lastStop</code></td><td>The resume point, whole: <code>media</code>, <code>position</code>, and when they apply <code>item</code>, <code>queue</code>, <code>after</code> and <code>chapter</code>.</td></tr></tbody></table></div>
+<p>Nothing else is kept: not the menu showing, the focus, Back&#39;s history, an overlay, the navigation timer,
+counters or a parental request. A session is plain JSON.</p>
+<ul>
+<li><strong>Restoring it:</strong> the start of navigation takes the session. Its <code>vars</code> replace the manifest&#39;s starting
+values (names the session doesn&#39;t have keep theirs). Its <code>player</code> comes first and what the player
+reports at the start (§6.1, its languages, region, …) overrides it, since the TV may have changed.
+Its <code>lastStop</code> becomes the resume point. Then the manifest starts as usual: <code>firstPlay</code>, or <code>rootMenu</code>.</li>
+<li><strong>Starting with the resume point:</strong> a player MAY instead start by resuming, as the <code>resume</code> action
+does (the item from its position, then its queue and <code>after</code>). Without a resume point it starts as usual.</li>
+<li><strong>A player MUST discard a session when the manifest changes,</strong> by whatever version it has of it (the
+file&#39;s modified time, a hash, the server index&#39;s tag). Variables and resume points mean nothing to a
+different manifest.</li>
+<li>A player that keeps sessions SHOULD keep one per manifest and per viewer, and MAY forget them (after
+the title is finished, after a while, to save space). Forgetting one is the same as a first viewing.</li>
+</ul>
 <h3 id="66-remote-keys-and-prohibitions-level-2"><a class="anchor" href="#66-remote-keys-and-prohibitions-level-2">6.6 Remote keys and prohibitions (Level 2)</a></h3>
 <p>A DVD remote has more than Back: <strong>Menu</strong> opens the disc&#39;s root menu, even in the middle of the film,
 and <strong>Title</strong> its title menu. A disc can also call its audio, subtitle, angle and chapter menus. And a
@@ -685,7 +707,7 @@ Level 3. <code>openvideomenu validate</code> shows the level each manifest uses.
 <footer class="site-footer">
   <div class="wrap">
     <div class="legal">
-      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="../../privacy.html">Privacy</a> · <span class="tbd">Source code</span> · <span class="tbd">Contact</span></span>
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="spec/">Specification</a> · <a href="../../privacy.html">Privacy</a> · <a href="https://github.com/tyson133-prog/openvideomenu">Source code</a> · <span class="tbd">Contact</span></span>
       <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
     </div>
   </div>

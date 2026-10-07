@@ -560,6 +560,33 @@ names the cell to come back to, and the point survives other titles until a Resu
 - Hosts MAY restore a point from their own records (the viewer's last position from the media server) as
   just media and position.
 
+#### 6.5.1 Keeping the session between viewings
+
+A disc player keeps its registers and its resume point until the disc comes out: stop the film, come
+back later, and Resume carries on with the settings the menus chose (a commentary, a viewing mode). A
+player MAY keep the same for each manifest between viewings, as a **session**:
+
+| Field | What it holds |
+|---|---|
+| `vars` | The variables (§6.1), as they were. |
+| `player` | The player state (`@audio`, `@subtitle`, `@angle`, …), as the navigator last had it. |
+| `lastStop` | The resume point, whole: `media`, `position`, and when they apply `item`, `queue`, `after` and `chapter`. |
+
+Nothing else is kept: not the menu showing, the focus, Back's history, an overlay, the navigation timer,
+counters or a parental request. A session is plain JSON.
+
+- **Restoring it:** the start of navigation takes the session. Its `vars` replace the manifest's starting
+  values (names the session doesn't have keep theirs). Its `player` comes first and what the player
+  reports at the start (§6.1, its languages, region, …) overrides it, since the TV may have changed.
+  Its `lastStop` becomes the resume point. Then the manifest starts as usual: `firstPlay`, or `rootMenu`.
+- **Starting with the resume point:** a player MAY instead start by resuming, as the `resume` action
+  does (the item from its position, then its queue and `after`). Without a resume point it starts as usual.
+- **A player MUST discard a session when the manifest changes,** by whatever version it has of it (the
+  file's modified time, a hash, the server index's tag). Variables and resume points mean nothing to a
+  different manifest.
+- A player that keeps sessions SHOULD keep one per manifest and per viewer, and MAY forget them (after
+  the title is finished, after a while, to save space). Forgetting one is the same as a first viewing.
+
 ### 6.6 Remote keys and prohibitions (Level 2)
 
 A DVD remote has more than Back: **Menu** opens the disc's root menu, even in the middle of the film,
