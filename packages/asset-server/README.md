@@ -27,17 +27,17 @@ The library paths come as your media server sees them. When the menu server sees
 ## Run with Docker (Linux, Unraid, Synology)
 
 ```sh
-docker build -f docker/asset-server.Dockerfile -t openvideomenu-asset-server .
 docker run -d --name openvideomenu --restart unless-stopped --network host \
   -v /path/to/media:/data:ro \
   -e PLEX_URL=http://127.0.0.1:32400 -e PLEX_TOKEN=your-token \
-  openvideomenu-asset-server
+  ghcr.io/tyson133-prog/openvideomenu-menu-server:latest
 ```
 
 Mount your media at the same path Plex uses (here `/data`, as in most Plex containers), or add `-e PATH_MAP=/plex-path=/container-path`. `--network host` lets the TV app discover the server automatically. Without it, publish the port (`-p 8790:8790`) and enter the address in the app by hand.
 
-Docker Compose: [`docker/compose.yaml`](../../docker/compose.yaml) (edit the media folders and server address, then
-`docker compose -f docker/compose.yaml up -d --build`).
+Docker Compose: [`docker/compose.yaml`](../../docker/compose.yaml) (edit the media folders, server address and token,
+then `docker compose -f docker/compose.yaml up -d`). To build the image yourself instead, from a checkout:
+`docker build -f docker/asset-server.Dockerfile -t openvideomenu-menu-server .`
 
 ## Run as a Linux service (systemd)
 
