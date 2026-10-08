@@ -55,15 +55,16 @@ The API uses the viewer's existing media-server sign-in. There are no Open Video
 
   | Media server | Header the app sends | How the asset server checks it |
   |---|---|---|
-  | Plex | `X-Plex-Token: …` (or `Authorization: Bearer …`) | plex.tv lists this Plex server among the token's resources |
+  | Plex | `X-Plex-Token: …` (or `Authorization: Bearer …`) | The configured Plex server accepts the token (it answers `GET /library/sections` with it). When that server lets its network in without signing in (it accepts a made-up token too), or can't be reached, plex.tv must list this Plex server among the token's resources instead. |
   | Jellyfin | `Authorization: MediaBrowser …, Token="…"` | The configured Jellyfin server answers `GET /Users/Me` |
 
 - Credentials MUST travel in headers, never in URLs.
 - A request without a valid sign-in MUST get `401`.
 - Servers MUST NOT store viewers' credentials. They MAY cache verdicts briefly in memory.
 - A standalone server MAY keep one credential of its own, given by whoever sets it up: a media-server
-  token or API key it uses to read that media server's library folders, so it scans them and follows
-  them when libraries change. It MUST NOT log it, and SHOULD keep it where only the server and the
+  token or API key it uses to read that media server's library folders and items, so it scans them,
+  follows them when libraries change, and says which item each menu's media is (the index's `items`). It
+  MUST NOT log it, and SHOULD keep it where only the server and the
   machine's administrators can read it. It uses it only to read; it MUST NOT change anything on the
   media server.
 
@@ -129,6 +130,13 @@ Signed in. Every manifest the server found, and the media each one references.
 | `media[].segments` | when the media is made of segments | *(Level 2)* The media ids it plays, in order; such media have no `ref` or `path` (the files are those of the media listed). |
 | `media[].angles` | when the media has angle files | *(Level 2)* One `{ ref, path }` per other angle (angle 2, 3, …), `path` as for the media itself, so apps can match those files too. |
 | `modified` | yes | When the manifest last changed (ISO 8601). |
+| `items` | no | The media server's items that play the manifest's media, when the server knows them: one `{ media, server, id, type, show? }` per media and media server. `media` is the manifest's media id; `server` the media server's id (Plex's `machineIdentifier`, Jellyfin's server `Id`); `id` the item's id there (Plex `ratingKey`, Jellyfin item `Id`); `type` `"movie"` or `"episode"`; `show` an episode's show id. |
+
+**Items.** Native servers know which of their items each `media[].path` is; a standalone server knows
+when it has the media server's token (§3). Servers SHOULD then include `items`. Apps use an item only
+when its `server` is the server they are signed in to, and MUST fall back to matching `media[].path`
+themselves when `items` is absent or has nothing for that server. An item lets an app show a menu's
+title without paging through the library to find it, and find a TV menu's show by its id.
 
 The index MUST NOT list menu asset paths; the server keeps its allowlist to itself. Apps MUST
 ignore fields they don't know.
@@ -168,9 +176,3 @@ remote-access settings.
 - The path carries the API major version (`/v1/`) and `health.api` repeats it.
 - Within v1, changes are additive: new optional fields and new endpoints only.
 - A breaking change would be `/v2/`, served alongside `/v1/`.
-
-## 7. Planned
-
-- **Resolved media:** native servers know which of their items each `media[].path` is. They could
-  return that directly (e.g. `"item": {"scheme": "jellyfin", "id": "…"}`), so apps skip path
-  matching. It would be an optional additive field. 

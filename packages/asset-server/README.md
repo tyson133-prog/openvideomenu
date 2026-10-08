@@ -7,13 +7,14 @@ A small, **read-only** server that runs next to your Plex server (or Jellyfin, w
 ## What it does and doesn't do
 
 - **Follows your libraries.** With a Plex token or a Jellyfin API key, it asks your media server for its library folders (movie and TV libraries) and keeps following them: a library you add is picked up within 5 minutes. Without one, it scans the folders you give it.
-- Scans those folders for `*.openvideomenu.json` manifests and `.ovmz` bundles, and again every 30 seconds, so new or removed menus show up within half a minute.
+- Scans those folders for `*.openvideomenu.json` manifests and `.ovmz` bundles. With a token it also listens to your media server's notifications, so a film's menu shows up as soon as the media server has the film; it then rescans the folders every 5 minutes (for menus added to films already in the library). Without a token, or while the notifications are down, it rescans every 30 seconds.
+- **Says which library item each menu belongs to** (with a token): the index names the Plex or Jellyfin item that plays each menu's media, so the TV apps find menus at once instead of searching your library.
 - Serves **only** those manifests and the menu art they name: backgrounds, highlights, menu music, transitions, chapter thumbnails.
 - **Never serves your media.** Films, episodes and extras are refused. Any file no manifest names as menu art can't be reached at all.
 - **Never writes anything.** Mount your media read-only.
 - **Home network only.** It answers only local and VPN addresses: 10.x, 172.16–31.x, 192.168.x, and 100.64.x (Tailscale).
-- **Checks each viewer's Plex or Jellyfin sign-in.** The TV app sends its sign-in. For Plex, the server asks plex.tv whether that token can access *your* Plex server. For Jellyfin, it asks your Jellyfin server whether it accepts the token (`GET /Users/Me`). Answers are cached briefly in memory; viewers' tokens are never stored.
-- **Keeps one credential of its own, if you give it one:** the Plex token or Jellyfin API key it reads your library folders with. It sits in the server's settings, so keep that file readable only by the server and administrators (the installers do this for you). The server only reads the list of libraries with it; it never changes anything on your media server, and never logs it.
+- **Checks each viewer's Plex or Jellyfin sign-in.** The TV app sends its sign-in. For Plex, the server asks *your* Plex server whether it accepts that token, so menus keep working when the internet is down. (If your Plex server lets your network in without signing in, it would accept any token, so then the server asks plex.tv whether the token can access your Plex server.) For Jellyfin, it asks your Jellyfin server whether it accepts the token (`GET /Users/Me`). Answers are cached briefly in memory; viewers' tokens are never stored.
+- **Keeps one credential of its own, if you give it one:** the Plex token or Jellyfin API key it reads your library folders with. It sits in the server's settings, so keep that file readable only by the server and administrators (the installers do this for you). The server only reads with it (the libraries, their items, and change notifications); it never changes anything on your media server, and never logs it.
 - **Announces itself** on the network (`_openvideomenu._tcp`), so the TV app finds it without typing an address. It also answers legacy unicast mDNS queries (RFC 6762 §6.7), which is how the Roku app browses.
 
 ## The token

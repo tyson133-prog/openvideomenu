@@ -34,7 +34,13 @@ data class CatalogEntry(
     val title: CatalogTitle? = null,
     val hasMenus: Boolean = false,
     val media: List<CatalogMedia> = emptyList(),
+    /** The media server's items that play its media, when the menu server knows them (server API `items`). */
+    val items: List<CatalogItem> = emptyList(),
 )
+
+/** One of [CatalogEntry.items]: the item ([id], on the media server [server]) that plays media [media]. */
+@Serializable
+data class CatalogItem(val media: String, val server: String, val id: String, val type: String, val show: String? = null)
 
 @Serializable
 data class CatalogTitle(val name: String, val year: Int? = null)

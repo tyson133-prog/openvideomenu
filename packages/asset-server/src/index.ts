@@ -1,5 +1,5 @@
 export { Catalog, encodePath } from "./catalog.js";
-export type { CatalogEntry, CatalogMedia } from "./catalog.js";
+export type { CatalogEntry, CatalogMedia, EntryItem, IndexEntry } from "./catalog.js";
 export { createAssetServer, credentialOf, API_VERSION } from "./server.js";
 export type { AssetServerOptions } from "./server.js";
 export { AnyOf, isLocalAddress, JellyfinTokenCheck, NoAuth, PlexTokenCheck } from "./auth.js";
@@ -9,4 +9,5 @@ export { CONTENT_TYPES, contentType, findManifests, sendFile } from "./files.js"
 export { checkAssetFiles, checkIgnoreFiles, isFaststart } from "./media-check.js";
 export { memberDataOffset, packBundle, readBundle, readMember, unpackBundle } from "./bundle.js";
 export type { Bundle, BundleMember } from "./bundle.js";
-export { applyPathMap, JellyfinLibrary, LibraryFollower, parseEnvFile, parsePathMap, PlexLibrary, type LibrarySource, type PathMapping } from "./library.js";
+export { applyPathMap, ItemIndex, JellyfinLibrary, LibraryFollower, parseEnvFile, parsePathMap, PlexLibrary, type IndexItem, type LibraryItem, type LibrarySource, type PathMapping } from "./library.js";
+export { JellyfinLive, LiveUpdates, PlexLive, type LiveOptions, type LiveSource, type MakeSocket, type SocketLike } from "./live.js";

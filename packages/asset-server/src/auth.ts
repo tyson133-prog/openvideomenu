@@ -67,17 +67,21 @@ type Fetch = typeof fetch;
 
 /**
  * "If you can use this Plex server, you can read its menus." The caller's token is checked against
- * plex.tv: it must list a resource whose clientIdentifier is this Plex server's machineIdentifier.
- * That covers owners, shared users and managed users. Just calling the Plex server with the token
- * isn't enough: servers set to allow LAN access without auth accept any token.
+ * the Plex server itself: a token it accepts is one of its owner's, shared users' or managed users'
+ * (a token for another server isn't accepted). That needs no internet. But a Plex server set to let
+ * the home network in without signing in accepts any token, so a made-up token is tried first (every
+ * 10 minutes): when that gets in, or the server can't be reached, the token is checked with plex.tv
+ * instead, which must list a resource whose clientIdentifier is this server's machineIdentifier.
  *
- * Nothing is stored. Results are cached in memory by token hash (allowed: 10 min, refused: 30 s).
+ * Viewers' tokens are never stored. Results are cached in memory by token hash (allowed: 10 min, refused: 30 s).
  */
 export class PlexTokenCheck implements TokenCheck {
   readonly description: string;
   private machineId?: string;
   private readonly verdicts: Verdicts;
   private readonly clientId = `openvideomenu-asset-server-${randomUUID()}`;
+  /** Whether the Plex server lets in any token (no sign-in needed on the home network), and until when that's known. */
+  private openLan?: { open: boolean; until: number };
 
   constructor(
     private readonly plexUrl: string,
@@ -113,13 +117,41 @@ export class PlexTokenCheck implements TokenCheck {
   async allows(credential: Credential | undefined): Promise<boolean> {
     if (credential?.kind !== "plex" || !credential.token) return false;
     const token = credential.token;
-    return this.verdicts.get(token, async () => {
-      const machineId = await this.serverId();
-      const res = await this.fetchImpl("https://plex.tv/api/v2/resources?includeHttps=1", { headers: this.headers(token) });
-      if (!res.ok) return false;
-      const resources = (await res.json()) as { clientIdentifier?: string; provides?: string }[];
-      return Array.isArray(resources) && resources.some((r) => r.clientIdentifier === machineId);
-    });
+    return this.verdicts.get(token, async () => (await this.localVerdict(token)) ?? (await this.plexTvVerdict(token)));
+  }
+
+  /** The Plex server's answer for this token: undefined when it can't be trusted (open to the LAN) or reached. */
+  private async localVerdict(token: string): Promise<boolean | undefined> {
+    try {
+      if (await this.letsAnyoneIn()) return undefined;
+      const status = await this.sectionsStatus(token);
+      if (status === 200) return true;
+      if (status === 401 || status === 403) return false;
+      return undefined;
+    } catch {
+      return undefined; // unreachable: plex.tv decides
+    }
+  }
+
+  /** True when the Plex server accepts a made-up token (it lets the home network in without signing in). */
+  private async letsAnyoneIn(): Promise<boolean> {
+    if (this.openLan && this.openLan.until > this.now()) return this.openLan.open;
+    const open = (await this.sectionsStatus(`openvideomenu-probe-${randomUUID()}`)) === 200;
+    this.openLan = { open, until: this.now() + 10 * 60_000 };
+    return open;
+  }
+
+  private async sectionsStatus(token: string): Promise<number> {
+    const res = await this.fetchImpl(new URL("/library/sections", this.plexUrl), { headers: this.headers(token), signal: AbortSignal.timeout(5_000) });
+    return res.status;
+  }
+
+  private async plexTvVerdict(token: string): Promise<boolean> {
+    const machineId = await this.serverId();
+    const res = await this.fetchImpl("https://plex.tv/api/v2/resources?includeHttps=1", { headers: this.headers(token) });
+    if (!res.ok) return false;
+    const resources = (await res.json()) as { clientIdentifier?: string; provides?: string }[];
+    return Array.isArray(resources) && resources.some((r) => r.clientIdentifier === machineId);
   }
 }
 

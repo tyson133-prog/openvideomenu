@@ -49,8 +49,21 @@ export interface CatalogEntry {
   modified: string;
 }
 
+/** The library item that plays one of a manifest's media, on a media server (when the server knows). */
+export interface EntryItem {
+  /** The manifest's media id. */
+  media: string;
+  /** The media server's id (Plex machineIdentifier, Jellyfin server Id). */
+  server: string;
+  /** The item's id on that server (Plex ratingKey, Jellyfin item Id). */
+  id: string;
+  type: "movie" | "episode";
+  /** For an episode: its show's id. */
+  show?: string;
+}
+
 /** What TV apps get per manifest: enough to match titles and open menus, without the asset list. */
-export type IndexEntry = Omit<CatalogEntry, "assets" | "warnings">;
+export type IndexEntry = Omit<CatalogEntry, "assets" | "warnings"> & { items?: EntryItem[] };
 
 /** The index as sent: JSON, a gzipped copy, and an ETag, made once per catalog change. */
 export interface IndexBody {
@@ -91,13 +104,19 @@ export class Catalog {
   /** Called after each scan with manifests whose asset checks found problems (first time seen or changed). */
   onWarnings?: (entries: CatalogEntry[]) => void;
 
+  /**
+   * The library items (one per media server) that play a file, given its full path on this machine.
+   * Set when the server follows a media server's library; the index then says which item each media is.
+   */
+  itemsFor?: (file: string) => Omit<EntryItem, "media">[];
+
   /** The media folders, in the order their index numbers ("root") refer to. */
   roots: string[];
 
   constructor(
     roots: string[],
     // A scan reuses unchanged manifests (by modified time), so it is cheap: a home library takes about a second.
-    private readonly rescanMs = 30_000,
+    private rescanMs = 30_000,
   ) {
     this.roots = roots.map((r) => resolve(r));
   }
@@ -125,6 +144,25 @@ export class Catalog {
     return this.ready();
   }
 
+  /**
+   * Scan every [ms] from now on: slower while the media server tells us about library changes (they
+   * trigger a scan of their own), back to every 30 s when it can't.
+   */
+  setRescanInterval(ms: number) {
+    if (ms === this.rescanMs) return;
+    this.rescanMs = ms;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = setInterval(() => void this.scan(), ms);
+      this.timer.unref?.();
+    }
+  }
+
+  /** The index is made again on the next request (the library items changed). */
+  invalidateIndex() {
+    this.body = undefined;
+  }
+
   stop() {
     clearInterval(this.timer);
     this.timer = undefined;
@@ -147,11 +185,21 @@ export class Catalog {
   /** The index TV apps download: serialized, gzipped and tagged once per change, not per request. */
   index(meta: Record<string, unknown>): IndexBody {
     if (!this.body) {
-      const manifests: IndexEntry[] = this.list.map(({ assets: _a, warnings: _w, ...rest }) => rest);
+      const manifests: IndexEntry[] = this.list.map(({ assets: _a, warnings: _w, ...rest }) => {
+        const items = this.entryItems(rest);
+        return items.length ? { ...rest, items } : rest;
+      });
       const json = JSON.stringify({ ...meta, manifests });
       this.body = { json, gzip: gzipSync(json), etag: `"${createHash("sha1").update(json).digest("hex").slice(0, 20)}"` };
     }
     return this.body;
+  }
+
+  /** Which library item plays each of the manifest's media with a file of its own (not segments). */
+  private entryItems(e: Omit<CatalogEntry, "assets" | "warnings">): EntryItem[] {
+    const root = this.roots[e.root];
+    if (!this.itemsFor || root === undefined) return [];
+    return e.media.flatMap((m) => (m.path ? this.itemsFor!(join(root, ...m.path.split("/"))).map((it) => ({ media: m.id, ...it })) : []));
   }
 
   /**

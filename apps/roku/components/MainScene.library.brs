@@ -54,6 +54,7 @@ sub startLibraries()
     end for
     m.rows.content = root
     m.rows.setFocus(true)
+    resolveIndexItems()
     showBrowseStatus()
     if m.libraries.Count() = 0 then setStatus("No movie or TV libraries on " + m.login.name + ".")
     librariesProgress()
@@ -184,6 +185,60 @@ sub librariesProgress()
     end if
 end sub
 
+' --- menus the menu server has already found in the library -------------------------------------
+' A menu server that knows the media server's library says which item plays each menu's media (the
+' index's "items", for this server only). Then a menu's film or show is one request away, and its tile
+' fills in at once instead of after the library is paged through. Without items, the matching below
+' (by file paths) does it as before.
+
+sub resolveIndexItems()
+    server = LCase(msOr(m.login.machineId, msOr(m.login.serverId, "")))
+    if server = "" then return
+    for each entry in m.catalog
+        film = invalid
+        series = invalid
+        for each it in msOr(entry["items"], [])
+            if LCase(msOr(it["server"], "")) = server
+                if it["type"] = "movie" and film = invalid then film = it["id"]
+                if it["type"] = "episode" and series = invalid and it["show"] <> invalid then series = it["show"]
+            end if
+        end for
+        if film <> invalid
+            http(itemUrl(film), "GET", invalid, "onIndexFilm", entry)
+        else if series <> invalid
+            http(itemUrl(series), "GET", invalid, "onIndexShow", entry)
+        end if
+    end for
+end sub
+
+function itemUrl(id as string) as string
+    if isPlex() then return m.login.url + "/library/metadata/" + id
+    return m.login.url + "/Items/" + id + "?userId=" + m.login.userId + "&fields=Path,MediaSources"
+end function
+
+sub onIndexFilm(res as object, entry as dynamic)
+    items = itemsOf(res.json)
+    if items.Count() = 0 or m.found = invalid then return
+    id = entry["id"]
+    film = items[0]
+    if not m.found.DoesExist(id)
+        m.found[id] = film
+        updateManifestTile(id)
+    end if
+    m.menuOf[itemKey(film)] = id
+end sub
+
+sub onIndexShow(res as object, entry as dynamic)
+    shows = itemsOf(res.json)
+    if shows.Count() = 0 or m.manifestShow = invalid then return
+    id = entry["id"]
+    if m.manifestShow.DoesExist(id) then return
+    m.manifestShow[id] = shows[0]
+    updateManifestTile(id)
+    key = itemKey(shows[0])
+    if m.showTiles[key] <> invalid then m.showTiles[key].badge = true
+end sub
+
 ' --- TV menus: find the show, confirmed by its episode files ---------------------------------
 ' Titles are unreliable (metadata agents rename shows: the example "Example Show" is the show
 ' "Example" in Plex), so as in the Android app: shows found by title, then the TV libraries'
@@ -195,7 +250,7 @@ sub findTvManifests()
     m.manifestTriedRecent = {}
     for each entry in m.catalog
         name = entry["title"]["name"]
-        if not m.found.DoesExist(entry["id"])
+        if not m.found.DoesExist(entry["id"]) and not m.manifestShow.DoesExist(entry["id"])
             m.manifestPending[entry["id"]] = 0
             for each lib in m.libraries
                 if lib.kind = "show" and name <> invalid

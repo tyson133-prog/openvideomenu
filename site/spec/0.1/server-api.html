@@ -28,7 +28,7 @@
   <section class="spec-page">
     <div class="wrap">
       <p class="small muted spec-nav">Open Video Menu 0.1 · <a href="index.html">Specification 0.1</a> · <strong>Server API</strong> · <a href="dvd-profile.html">DVD profile</a> · <a href="compatibility.html">Compatibility</a> · <a href="license.html">License</a> · <a href="manifest.schema.json">JSON Schema</a></p>
-      <details class="spec-toc" open><summary>Contents</summary><ul><li><a href="#1-purpose">1. Purpose</a></li><li><a href="#2-finding-a-server-client-behaviour">2. Finding a server (client behaviour)</a></li><li><a href="#3-sign-in">3. Sign-in</a></li><li><a href="#4-endpoints">4. Endpoints</a></li><li><a href="#5-network">5. Network</a></li><li><a href="#6-versions">6. Versions</a></li><li><a href="#7-planned">7. Planned</a></li></ul></details>
+      <details class="spec-toc" open><summary>Contents</summary><ul><li><a href="#1-purpose">1. Purpose</a></li><li><a href="#2-finding-a-server-client-behaviour">2. Finding a server (client behaviour)</a></li><li><a href="#3-sign-in">3. Sign-in</a></li><li><a href="#4-endpoints">4. Endpoints</a></li><li><a href="#5-network">5. Network</a></li><li><a href="#6-versions">6. Versions</a></li></ul></details>
       <article class="prose spec">
 <h1 id="open-video-menu-server-api--v1-draft"><a class="anchor" href="#open-video-menu-server-api--v1-draft">Open Video Menu server API — v1 (draft)</a></h1>
 <blockquote>
@@ -76,7 +76,7 @@ Jellyfin&#39;s <code>Authorization: MediaBrowser …, Token=&quot;…&quot;</cod
 </li>
 <li><p><strong>Standalone servers</strong> accept the sign-in of the media servers they are configured for, and check
 it with that media server:</p>
-<div class="table-wrap"><table><thead><tr><th>Media server</th><th>Header the app sends</th><th>How the asset server checks it</th></tr></thead><tbody><tr><td>Plex</td><td><code>X-Plex-Token: …</code> (or <code>Authorization: Bearer …</code>)</td><td>plex.tv lists this Plex server among the token&#39;s resources</td></tr>
+<div class="table-wrap"><table><thead><tr><th>Media server</th><th>Header the app sends</th><th>How the asset server checks it</th></tr></thead><tbody><tr><td>Plex</td><td><code>X-Plex-Token: …</code> (or <code>Authorization: Bearer …</code>)</td><td>The configured Plex server accepts the token (it answers <code>GET /library/sections</code> with it). When that server lets its network in without signing in (it accepts a made-up token too), or can&#39;t be reached, plex.tv must list this Plex server among the token&#39;s resources instead.</td></tr>
 <tr><td>Jellyfin</td><td><code>Authorization: MediaBrowser …, Token=&quot;…&quot;</code></td><td>The configured Jellyfin server answers <code>GET /Users/Me</code></td></tr></tbody></table></div>
 </li>
 <li><p>Credentials MUST travel in headers, never in URLs.</p>
@@ -86,8 +86,9 @@ it with that media server:</p>
 <li><p>Servers MUST NOT store viewers&#39; credentials. They MAY cache verdicts briefly in memory.</p>
 </li>
 <li><p>A standalone server MAY keep one credential of its own, given by whoever sets it up: a media-server
-token or API key it uses to read that media server&#39;s library folders, so it scans them and follows
-them when libraries change. It MUST NOT log it, and SHOULD keep it where only the server and the
+token or API key it uses to read that media server&#39;s library folders and items, so it scans them,
+follows them when libraries change, and says which item each menu&#39;s media is (the index&#39;s <code>items</code>). It
+MUST NOT log it, and SHOULD keep it where only the server and the
 machine&#39;s administrators can read it. It uses it only to read; it MUST NOT change anything on the
 media server.</p>
 </li>
@@ -138,7 +139,13 @@ media server.</p>
 <tr><td><code>media[].path</code></td><td>when <code>ref</code> is a relative path</td><td>The media file&#39;s path under the same folder, with forward slashes. Apps match it against the media server&#39;s file paths by their <strong>trailing segments</strong> (at least the folder and file name), because the two machines may mount the folder at different places.</td></tr>
 <tr><td><code>media[].segments</code></td><td>when the media is made of segments</td><td><em>(Level 2)</em> The media ids it plays, in order; such media have no <code>ref</code> or <code>path</code> (the files are those of the media listed).</td></tr>
 <tr><td><code>media[].angles</code></td><td>when the media has angle files</td><td><em>(Level 2)</em> One <code>{ ref, path }</code> per other angle (angle 2, 3, …), <code>path</code> as for the media itself, so apps can match those files too.</td></tr>
-<tr><td><code>modified</code></td><td>yes</td><td>When the manifest last changed (ISO 8601).</td></tr></tbody></table></div>
+<tr><td><code>modified</code></td><td>yes</td><td>When the manifest last changed (ISO 8601).</td></tr>
+<tr><td><code>items</code></td><td>no</td><td>The media server&#39;s items that play the manifest&#39;s media, when the server knows them: one <code>{ media, server, id, type, show? }</code> per media and media server. <code>media</code> is the manifest&#39;s media id; <code>server</code> the media server&#39;s id (Plex&#39;s <code>machineIdentifier</code>, Jellyfin&#39;s server <code>Id</code>); <code>id</code> the item&#39;s id there (Plex <code>ratingKey</code>, Jellyfin item <code>Id</code>); <code>type</code> <code>&quot;movie&quot;</code> or <code>&quot;episode&quot;</code>; <code>show</code> an episode&#39;s show id.</td></tr></tbody></table></div>
+<p><strong>Items.</strong> Native servers know which of their items each <code>media[].path</code> is; a standalone server knows
+when it has the media server&#39;s token (§3). Servers SHOULD then include <code>items</code>. Apps use an item only
+when its <code>server</code> is the server they are signed in to, and MUST fall back to matching <code>media[].path</code>
+themselves when <code>items</code> is absent or has nothing for that server. An item lets an app show a menu&#39;s
+title without paging through the library to find it, and find a TV menu&#39;s show by its id.</p>
 <p>The index MUST NOT list menu asset paths; the server keeps its allowlist to itself. Apps MUST
 ignore fields they don&#39;t know.</p>
 <p><strong>Caching.</strong> Responses SHOULD carry an <code>ETag</code> and <code>Cache-Control: private, no-cache</code>, and answer
@@ -172,12 +179,6 @@ remote-access settings.</p>
 <li>The path carries the API major version (<code>/v1/</code>) and <code>health.api</code> repeats it.</li>
 <li>Within v1, changes are additive: new optional fields and new endpoints only.</li>
 <li>A breaking change would be <code>/v2/</code>, served alongside <code>/v1/</code>.</li>
-</ul>
-<h2 id="7-planned"><a class="anchor" href="#7-planned">7. Planned</a></h2>
-<ul>
-<li><strong>Resolved media:</strong> native servers know which of their items each <code>media[].path</code> is. They could
-return that directly (e.g. <code>&quot;item&quot;: {&quot;scheme&quot;: &quot;jellyfin&quot;, &quot;id&quot;: &quot;…&quot;}</code>), so apps skip path
-matching. It would be an optional additive field.</li>
 </ul>
 
       </article>

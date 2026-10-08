@@ -6,6 +6,7 @@ import { AnyOf, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type TokenCheck } fr
 import { Catalog } from "./catalog.js";
 import { advertise } from "./discovery.js";
 import { JellyfinLibrary, LibraryFollower, parseEnvFile, parsePathMap, PlexLibrary, type LibrarySource } from "./library.js";
+import { JellyfinLive, LiveUpdates, PlexLive, type LiveSource } from "./live.js";
 import { createAssetServer } from "./server.js";
 
 const USAGE = `${FORMAT_NAME} asset server (proof of concept)
@@ -107,8 +108,21 @@ async function main() {
   catalog.onWarnings = (entries) => {
     for (const e of entries) for (const w of e.warnings ?? []) console.warn(`  ${e.path}: ${w}`);
   };
-  // With a token, the media server's libraries decide the folders (re-read every 5 minutes).
-  if (sources.length > 0) await new LibraryFollower(sources, o.media, o.pathMap, catalog).start();
+  // With a token, the media server's libraries decide the folders (re-read every 5 minutes), the index
+  // says which library item each menu's media is, and the media server's notifications say when its
+  // library changed: then the menus are rescanned at once, and the regular scan slows to every 5 minutes.
+  if (sources.length > 0) {
+    const follower = new LibraryFollower(sources, o.media, o.pathMap, catalog);
+    await follower.start();
+    const live: LiveSource[] = [];
+    if (o.plexUrl && o.plexToken) live.push(new PlexLive(o.plexUrl, o.plexToken));
+    if (o.jellyfinUrl && o.jellyfinApiKey) live.push(new JellyfinLive(o.jellyfinUrl, o.jellyfinApiKey));
+    new LiveUpdates(live, {
+      onChange: () => void follower.refresh(true).then(() => catalog.scan()),
+      onConnected: (connected) => catalog.setRescanInterval(connected ? 5 * 60_000 : 30_000),
+      log: (l) => console.log(l),
+    }).start();
+  }
   const scanStarted = Date.now();
   void catalog.start().then(() => {
     const found = catalog.entries();

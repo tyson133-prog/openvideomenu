@@ -521,6 +521,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun findCatalogTitles(menus: List<CatalogEntry>, onFound: (String, Tile) -> Unit) = coroutineScope {
         val src = source ?: return@coroutineScope
         val remaining = menus.associateBy { it.id }.toMutableMap()
+        // 0. The menu server already knows which item plays each menu (the index's items, for this server):
+        //    one request per menu instead of searching the libraries.
+        val server = currentServerId()?.lowercase()
+        if (server != null) {
+            val gate = Semaphore(8)
+            menus.mapNotNull { entry ->
+                val mine = entry.items.filter { it.server.lowercase() == server }
+                val film = mine.firstOrNull { it.type == "movie" }?.id
+                val show = mine.firstOrNull { it.type == "episode" && it.show != null }?.show
+                if (film == null && show == null) return@mapNotNull null
+                launch {
+                    val item = gate.withPermit { attempt { src.item(film ?: show!!) }.getOrNull() } ?: return@launch
+                    if (remaining.remove(entry.id) == null) return@launch
+                    onFound(entry.id, if (film != null) Tile.Media(item, entry, rowKey = "manifest:" + entry.id) else Tile.Manifest(entry, item))
+                }
+            }.joinAll()
+        }
         val index = MenuIndex(menus)
         for (lib in libraries.filter { it.kind == LibraryKind.MOVIES }) {
             var start = 0
@@ -743,10 +760,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun stopKey(item: Item): String {
-        val server = if (settings.sourceKind == "jellyfin") settings.jellyfin?.serverId else settings.serverId
-        return "${server ?: "server"}|${item.id}"
-    }
+    private fun stopKey(item: Item): String = "${currentServerId() ?: "server"}|${item.id}"
+
+    /** The signed-in media server's id (Plex machineIdentifier, Jellyfin server Id), as the menu server's index names it. */
+    private fun currentServerId(): String? = if (settings.sourceKind == "jellyfin") settings.jellyfin?.serverId else settings.serverId
 
     /**
      * The answer to [Screen.ResumeAsk]: a title from where it stopped, or (null) the menu. With a kept
@@ -763,10 +780,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun sessionKey(entry: CatalogEntry): String {
-        val server = if (settings.sourceKind == "jellyfin") settings.jellyfin?.serverId else settings.serverId
-        return "${server ?: "server"}|${entry.id}"
-    }
+    private fun sessionKey(entry: CatalogEntry): String = "${currentServerId() ?: "server"}|${entry.id}"
 
     /** Level 3: the menu page reported its session (spec §6.5.1): keep it for the next viewing. */
     fun rememberSession(open: OpenMenu, version: String, session: JsonObject) =

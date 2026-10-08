@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using MediaBrowser.Controller;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using OpenVideoMenu;
@@ -25,6 +27,12 @@ public sealed record CatalogEntry
     public List<CatalogMedia> Media { get; init; } = [];
     public required string Modified { get; init; }
 
+    /// <summary>
+    /// The library item that plays each media with a file of its own, so apps don't have to match files to items
+    /// themselves. Worked out for each scan (the library changes), not kept with the cached entry.
+    /// </summary>
+    public List<EntryItem>? Items { get; init; }
+
     /// <summary>Menu assets, relative to the root: the allowlist. Not sent in the index.</summary>
     [JsonIgnore]
     public List<string> Assets { get; init; } = [];
@@ -32,6 +40,9 @@ public sealed record CatalogEntry
 
 /// <summary>A media item of a manifest. <paramref name="Ref"/> is null for media made of <paramref name="Segments"/> (Level 2).</summary>
 public sealed record CatalogMedia(string Id, string? Kind, string? Label, JsonElement? Ref, string? Path, List<CatalogAngle>? Angles = null, List<string>? Segments = null);
+
+/// <summary>The Jellyfin item that plays one of a manifest's media: <paramref name="Server"/> is this server's id.</summary>
+public sealed record EntryItem(string Media, string Server, string Id, string Type, string? Show = null);
 
 /// <summary>Level 2: another angle of a media item as a file (angle 2, 3, …), with its ref and path like the media's own.</summary>
 public sealed record CatalogAngle(JsonElement Ref, string? Path);
@@ -52,6 +63,7 @@ public sealed class MenuCatalog
     };
 
     private readonly ILibraryManager _libraries;
+    private readonly IServerApplicationHost _host;
     private readonly ILogger<MenuCatalog> _log;
     private readonly SemaphoreSlim _scanLock = new(1, 1);
     private readonly Dictionary<string, (DateTime Modified, CatalogEntry Entry, IReadOnlyDictionary<string, BundleMember>? Members)> _cache = new();
@@ -59,9 +71,10 @@ public sealed class MenuCatalog
     private volatile Snapshot? _snapshot;
     private Task? _background;
 
-    public MenuCatalog(ILibraryManager libraries, ILogger<MenuCatalog> log)
+    public MenuCatalog(ILibraryManager libraries, IServerApplicationHost host, ILogger<MenuCatalog> log)
     {
         _libraries = libraries;
+        _host = host;
         _log = log;
     }
 
@@ -140,6 +153,37 @@ public sealed class MenuCatalog
     public Task RescanAsync(CancellationToken cancel) => ScanAsync(cancel);
 
     /// <summary>Scan the library folders. Scans run one at a time.</summary>
+    /// <summary>The entry with the item that plays each of its media (Jellyfin knows each file's item).</summary>
+    private CatalogEntry WithItems(CatalogEntry entry, string root)
+    {
+        if (!entry.Valid)
+        {
+            return entry;
+        }
+
+        var items = new List<EntryItem>();
+        foreach (var m in entry.Media)
+        {
+            if (m.Path is null)
+            {
+                continue;
+            }
+
+            var file = System.IO.Path.GetFullPath(System.IO.Path.Combine(root, m.Path.Replace('/', System.IO.Path.DirectorySeparatorChar)));
+            switch (_libraries.FindByPath(file, false))
+            {
+                case Episode ep:
+                    items.Add(new EntryItem(m.Id, _host.SystemId, ep.Id.ToString("N"), "episode", ep.SeriesId == Guid.Empty ? null : ep.SeriesId.ToString("N")));
+                    break;
+                case MediaBrowser.Controller.Entities.Movies.Movie movie:
+                    items.Add(new EntryItem(m.Id, _host.SystemId, movie.Id.ToString("N"), "movie"));
+                    break;
+            }
+        }
+
+        return items.Count > 0 ? entry with { Items = items } : entry;
+    }
+
     private async Task<Snapshot> ScanAsync(CancellationToken cancel)
     {
         await _scanLock.WaitAsync(cancel).ConfigureAwait(false);
@@ -180,7 +224,7 @@ public sealed class MenuCatalog
                     var loaded = _cache.TryGetValue(key, out var hit) && hit.Modified == modified ? (hit.Entry, hit.Members) : Load(r, rel, file, modified);
                     _cache[key] = (modified, loaded.Item1, loaded.Item2);
                     var entry = loaded.Item1;
-                    entries.Add(entry);
+                    entries.Add(WithItems(entry, roots[r]));
                     if (loaded.Item2 is { } members)
                     {
                         bundles[$"{r}:{rel}"] = (file, members);
