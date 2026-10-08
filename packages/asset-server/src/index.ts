@@ -9,3 +9,4 @@ export { CONTENT_TYPES, contentType, findManifests, sendFile } from "./files.js"
 export { checkAssetFiles, checkIgnoreFiles, isFaststart } from "./media-check.js";
 export { memberDataOffset, packBundle, readBundle, readMember, unpackBundle } from "./bundle.js";
 export type { Bundle, BundleMember } from "./bundle.js";
+export { applyPathMap, JellyfinLibrary, LibraryFollower, parseEnvFile, parsePathMap, PlexLibrary, type LibrarySource, type PathMapping } from "./library.js";

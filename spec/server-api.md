@@ -60,7 +60,12 @@ The API uses the viewer's existing media-server sign-in. There are no Open Video
 
 - Credentials MUST travel in headers, never in URLs.
 - A request without a valid sign-in MUST get `401`.
-- Servers MUST NOT store credentials. They MAY cache verdicts briefly in memory.
+- Servers MUST NOT store viewers' credentials. They MAY cache verdicts briefly in memory.
+- A standalone server MAY keep one credential of its own, given by whoever sets it up: a media-server
+  token or API key it uses to read that media server's library folders, so it scans them and follows
+  them when libraries change. It MUST NOT log it, and SHOULD keep it where only the server and the
+  machine's administrators can read it. It uses it only to read; it MUST NOT change anything on the
+  media server.
 
 ## 4. Endpoints
 
@@ -113,7 +118,7 @@ Signed in. Every manifest the server found, and the media each one references.
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | Stable id for this manifest on this server. |
-| `root` | yes | Which media folder it is in (index into the server's folders). |
+| `root` | yes | Which media folder it is in (index into the server's folders). A server that follows the media server's libraries may number its folders differently after a library changes; apps take `root` and `url` from the latest index. |
 | `path` | yes | The manifest's path under that folder, with forward slashes. |
 | `url` | yes | Where to fetch the manifest, relative to `B`. Relative asset paths in the manifest resolve against this URL. |
 | `valid` | yes | Whether the manifest could be read. Invalid entries carry `errors` (strings) instead of the fields below. |

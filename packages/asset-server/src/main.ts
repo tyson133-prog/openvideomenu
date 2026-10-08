@@ -1,9 +1,11 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { FORMAT_NAME } from "@openvideomenu/core";
 import { AnyOf, JellyfinTokenCheck, NoAuth, PlexTokenCheck, type TokenCheck } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { advertise } from "./discovery.js";
+import { JellyfinLibrary, LibraryFollower, parseEnvFile, parsePathMap, PlexLibrary, type LibrarySource } from "./library.js";
 import { createAssetServer } from "./server.js";
 
 const USAGE = `${FORMAT_NAME} asset server (proof of concept)
@@ -12,14 +14,23 @@ Serves menu manifests and menu art from your media folders to TV apps on your ho
 Read-only. Serves only manifests and the menu art they name, never your media.
 
 Usage:
+  openvideomenu-asset-server --plex-url <url> --plex-token <token> [options]
+  openvideomenu-asset-server --jellyfin-url <url> --jellyfin-api-key <key> [options]
   openvideomenu-asset-server --media <folder> [--media <folder> ...] --plex-url <url> [options]
-  openvideomenu-asset-server --media <folder> [--media <folder> ...] --jellyfin-url <url> [options]
+
+With a token it reads the media server's library folders and follows them; without one, give the
+folders with --media.
 
 Options (or environment variables):
-  --media <folder>     MEDIA_ROOTS  (comma-separated)   Media folders to scan (mount them read-only)
-  --plex-url <url>     PLEX_URL     e.g. http://192.168.1.20:32400   Plex sign-ins are checked against this server
-  --jellyfin-url <url> JELLYFIN_URL e.g. http://192.168.1.20:8096    Jellyfin sign-ins are checked against this server
-                       (give one or both)
+  --plex-url <url>          PLEX_URL          e.g. http://192.168.1.20:32400   Plex sign-ins are checked against it
+  --plex-token <token>      PLEX_TOKEN        read Plex's library folders with this token
+  --jellyfin-url <url>      JELLYFIN_URL      e.g. http://192.168.1.20:8096    Jellyfin sign-ins are checked against it
+  --jellyfin-api-key <key>  JELLYFIN_API_KEY  read Jellyfin's library folders with this API key
+                            (give Plex, Jellyfin or both)
+  --media <folder>          MEDIA_ROOTS (comma-separated)  more folders to scan (mount them read-only)
+  --path-map <from>=<to>    PATH_MAP (";"-separated)  a library path as this machine sees it,
+                            e.g. /data=/mnt/media (Plex in Docker)
+  --config <file>           OVM_CONFIG        read these settings from a KEY=VALUE file
   --port <n>           PORT         default 8790
   --name <text>        SERVER_NAME  name shown in TV apps (default: this machine's name)
   --no-discovery       DISCOVERY=off   don't announce on the network (mDNS)
@@ -30,13 +41,18 @@ Options (or environment variables):
 function options(argv: string[]) {
   const values = (name: string) => argv.flatMap((a, i) => (a === name && argv[i + 1] ? [argv[i + 1]!] : []));
   const flag = (name: string) => argv.includes(name);
-  const env = process.env;
-  const media = [...values("--media"), ...(env.MEDIA_ROOTS ?? "").split(",").map((s) => s.trim()).filter(Boolean)];
+  // A settings file fills in what the environment doesn't set; command-line flags win over both.
+  const config = values("--config")[0] ?? process.env.OVM_CONFIG;
+  const env: Record<string, string | undefined> = { ...(config ? parseEnvFile(readFileSync(config, "utf8")) : {}), ...process.env };
+  const list = (v: string | undefined, sep: string) => (v ?? "").split(sep).map((s) => s.trim()).filter(Boolean);
   return {
     help: flag("--help") || flag("-h"),
-    media,
+    media: [...values("--media"), ...list(env.MEDIA_ROOTS, ",")],
+    pathMap: parsePathMap([...values("--path-map"), ...list(env.PATH_MAP, ";")]),
     plexUrl: values("--plex-url")[0] ?? env.PLEX_URL,
+    plexToken: values("--plex-token")[0] ?? env.PLEX_TOKEN,
     jellyfinUrl: values("--jellyfin-url")[0] ?? env.JELLYFIN_URL,
+    jellyfinApiKey: values("--jellyfin-api-key")[0] ?? env.JELLYFIN_API_KEY,
     port: Number(values("--port")[0] ?? env.PORT ?? 8790),
     name: values("--name")[0] ?? env.SERVER_NAME ?? `${FORMAT_NAME} on ${hostname()}`,
     discovery: !flag("--no-discovery") && env.DISCOVERY !== "off",
@@ -48,7 +64,14 @@ function options(argv: string[]) {
 async function main() {
   const o = options(process.argv.slice(2));
   if (o.help) return void console.log(USAGE);
-  if (o.media.length === 0) throw new Error(`No media folders given.\n\n${USAGE}`);
+  if (o.plexToken && !o.plexUrl) throw new Error(`--plex-token needs --plex-url.\n\n${USAGE}`);
+  if (o.jellyfinApiKey && !o.jellyfinUrl) throw new Error(`--jellyfin-api-key needs --jellyfin-url.\n\n${USAGE}`);
+  const sources: LibrarySource[] = [];
+  if (o.plexUrl && o.plexToken) sources.push(new PlexLibrary(o.plexUrl, o.plexToken));
+  if (o.jellyfinUrl && o.jellyfinApiKey) sources.push(new JellyfinLibrary(o.jellyfinUrl, o.jellyfinApiKey));
+  if (sources.length === 0 && o.media.length === 0) {
+    throw new Error(`No media folders: give a Plex token or a Jellyfin API key (to follow the libraries), or --media.\n\n${USAGE}`);
+  }
 
   let auth: TokenCheck;
   if (o.noAuth) {
@@ -84,12 +107,14 @@ async function main() {
   catalog.onWarnings = (entries) => {
     for (const e of entries) for (const w of e.warnings ?? []) console.warn(`  ${e.path}: ${w}`);
   };
+  // With a token, the media server's libraries decide the folders (re-read every 5 minutes).
+  if (sources.length > 0) await new LibraryFollower(sources, o.media, o.pathMap, catalog).start();
   const scanStarted = Date.now();
   void catalog.start().then(() => {
     const found = catalog.entries();
     const invalid = found.filter((e) => !e.valid);
     console.log(
-      `Found ${found.length} manifest(s) in ${o.media.join(", ")} in ${((Date.now() - scanStarted) / 1000).toFixed(1)} s` +
+      `Found ${found.length} manifest(s) in ${catalog.roots.join(", ") || "no folders yet"} in ${((Date.now() - scanStarted) / 1000).toFixed(1)} s` +
         (invalid.length ? ` (${invalid.length} with problems)` : ""),
     );
     for (const e of invalid) console.warn(`  ${e.path}: ${e.errors?.[0]}`);

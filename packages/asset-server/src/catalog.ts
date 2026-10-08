@@ -85,16 +85,34 @@ export class Catalog {
   private scanning?: Promise<void>;
   private firstScan?: Promise<void>;
   private timer?: NodeJS.Timeout;
+  /** Roots set by [setRoots], used from the next scan on. */
+  private nextRoots?: string[];
 
   /** Called after each scan with manifests whose asset checks found problems (first time seen or changed). */
   onWarnings?: (entries: CatalogEntry[]) => void;
 
+  /** The media folders, in the order their index numbers ("root") refer to. */
+  roots: string[];
+
   constructor(
-    readonly roots: string[],
+    roots: string[],
     // A scan reuses unchanged manifests (by modified time), so it is cheap: a home library takes about a second.
     private readonly rescanMs = 30_000,
   ) {
     this.roots = roots.map((r) => resolve(r));
+  }
+
+  /**
+   * Change the media folders (the media server's libraries changed). The next scan uses them, and swaps
+   * them in together with its results, so a file is never looked up under the wrong root. False when
+   * they're the same as now.
+   */
+  setRoots(roots: string[]): boolean {
+    const next = roots.map((r) => resolve(r));
+    const current = this.nextRoots ?? this.roots;
+    if (next.length === current.length && next.every((r, i) => r === current[i])) return false;
+    this.nextRoots = next;
+    return true;
   }
 
   /**
@@ -173,9 +191,12 @@ export class Catalog {
   }
 
   private async doScan() {
+    const roots = this.nextRoots ?? this.roots;
+    // New roots number differently: nothing cached under the old numbers carries over.
+    const previous = roots === this.roots ? this.cache : new Map<string, Cached>();
     const found: { key: string; root: number; path: string; file: string }[] = [];
     await Promise.all(
-      this.roots.map(async (root, rootIndex) => {
+      roots.map(async (root, rootIndex) => {
         let paths: string[];
         try {
           paths = await scanManifests(root);
@@ -199,7 +220,7 @@ export class Catalog {
       } catch {
         return undefined;
       }
-      const cached = this.cache.get(f.key);
+      const cached = previous.get(f.key);
       if (cached && cached.mtimeMs === mtimeMs) return { key: f.key, root: f.root, file: f.file, cached };
       return { key: f.key, root: f.root, file: f.file, cached: await this.load(f.root, f.path, f.file, mtimeMs) };
     });
@@ -220,7 +241,9 @@ export class Catalog {
       }
       for (const asset of l.cached.entry.assets) allowed.add(`${l.root}:${asset}`);
     }
-    const changed = next.length !== this.list.length || next.some((e, i) => e !== this.list[i]);
+    const changed = roots !== this.roots || next.length !== this.list.length || next.some((e, i) => e !== this.list[i]);
+    this.roots = roots;
+    if (this.nextRoots === roots) this.nextRoots = undefined;
     this.cache = cache;
     this.list = next;
     this.allowed = allowed;

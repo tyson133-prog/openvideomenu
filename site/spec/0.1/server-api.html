@@ -83,7 +83,13 @@ it with that media server:</p>
 </li>
 <li><p>A request without a valid sign-in MUST get <code>401</code>.</p>
 </li>
-<li><p>Servers MUST NOT store credentials. They MAY cache verdicts briefly in memory.</p>
+<li><p>Servers MUST NOT store viewers&#39; credentials. They MAY cache verdicts briefly in memory.</p>
+</li>
+<li><p>A standalone server MAY keep one credential of its own, given by whoever sets it up: a media-server
+token or API key it uses to read that media server&#39;s library folders, so it scans them and follows
+them when libraries change. It MUST NOT log it, and SHOULD keep it where only the server and the
+machine&#39;s administrators can read it. It uses it only to read; it MUST NOT change anything on the
+media server.</p>
 </li>
 </ul>
 <h2 id="4-endpoints"><a class="anchor" href="#4-endpoints">4. Endpoints</a></h2>
@@ -122,7 +128,7 @@ it with that media server:</p>
 }
 </code></pre>
 <div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>id</code></td><td>yes</td><td>Stable id for this manifest on this server.</td></tr>
-<tr><td><code>root</code></td><td>yes</td><td>Which media folder it is in (index into the server&#39;s folders).</td></tr>
+<tr><td><code>root</code></td><td>yes</td><td>Which media folder it is in (index into the server&#39;s folders). A server that follows the media server&#39;s libraries may number its folders differently after a library changes; apps take <code>root</code> and <code>url</code> from the latest index.</td></tr>
 <tr><td><code>path</code></td><td>yes</td><td>The manifest&#39;s path under that folder, with forward slashes.</td></tr>
 <tr><td><code>url</code></td><td>yes</td><td>Where to fetch the manifest, relative to <code>B</code>. Relative asset paths in the manifest resolve against this URL.</td></tr>
 <tr><td><code>valid</code></td><td>yes</td><td>Whether the manifest could be read. Invalid entries carry <code>errors</code> (strings) instead of the fields below.</td></tr>
