@@ -2,6 +2,8 @@
 # Registry versions can be deprecated or unlisted but never replaced, so this never runs before that.
 #   - .NET (nuget.org): OpenVideoMenu, OpenVideoMenu.Dvd, OpenVideoMenu.Dvd.Tool
 #   - npm: @openvideomenu/core, renderer-web, asset-server, cli
+#   - the menu server's Docker image: ghcr.io/<owner>/openvideomenu-menu-server, tagged with the version and
+#     latest, for linux/amd64 and linux/arm64, built from the release's tag (needs no secret: GITHUB_TOKEN)
 #
 # Secrets (Settings → Secrets and variables → Actions):
 #   NUGET_API_KEY   a nuget.org API key allowed to push these package ids
@@ -51,3 +53,36 @@ jobs:
           for f in npm/openvideomenu-core-*.tgz $(ls npm/*.tgz | grep -v openvideomenu-core-); do
             npm publish "$f" --access public --tag latest
           done
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ github.event.release.tag_name }}" }
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Image name and tags
+        id: image
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          IMAGE="ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/openvideomenu-menu-server"
+          echo "tags=$IMAGE:${TAG#v},$IMAGE:latest" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/asset-server.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Open Video Menu menu server: menus for Plex and Jellyfin libraries
+            org.opencontainers.image.licenses=Apache-2.0

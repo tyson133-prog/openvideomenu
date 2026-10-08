@@ -1,39 +1,65 @@
-# Running the asset server on Linux
+# Running the menu server on Linux
 
-No port is needed: the asset server is plain Node.js. Choose Docker (below, or
-[`docker/compose.yaml`](../../docker/compose.yaml)) or a systemd service.
+Choose the one-command install (a systemd service, below) or Docker
+([`docker/compose.yaml`](../../docker/compose.yaml), image `ghcr.io/tyson133-prog/openvideomenu-menu-server`).
 
-## As a systemd service
-
-Needs Node.js 22.2 or newer (`node --version`).
+## One-command install
 
 ```sh
-# 1. Build it (from a checkout of this repository) and copy it into place.
-npm ci && npm run build
-sudo mkdir -p /opt/openvideomenu
-sudo cp -r package.json package-lock.json node_modules packages /opt/openvideomenu/
-
-# 2. A user of its own. It only needs to READ your media: add it to the group that owns the media
-#    (for example the plex group), or grant read access another way.
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin openvideomenu
-sudo usermod -aG plex openvideomenu   # if your media is readable by the plex group
-
-# 3. Settings.
-sudo mkdir -p /etc/openvideomenu
-sudo cp packaging/linux/asset-server.env.example /etc/openvideomenu/asset-server.env
-sudo nano /etc/openvideomenu/asset-server.env   # MEDIA_ROOTS, PLEX_URL and/or JELLYFIN_URL
-
-# 4. The service.
-sudo cp packaging/linux/openvideomenu-asset-server.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now openvideomenu-asset-server
+curl -fsSL https://openvideomenu.org/install/menu-server.sh | sudo sh
 ```
 
-Check it:
+It downloads the latest release (the server with its own Node.js, x64 or arm64), installs it to
+`/opt/openvideomenu-menu-server`, runs it as the system user `openvideomenu`, and asks for your Plex or
+Jellyfin address and token. On a machine running Plex it finds Plex's token itself. Run it again to update;
+your settings are kept. To remove everything:
 
 ```sh
-systemctl status openvideomenu-asset-server
-journalctl -u openvideomenu-asset-server -f
+curl -fsSL https://openvideomenu.org/install/menu-server.sh | sudo sh -s -- --uninstall
+```
+
+The script is [`install.sh`](install.sh); the website serves the same file.
+
+## Settings
+
+`/etc/openvideomenu/menu-server.env`, readable by root only, because it holds a token (systemd reads it for
+the service). All settings: [`menu-server.env.example`](menu-server.env.example).
+
+- **`PLEX_URL` and `PLEX_TOKEN`** (or `JELLYFIN_URL` and `JELLYFIN_API_KEY`): with the token, the server reads
+  the library folders from your media server and follows them when you add a library. TV apps' sign-ins are
+  checked against it too.
+- **`PATH_MAP`**, when the media server sees the folders under other paths than this machine (Plex in a
+  container sees `/data`, here it's `/mnt/media`): `PATH_MAP=/data=/mnt/media`.
+- **`MEDIA_ROOTS`**: extra folders to scan besides the libraries (optional).
+
+After changing them: `sudo systemctl restart openvideomenu-menu-server`.
+
+The server only needs to read your media. The installer adds its user to the `plex` and `jellyfin` groups when
+they exist, which usually owns the media; otherwise grant it read access another way.
+
+## Without the installer
+
+The same steps by hand, from a release download (`openvideomenu-menu-server-linux-x64.tar.gz` or `-arm64`):
+
+```sh
+sudo tar -xzf openvideomenu-menu-server-linux-x64.tar.gz -C /opt   # → /opt/openvideomenu-menu-server
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin openvideomenu
+sudo install -d /etc/openvideomenu
+sudo install -m 600 /opt/openvideomenu-menu-server/menu-server.env.example /etc/openvideomenu/menu-server.env
+sudo nano /etc/openvideomenu/menu-server.env    # PLEX_URL and PLEX_TOKEN, or Jellyfin's
+sudo cp /opt/openvideomenu-menu-server/openvideomenu-menu-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now openvideomenu-menu-server
+```
+
+The downloads are built by [`build.sh`](build.sh) (the bundled server and the official Node.js 24 binary,
+checked against nodejs.org's checksums).
+
+## Check it
+
+```sh
+systemctl status openvideomenu-menu-server
+journalctl -u openvideomenu-menu-server -f
 curl http://localhost:8790/v1/health
 ```
 

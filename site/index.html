@@ -93,7 +93,13 @@ Sintel (2010)/
           <h3>On your server</h3>
           <ul>
             <li><strong>Jellyfin:</strong> in Dashboard → Plugins → Repositories, add <span class="tbd">Repository URL</span>, install <strong>Open Video Menu</strong>, and restart Jellyfin.</li>
-            <li><strong>Plex:</strong> run the menu server beside Plex, with your media folders read-only: <code>docker compose up -d</code> (<a href="https://github.com/tyson133-prog/openvideomenu/tree/main/packages/asset-server#readme">setup guide</a>). It only answers people signed in to your Plex server.</li>
+            <li><strong>Plex:</strong> run the menu server beside Plex. Give it a Plex token and it follows your libraries by itself; it only answers people signed in to your Plex server.
+              <ul>
+                <li><strong>Windows:</strong> <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/OpenVideoMenu-MenuServer-Setup.exe">download the installer</a>, which sets it up as a service. Windows may warn about an unknown publisher: choose More info, then Run anyway.</li>
+                <li><strong>Linux:</strong> <code>curl -fsSL https://openvideomenu.org/install/menu-server.sh | sudo sh</code></li>
+                <li><strong>Docker</strong> (Unraid, Synology): <code>docker run -d --network host -v /mnt/media:/mnt/media:ro -e PLEX_URL=http://127.0.0.1:32400 -e PLEX_TOKEN=… ghcr.io/tyson133-prog/openvideomenu-menu-server</code></li>
+              </ul>
+              More in the <a href="https://github.com/tyson133-prog/openvideomenu/tree/main/packages/asset-server#readme">setup guide</a>.</li>
           </ul>
         </div>
       </div>

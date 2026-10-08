@@ -46,6 +46,8 @@ jobs:
       - name: Roku compile check
         working-directory: apps/roku
         run: npm ci && npx bsc --create-package false
+      - name: The website's copy of the Linux installer is the same file
+        run: cmp packaging/linux/install.sh site/install/menu-server.sh
 
   android:
     needs: test
@@ -159,9 +161,37 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: examples, path: dist/ }
 
+  menu-server-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Tarballs with their own Node.js (x64, arm64)
+        run: bash packaging/linux/build.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: menu-server-linux, path: packaging/build/out/*.tar.gz }
+
+  menu-server-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: choco install innosetup --no-progress -y
+      - name: Installer (unsigned until a signing certificate is set up)
+        shell: pwsh
+        run: ./packaging/windows/build.ps1 -Version "$($env:VERSION -replace '^v','')"
+      - uses: actions/upload-artifact@v4
+        with: { name: menu-server-windows, path: packaging/build/out/*.exe }
+
   release:
     if: github.event_name == 'push'
-    needs: [android, roku, dotnet, npm, examples]
+    needs: [android, roku, dotnet, npm, examples, menu-server-linux, menu-server-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -172,4 +202,4 @@ jobs:
         run: |
           gh release create "$VERSION" dist/* --repo "${{ github.repository }}" --draft \
             --title "Open Video Menu $VERSION" \
-            --notes "Draft: players, Jellyfin plugin, .NET and npm packages, and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
+            --notes "Draft: players, Jellyfin plugin, the menu server (Windows installer, Linux downloads; its Docker image is pushed when this is published), .NET and npm packages, and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."

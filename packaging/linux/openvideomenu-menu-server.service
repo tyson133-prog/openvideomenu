@@ -1,7 +1,8 @@
-# Open Video Menu asset server (proof of concept) as a systemd service.
-# Install steps: packaging/linux/README.md. Settings: /etc/openvideomenu/asset-server.env
+# Open Video Menu menu server (proof of concept) as a systemd service, as install.sh sets it up:
+# the release download in /opt/openvideomenu-menu-server (its own Node.js and menu-server.mjs),
+# settings in /etc/openvideomenu/menu-server.env.
 [Unit]
-Description=Open Video Menu asset server (menus for Plex and Jellyfin)
+Description=Open Video Menu menu server (menus for Plex and Jellyfin)
 Documentation=https://openvideomenu.org
 Wants=network-online.target
 After=network-online.target
@@ -10,8 +11,9 @@ After=network-online.target
 Type=simple
 User=openvideomenu
 Group=openvideomenu
-EnvironmentFile=/etc/openvideomenu/asset-server.env
-ExecStart=/usr/bin/env node /opt/openvideomenu/packages/asset-server/dist/main.js
+# systemd reads the settings as root, so the file can stay readable by root alone (it holds a token).
+EnvironmentFile=/etc/openvideomenu/menu-server.env
+ExecStart=/opt/openvideomenu-menu-server/bin/node /opt/openvideomenu-menu-server/menu-server.mjs
 Restart=on-failure
 RestartSec=5
 

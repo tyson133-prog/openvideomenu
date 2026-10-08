@@ -46,6 +46,12 @@ license, and the JSON Schema), built from the Markdown in the repo's `spec/` fol
 spec, run `npm run site:spec` and commit the pages. Each version keeps its address: a new version gets a new
 folder and `spec/` points at it.
 
+## The Linux installer
+
+`install/menu-server.sh` is the menu server's Linux installer (`curl -fsSL https://openvideomenu.org/install/menu-server.sh | sudo sh`).
+It's a copy of [`packaging/linux/install.sh`](../packaging/linux/install.sh): change that one and copy it here; the
+release workflow fails if they differ. Serve it as plain text.
+
 ## The repository's address
 
 Links into the code use `https://github.com/tyson133-prog/openvideomenu` with branch `main`. If the

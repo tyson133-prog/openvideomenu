@@ -1,29 +1,39 @@
-# Open Video Menu asset server (proof of concept), for Linux hosts (Unraid, Synology, a home server).
+# Open Video Menu menu server (proof of concept), for Linux hosts (Unraid, Synology, a home server).
 #
-#   docker compose -f docker/compose.yaml up -d --build
+#   docker compose -f docker/compose.yaml up -d
 #
 # Host networking lets TV apps discover the server by itself (mDNS). Where host networking isn't
 # available (Docker Desktop on Windows or macOS), use `ports: ["8790:8790"]` instead and enter the
 # server's address in the TV app.
 services:
   openvideomenu:
-    build:
-      context: ..
-      dockerfile: docker/asset-server.Dockerfile
-    image: openvideomenu-asset-server
+    image: ghcr.io/tyson133-prog/openvideomenu-menu-server:latest
+    # Or build it from a checkout of the repository instead of pulling the published image:
+    # build:
+    #   context: ..
+    #   dockerfile: docker/asset-server.Dockerfile
     container_name: openvideomenu
     network_mode: host
     restart: unless-stopped
     environment:
-      # Your media server; sign-ins from the TV apps are checked against it. Give either or both.
+      # Your media server. With its token the menu server reads the library folders from it, and
+      # follows them when you add a library. Sign-ins from the TV apps are checked against it too.
       PLEX_URL: http://127.0.0.1:32400
+      PLEX_TOKEN: your-plex-token
+      # Or Jellyfin, with an API key (Dashboard → API Keys):
       # JELLYFIN_URL: http://127.0.0.1:8096
-      MEDIA_ROOTS: /media/movies,/media/tv
+      # JELLYFIN_API_KEY: your-api-key
+      #
+      # Mount the media below at the same paths Plex or Jellyfin sees it. If they differ (Plex in its
+      # own container sees /data/movies, this one /mnt/media/movies), map them: from=to, ";" between.
+      # PATH_MAP: /data=/mnt/media
+      #
+      # Extra folders to scan besides the libraries (optional), comma-separated:
+      # MEDIA_ROOTS: /mnt/media/extras
       SERVER_NAME: Open Video Menu
     volumes:
       # Read-only: the server never writes to your media.
-      - /mnt/media/movies:/media/movies:ro
-      - /mnt/media/tv:/media/tv:ro
+      - /mnt/media:/mnt/media:ro
     read_only: true
     security_opt:
       - no-new-privileges:true
