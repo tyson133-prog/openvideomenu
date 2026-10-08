@@ -23,10 +23,18 @@ public enum TargetKind
 public sealed class ButtonTarget
 {
     public TargetKind Kind { get; init; }
-    public TitleLanding? Landing { get; init; }
+    /// <summary>
+    /// The title the button plays: the last title in its chain with real content (not junk, see
+    /// <see cref="DvdTitleInfo.JunkReason"/>). Empty titles after it (a stub that only goes back to the menu) are
+    /// <see cref="FollowedBy"/>; a chain of nothing but junk keeps its last title.
+    /// </summary>
+    public TitleLanding? Landing { get; internal set; }
 
     /// <summary>Short titles played on the way to <see cref="Landing"/> (e.g. an intro before an episode).</summary>
-    public IReadOnlyList<TitleLanding> PassedThrough { get; init; } = Array.Empty<TitleLanding>();
+    public IReadOnlyList<TitleLanding> PassedThrough { get; internal set; } = Array.Empty<TitleLanding>();
+
+    /// <summary>Junk titles the chain plays after <see cref="Landing"/> (a return-to-menu stub).</summary>
+    public IReadOnlyList<TitleLanding> FollowedBy { get; internal set; } = Array.Empty<TitleLanding>();
 
     public MenuNode? Menu { get; internal set; }
     public string? Detail { get; init; }
@@ -45,7 +53,8 @@ public sealed class ButtonTarget
 
     public override string ToString() => (Resumes ? "resume, else " : "") + Kind switch
     {
-        TargetKind.Title => Landing!.ToString() + (PassedThrough.Count > 0 ? $" via {string.Join(", ", PassedThrough.Select(p => $"title {p.Ttn}"))}" : ""),
+        TargetKind.Title => Landing!.ToString() + (PassedThrough.Count > 0 ? $" via {string.Join(", ", PassedThrough.Select(p => $"title {p.Ttn}"))}" : "")
+                            + (FollowedBy.Count > 0 ? $" then {string.Join(", ", FollowedBy.Select(p => $"title {p.Ttn}"))}" : ""),
         TargetKind.Menu => $"-> {Menu?.Name ?? "menu"}",
         TargetKind.Setting => "setting" + (Detail is null ? "" : $" [{Detail}]"),
         _ => "unresolved: " + Detail,
@@ -161,8 +170,11 @@ public sealed class DvdTitleInfo
     /// <summary>A duplicate with cells of its own (<see cref="OwnCells"/>).</summary>
     public bool IsNearDuplicate => DuplicateOf is not null && OwnCells.Count > 0;
 
-    /// <summary>Non-null when the title is likely filler (a few frames, a black gap).</summary>
+    /// <summary>Non-null when the title is likely filler (a few frames, a black gap): shorter than <see cref="JunkBelow"/>.</summary>
     public string? JunkReason { get; internal set; }
+
+    /// <summary>Titles shorter than this are junk (<see cref="JunkReason"/>).</summary>
+    public static readonly TimeSpan JunkBelow = TimeSpan.FromSeconds(3);
 
     public TimeSpan ChapterStart(int chapter) =>
         chapter >= 1 && chapter <= ChapterStarts.Count ? ChapterStarts[chapter - 1] : TimeSpan.Zero;
@@ -519,6 +531,14 @@ public static class DiscMapBuilder
             });
         }
 
+        // Junk first: it decides which title of a button's chain is the one the button plays.
+        foreach (var t in map.Titles)
+            if (t.Duration < DvdTitleInfo.JunkBelow)
+                t.JunkReason = "shorter than 3 seconds";
+        foreach (var node in map.Menus)
+            foreach (var bn in node.Buttons)
+                CreditRealTitle(map, bn.Target);
+
         var visible = new HashSet<int>();
         var hidden = new HashSet<int>();
         var auto = new HashSet<int>();
@@ -553,6 +573,12 @@ public static class DiscMapBuilder
                     auto.Add(p.Ttn);
                     map.GetTitle(p.Ttn)?.Sources.Add($"plays before title {l.Ttn}");
                 }
+                foreach (var f in bn.Target.FollowedBy)
+                {
+                    if (f.Ttn == 0) { AddOrphan(f); continue; }
+                    auto.Add(f.Ttn);
+                    map.GetTitle(f.Ttn)?.Sources.Add($"plays after title {l.Ttn}");
+                }
             }
         }
 
@@ -577,9 +603,24 @@ public static class DiscMapBuilder
                 if (ContentSignature(disc, map.GetTitle(t.DuplicateOf.Value)!) != sig)
                     t.OwnCells = OwnCells(disc, t, map.GetTitle(t.DuplicateOf.Value)!);
             }
-
-            if (t.Duration < TimeSpan.FromSeconds(3))
-                t.JunkReason = "shorter than 3 seconds";
         }
+    }
+
+    /// <summary>
+    /// A button's title is the last title in its chain with real content: junk titles at the end (a stub that only
+    /// returns to the menu) follow it. A real pre-roll before a real title is unchanged, and so is a chain of nothing
+    /// but junk. Titles are judged by the inventory's junk test; a title-less PGC (an orphan) by the same length.
+    /// </summary>
+    private static void CreditRealTitle(DiscMap map, ButtonTarget target)
+    {
+        if (target.Kind != TargetKind.Title || target.Landing is not { } landing) return;
+        bool IsReal(TitleLanding l) => l.Ttn == 0 ? l.PgcDuration >= DvdTitleInfo.JunkBelow : map.GetTitle(l.Ttn) is not { JunkReason: not null };
+        if (IsReal(landing)) return;
+        var chain = target.PassedThrough.Append(landing).ToList();
+        var last = chain.FindLastIndex(IsReal);
+        if (last < 0) return;
+        target.Landing = chain[last];
+        target.PassedThrough = chain.Take(last).ToList();
+        target.FollowedBy = chain.Skip(last + 1).ToList();
     }
 }

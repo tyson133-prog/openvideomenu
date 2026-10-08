@@ -24,14 +24,16 @@ public static class SyntheticDisc
     /// <param name="pal">The title set's video is PAL (default NTSC).</param>
     /// <param name="repeatCell">Title 2 lists its one cell twice (5 min each), as discs do for cell commands to pick from.</param>
     /// <param name="second">What title 2 plays (default: video of its own).</param>
-    public static DvdDisc Open(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own) =>
-        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell, second)));
+    /// <param name="chain">Title 1 runs on into title 2 when it ends, with these lengths (default: it calls the menu).</param>
+    public static DvdDisc Open(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own, TitleChain chain = TitleChain.None) =>
+        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell, second, chain)));
 
-    public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own) => new(StringComparer.OrdinalIgnoreCase)
+    public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own,
+        TitleChain chain = TitleChain.None) => new(StringComparer.OrdinalIgnoreCase)
     {
         [@"\VIDEO_TS\VIDEO_TS.IFO"] = Vmg(),
         [@"\VIDEO_TS\VIDEO_TS.VOB"] = MenuVob(),
-        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell, second),
+        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell, second, chain),
         [@"\VIDEO_TS\VTS_01_1.VOB"] = new byte[2 * 2048],
     };
 
@@ -76,7 +78,7 @@ public static class SyntheticDisc
         return b;
     }
 
-    private static byte[] Vts(bool pal, bool repeatCell, SecondTitle second)
+    private static byte[] Vts(bool pal, bool repeatCell, SecondTitle second, TitleChain chain)
     {
         var b = new byte[4 * 2048];
         Ascii(b, 0, "DVDVIDEO-VTS");
@@ -110,13 +112,24 @@ public static class SyntheticDisc
                 ? new[] { shared, i == 1 && second == SecondTitle.NearlySameCells ? new Cell(10, 0, 110, 119) : new Cell(10, 0, 100, 109) }
                 : repeatCell && i == 1
                 ? new[] { new Cell(Seconds: 300, Still: 0, First: 1, Last: 1), new Cell(Seconds: 300, Still: 0, First: 1, Last: 1) }
+                : chain != TitleChain.None
+                ? new[] { new Cell(Seconds: ChainSeconds(chain)[i], Still: 0, First: (uint)i, Last: (uint)i) }
                 : new[] { new Cell(Seconds: 600 * (i + 1), Still: 0, First: (uint)i, Last: (uint)i) };
-            at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { CallMenu }, cells: cells);
+            var post = chain != TitleChain.None && i == 0 ? JumpTitle2 : CallMenu;
+            at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { post }, cells: cells);
         }
         return b;
     }
 
     private sealed record Cell(int Seconds, byte Still, uint First, uint Last);
+
+    /// <summary>Titles 1 and 2's lengths for a chain.</summary>
+    private static int[] ChainSeconds(TitleChain chain) => chain switch
+    {
+        TitleChain.ExtraThenStub => new[] { 30, 1 },
+        TitleChain.PrerollThenFilm => new[] { 8, 600 },
+        _ => new[] { 1, 2 },
+    };
 
     /// <summary>Writes a PGC at <paramref name="off"/> and returns its size.</summary>
     private static int Pgc(byte[] b, int off, string[] pre, string[] post, Cell[] cells)
@@ -247,4 +260,20 @@ public enum SecondTitle
 
     /// <summary>Title 1's cells but the last, which it has its own copy of: a near duplicate.</summary>
     NearlySameCells,
+}
+
+/// <summary>Title 1 runs on into title 2 when it ends (its post command jumps there).</summary>
+public enum TitleChain
+{
+    /// <summary>No chain: title 1 calls the menu.</summary>
+    None,
+
+    /// <summary>An extra (30 s), then a 1 s title that only returns to the menu.</summary>
+    ExtraThenStub,
+
+    /// <summary>A warning (8 s) before the film (10 min).</summary>
+    PrerollThenFilm,
+
+    /// <summary>Two empty titles (1 s and 2 s).</summary>
+    AllJunk,
 }
