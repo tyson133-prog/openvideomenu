@@ -1,0 +1,26 @@
+<!--
+  The Windows service for the Open Video Menu menu server, run by WinSW (OpenVideoMenuServer.exe beside this
+  file). The installer writes OpenVideoMenuServer.xml from this template; <!-\-ACCOUNT-\-> becomes the service
+  account only while the service is being installed. Settings are in %ProgramData%\Open Video Menu\menu-server.env.
+-->
+<service>
+  <id>OpenVideoMenuServer</id>
+  <name>Open Video Menu menu server</name>
+  <description>Hands Open Video Menu menus and their art to TV apps on your home network. Read-only; never serves your video.</description>
+  <executable>%BASE%\node.exe</executable>
+  <arguments>"%BASE%\menu-server.mjs" --config "%ProgramData%\Open Video Menu\menu-server.env"</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>10 sec</stoptimeout>
+  <logpath>%ProgramData%\Open Video Menu\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>1024</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+  <!--ACCOUNT-->
+</service>
