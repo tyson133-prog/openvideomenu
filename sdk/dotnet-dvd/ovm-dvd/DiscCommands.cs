@@ -35,6 +35,7 @@ internal static class DiscCommands
                 var flags = b.IsHidden ? " HIDDEN" : "";
                 var target = b.Target.Kind == TargetKind.Menu && b.Target.Menu is not null
                     ? (b.Target.Resumes ? "resume, else " : "") + $"-> menu [{b.Target.Menu.Id}]"
+                      + (b.Target.PassedThrough.Count > 0 ? $" via {string.Join(", ", b.Target.PassedThrough.Select(p => $"title {p.Ttn}"))}" : "")
                     : b.Target.ToString();
                 Console.WriteLine($"     {b.Button}{flags}  =>  {target}");
                 if (verbose) Console.WriteLine($"        cmd {DvdCommands.Disassemble(b.Button.Command)}");

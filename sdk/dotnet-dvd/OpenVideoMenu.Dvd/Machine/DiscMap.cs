@@ -30,7 +30,10 @@ public sealed class ButtonTarget
     /// </summary>
     public TitleLanding? Landing { get; internal set; }
 
-    /// <summary>Short titles played on the way to <see cref="Landing"/> (e.g. an intro before an episode).</summary>
+    /// <summary>
+    /// Short titles played on the way to <see cref="Landing"/> (e.g. an intro before an episode), or, for a button that
+    /// leads to a <see cref="Menu"/>, the empty titles it plays on the way there.
+    /// </summary>
     public IReadOnlyList<TitleLanding> PassedThrough { get; internal set; } = Array.Empty<TitleLanding>();
 
     /// <summary>Junk titles the chain plays after <see cref="Landing"/> (a return-to-menu stub).</summary>
@@ -55,7 +58,7 @@ public sealed class ButtonTarget
     {
         TargetKind.Title => Landing!.ToString() + (PassedThrough.Count > 0 ? $" via {string.Join(", ", PassedThrough.Select(p => $"title {p.Ttn}"))}" : "")
                             + (FollowedBy.Count > 0 ? $" then {string.Join(", ", FollowedBy.Select(p => $"title {p.Ttn}"))}" : ""),
-        TargetKind.Menu => $"-> {Menu?.Name ?? "menu"}",
+        TargetKind.Menu => $"-> {Menu?.Name ?? "menu"}" + (PassedThrough.Count > 0 ? $" via {string.Join(", ", PassedThrough.Select(p => $"title {p.Ttn}"))}" : ""),
         TargetKind.Setting => "setting" + (Detail is null ? "" : $" [{Detail}]"),
         _ => "unresolved: " + Detail,
     };
@@ -383,14 +386,28 @@ public static class DiscMapBuilder
                     var landing = r.Landing!;
                     var passed = new List<TitleLanding>();
                     var state = r.State;
+                    VmResult? after = null;
                     for (var hop = 0; hop < 3 && landing.PgcDuration < options.FollowThroughBelow; hop++)
                     {
-                        var c = vm.ContinueAfterTitle(state);
-                        if (c.Kind != VmStopKind.Title || c.Landing is null) break;
-                        if (c.Landing.Vtsn == landing.Vtsn && c.Landing.Pgcn == landing.Pgcn) break;
+                        after = vm.ContinueAfterTitle(state);
+                        if (after.Kind != VmStopKind.Title || after.Landing is null) break;
+                        // The same title again: the menus in between changed registers (a stub played twice on the way
+                        // to an episode's menu). Carry on from there; the hop limit ends a title that only loops.
+                        if (after.Landing.Vtsn == landing.Vtsn && after.Landing.Pgcn == landing.Pgcn) { state = after.State; after = null; continue; }
                         passed.Add(landing);
-                        landing = c.Landing;
-                        state = c.State;
+                        landing = after.Landing;
+                        state = after.State;
+                        after = null;
+                    }
+                    // A chain of nothing but empty titles that goes on to another menu waiting for the viewer (a stub
+                    // that hands back to the menus, which then play on without buttons to that menu): the button
+                    // leads to that menu. Back to the same menu, it stays a title (a stub that only returns).
+                    var chain = passed.Append(landing).ToList();
+                    if (chain.All(l => TitleLength(vm.Disc, l) < DvdTitleInfo.JunkBelow))
+                    {
+                        after ??= landing.PgcDuration < options.FollowThroughBelow ? vm.ContinueAfterTitle(state) : null;
+                        if (after is { Kind: VmStopKind.Menu } && menuFor(after) is { } menu && menu != node && menu.LayoutKey != node.LayoutKey)
+                            return new ButtonTarget { Kind = TargetKind.Menu, Menu = menu, PassedThrough = chain, ResultState = after.State, LeadIn = after.LeadInCells, Resumes = r.OffersResume };
                     }
                     return new ButtonTarget { Kind = TargetKind.Title, Landing = landing, PassedThrough = passed, ResultState = state, Resumes = r.OffersResume };
                 }
@@ -411,6 +428,20 @@ public static class DiscMapBuilder
             default:
                 return new ButtonTarget { Kind = TargetKind.Unresolved, Detail = r.ToString(), ResultState = r.State, Resumes = r.OffersResume };
         }
+    }
+
+    /// <summary>
+    /// A title's length as the inventory measures it (its PGCs in chapter order), for the junk test while menus are
+    /// still being mapped; a title-less PGC (an orphan) by its own length.
+    /// </summary>
+    private static TimeSpan TitleLength(DvdDisc disc, TitleLanding l)
+    {
+        var t = l.Ttn > 0 ? disc.GetTitle(l.Ttn) : null;
+        if (t is null || !disc.TitleSets.TryGetValue(t.Vtsn, out var vts) || t.VtsTtn < 1 || t.VtsTtn > vts.Ptts.Count) return l.PgcDuration;
+        var total = TimeSpan.Zero;
+        foreach (var pgcn in vts.Ptts[t.VtsTtn - 1].Select(p => p.Pgcn).Distinct())
+            total += disc.GetPgc(DvdDomain.Title, t.Vtsn, pgcn)?.Duration ?? TimeSpan.Zero;
+        return total;
     }
 
     /// <summary>The sector ranges a title plays, in order (first angle only).</summary>
@@ -559,26 +590,35 @@ public static class DiscMapBuilder
         {
             foreach (var bn in node.Buttons)
             {
+                // Empty titles a button plays on its way to another menu.
+                if (bn.Target.Kind == TargetKind.Menu)
+                    foreach (var p in bn.Target.PassedThrough)
+                    {
+                        if (p.Ttn == 0) { AddOrphan(p); continue; }
+                        auto.Add(p.Ttn);
+                        map.GetTitle(p.Ttn)?.Sources.Add($"plays on the way to {bn.Target.Menu?.Name ?? "a menu"}");
+                    }
                 if (bn.Target.Kind != TargetKind.Title || bn.Target.Landing is not { } l) continue;
+                // The titles around it count whatever it lands on, a title or a PGC no title lists.
+                var name = l.Ttn == 0 ? $"VTS {l.Vtsn} title PGC {l.Pgcn}" : $"title {l.Ttn}";
+                foreach (var p in bn.Target.PassedThrough)
+                {
+                    if (p.Ttn == 0) { AddOrphan(p); continue; }
+                    auto.Add(p.Ttn);
+                    map.GetTitle(p.Ttn)?.Sources.Add($"plays before {name}");
+                }
+                foreach (var f in bn.Target.FollowedBy)
+                {
+                    if (f.Ttn == 0) { AddOrphan(f); continue; }
+                    auto.Add(f.Ttn);
+                    map.GetTitle(f.Ttn)?.Sources.Add($"plays after {name}");
+                }
                 if (l.Ttn == 0) { AddOrphan(l); continue; }
                 var info = map.GetTitle(l.Ttn);
                 if (info is null) continue;
                 info.Sources.Add($"{node.Name} button {bn.Button.Number}" + (bn.IsHidden ? " (hidden)" : ""));
                 if (l.Chapter > 0) info.TargetedChapters.Add(l.Chapter);
                 (bn.IsHidden ? hidden : visible).Add(l.Ttn);
-
-                foreach (var p in bn.Target.PassedThrough)
-                {
-                    if (p.Ttn == 0) { AddOrphan(p); continue; }
-                    auto.Add(p.Ttn);
-                    map.GetTitle(p.Ttn)?.Sources.Add($"plays before title {l.Ttn}");
-                }
-                foreach (var f in bn.Target.FollowedBy)
-                {
-                    if (f.Ttn == 0) { AddOrphan(f); continue; }
-                    auto.Add(f.Ttn);
-                    map.GetTitle(f.Ttn)?.Sources.Add($"plays after title {l.Ttn}");
-                }
             }
         }
 

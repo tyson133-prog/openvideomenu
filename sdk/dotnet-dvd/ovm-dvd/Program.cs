@@ -11,11 +11,12 @@ internal static class Program
                                             a cell's navigation packs and highlight status
           disasm <hex>...                   8-byte commands as text (e.g. 3002000000050000)
           export <disc> <bundle.ovmz> --files <pattern>... [--file <n>=<path>]... [--ffmpeg <path>|none]
-                 [--no-tracks] [--title <name>]
+                 [--no-tracks] [--title <name>] [--cells-once]
                                             a bundle from files ripped one per DVD title; a pattern names each
                                             title's file relative to the bundle, {n} = the title number
                                             ("Title {n}.mkv"); with several, the first whose file exists wins;
                                             --file names one title's file (the feature as "Heat (1995).mkv")
+                                            --cells-once: the files hold each repeated cell once (as DVD Tamer rips)
           verify <disc> [--walks n] [--depth n] [--seed n] [--lang xx] [--json <out>] [--quiet]
                                             export the whole disc and play it against the disc; one VERIFY line
           verify-all <folder>... [--out <dir>] [--parallel n] [--timeout s] [--walks n] [--depth n]

@@ -19,27 +19,30 @@ public static class SyntheticDisc
     public const string Resume = "2001000000000010";
     private const string ToMenu = "3006000100C00000";            // JumpSS VMGM PGC 1
     private const string CallMenu = "3008000101C00000";          // CallSS VMGM PGC 1, resume cell 1
+    private const string ToOtherMenu = "3006000200C00000";       // JumpSS VMGM PGC 2
 
     /// <summary>The disc, opened. Dispose it when done.</summary>
     /// <param name="pal">The title set's video is PAL (default NTSC).</param>
     /// <param name="repeatCell">Title 2 lists its one cell twice (5 min each), as discs do for cell commands to pick from.</param>
     /// <param name="second">What title 2 plays (default: video of its own).</param>
     /// <param name="chain">Title 1 runs on into title 2 when it ends, with these lengths (default: it calls the menu).</param>
-    public static DvdDisc Open(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own, TitleChain chain = TitleChain.None) =>
-        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell, second, chain)));
+    /// <param name="repeatChapter">With <paramref name="repeatCell"/>: title 2's second listing of its cell starts chapter 2.</param>
+    public static DvdDisc Open(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own, TitleChain chain = TitleChain.None,
+        bool repeatChapter = false) =>
+        DvdDisc.Open("synthetic", new MemoryFileSystem(Files(pal, repeatCell, second, chain, repeatChapter)));
 
     public static Dictionary<string, byte[]> Files(bool pal = false, bool repeatCell = false, SecondTitle second = SecondTitle.Own,
-        TitleChain chain = TitleChain.None) => new(StringComparer.OrdinalIgnoreCase)
+        TitleChain chain = TitleChain.None, bool repeatChapter = false) => new(StringComparer.OrdinalIgnoreCase)
     {
-        [@"\VIDEO_TS\VIDEO_TS.IFO"] = Vmg(),
-        [@"\VIDEO_TS\VIDEO_TS.VOB"] = MenuVob(),
-        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell, second, chain),
+        [@"\VIDEO_TS\VIDEO_TS.IFO"] = Vmg(chain, repeatChapter),
+        [@"\VIDEO_TS\VIDEO_TS.VOB"] = MenuVob(chain),
+        [@"\VIDEO_TS\VTS_01_0.IFO"] = Vts(pal, repeatCell, second, chain, repeatChapter),
         [@"\VIDEO_TS\VTS_01_1.VOB"] = new byte[2 * 2048],
     };
 
     // ------------------------------------------------------------------ IFOs
 
-    private static byte[] Vmg()
+    private static byte[] Vmg(TitleChain chain, bool repeatChapter)
     {
         var b = new byte[4 * 2048];
         Ascii(b, 0, "DVDVIDEO-VMG");
@@ -59,26 +62,37 @@ public static class SyntheticDisc
             var e = tt + 8 + i * 12;
             b[e] = 0x3C;                     // playback type: one sequential PGC
             b[e + 1] = 1;                    // angles
-            U16(b, e + 2, 1);                // chapters
+            U16(b, e + 2, i == 1 && repeatChapter ? 2 : 1); // chapters
             b[e + 6] = 1;                    // title set
             b[e + 7] = (byte)(i + 1);        // title set title
         }
 
-        // VMGM menu table: one language unit ("en") with the title menu.
+        // VMGM menu table: one language unit ("en") with the title menu, and for StubToOtherMenu a second menu:
+        // a 1 s clip without buttons (sector 1), then a still with two buttons of its own (sector 2).
         var ut = 2 * 2048;
         U16(b, ut, 1);
         Ascii(b, ut + 8, "en");
         U32(b, ut + 12, 16);                 // language unit, from ut
         var lu = ut + 16;
-        U16(b, lu, 1);
+        var other = chain == TitleChain.StubToOtherMenu;
+        var count = other ? 2 : 1;
+        U16(b, lu, count);
         b[lu + 8] = 0x80 | (byte)MenuType.Title;
-        U32(b, lu + 12, 16);                 // PGC, from lu
-        Pgc(b, lu + 16, pre: Array.Empty<string>(), post: Array.Empty<string>(),
+        var at = 8 + count * 8;
+        U32(b, lu + 12, at);                 // PGC, from lu
+        at += Pgc(b, lu + at, pre: Array.Empty<string>(), post: Array.Empty<string>(),
             cells: new[] { new Cell(Seconds: 1, Still: 0xFF, First: 0, Last: 0) });
+        if (other)
+        {
+            at += at % 2;
+            U32(b, lu + 20, at);
+            Pgc(b, lu + at, pre: Array.Empty<string>(), post: Array.Empty<string>(),
+                cells: new[] { new Cell(Seconds: 1, Still: 0, First: 1, Last: 1), new Cell(Seconds: 1, Still: 0xFF, First: 2, Last: 2) });
+        }
         return b;
     }
 
-    private static byte[] Vts(bool pal, bool repeatCell, SecondTitle second, TitleChain chain)
+    private static byte[] Vts(bool pal, bool repeatCell, SecondTitle second, TitleChain chain, bool repeatChapter)
     {
         var b = new byte[4 * 2048];
         Ascii(b, 0, "DVDVIDEO-VTS");
@@ -87,14 +101,15 @@ public static class SyntheticDisc
         b[0x100] = 0x0C;
         b[0x200] = (byte)(pal ? 0x1C : 0x0C); // title video: NTSC (or PAL) 16:9
 
-        // Chapter table: each title is one chapter, program 1 of its PGC.
+        // Chapter table: each title is one chapter, program 1 of its PGC (with repeatChapter, title 2 also program 2).
         var ptt = 2048;
         U16(b, ptt, 2);
-        U32(b, ptt + 4, 16 + 2 * 4 - 1);
+        U32(b, ptt + 4, 16 + (repeatChapter ? 3 : 2) * 4 - 1);
         U32(b, ptt + 8, 16);
         U32(b, ptt + 12, 20);
         U16(b, ptt + 16, 1); U16(b, ptt + 18, 1);
         U16(b, ptt + 20, 2); U16(b, ptt + 22, 1);
+        if (repeatChapter) { U16(b, ptt + 24, 2); U16(b, ptt + 26, 2); }
 
         // Title PGCs: 10 s and 20 s, one cell each, calling the menu when they end.
         var pgcit = 2 * 2048;
@@ -115,7 +130,12 @@ public static class SyntheticDisc
                 : chain != TitleChain.None
                 ? new[] { new Cell(Seconds: ChainSeconds(chain)[i], Still: 0, First: (uint)i, Last: (uint)i) }
                 : new[] { new Cell(Seconds: 600 * (i + 1), Still: 0, First: (uint)i, Last: (uint)i) };
-            var post = chain != TitleChain.None && i == 0 ? JumpTitle2 : CallMenu;
+            var post = i != 0 ? CallMenu : chain switch
+            {
+                TitleChain.None or TitleChain.StubBackToMenu => CallMenu,
+                TitleChain.StubToOtherMenu => ToOtherMenu,
+                _ => JumpTitle2,
+            };
             at += Pgc(b, pgcit + at, pre: Array.Empty<string>(), post: new[] { post }, cells: cells);
         }
         return b;
@@ -128,6 +148,7 @@ public static class SyntheticDisc
     {
         TitleChain.ExtraThenStub => new[] { 30, 1 },
         TitleChain.PrerollThenFilm => new[] { 8, 600 },
+        TitleChain.StubToOtherMenu or TitleChain.StubBackToMenu => new[] { 1, 600 },
         _ => new[] { 1, 2 },
     };
 
@@ -168,9 +189,21 @@ public static class SyntheticDisc
 
     // ------------------------------------------------------------------ the menu's navigation pack
 
-    /// <summary>One sector: a NAV pack whose PCI carries the menu's three buttons.</summary>
-    private static byte[] MenuVob()
+    /// <summary>
+    /// The menu VOB: sector 0, a NAV pack whose PCI carries the title menu's three buttons; for StubToOtherMenu also
+    /// sector 1 (a clip without buttons) and sector 2 (the other menu's two buttons).
+    /// </summary>
+    private static byte[] MenuVob(TitleChain chain)
     {
+        var main = NavPack(JumpTitle1, JumpTitle2, Resume);
+        if (chain != TitleChain.StubToOtherMenu) return main;
+        return main.Concat(new byte[2048]).Concat(NavPack(JumpTitle2, ToMenu)).ToArray();
+    }
+
+    /// <summary>One sector: a NAV pack whose PCI carries buttons with these commands, one below the other.</summary>
+    private static byte[] NavPack(params string[] commands)
+    {
+        var count = commands.Length;
         var b = new byte[2048];
         b[2] = 1; b[3] = 0xBA;                                 // pack header, no stuffing
         var p = 14;
@@ -182,14 +215,13 @@ public static class SyntheticDisc
         U16(b, hli, 1);                                        // new highlight
         U32(b, hli + 6, 0xFFFFFFFF);                           // to the end of the cell
         U16(b, hli + 14, 0x1000);                              // one button group, normal display
-        b[hli + 17] = 3;                                       // buttons
+        b[hli + 17] = (byte)count;                             // buttons
         for (var i = 0; i < 3; i++)                            // colour tables: opaque palette 1 for pattern pixels
         {
             U32(b, hli + 22 + i * 8, 0x0010_00F0);
             U32(b, hli + 22 + i * 8 + 4, 0x0020_00F0);
         }
-        var commands = new[] { JumpTitle1, JumpTitle2, Resume };
-        for (var n = 1; n <= 3; n++)
+        for (var n = 1; n <= count; n++)
         {
             var e = hli + 46 + (n - 1) * 18;
             int x0 = 100, x1 = 300, y0 = 100 + (n - 1) * 80, y1 = y0 + 60;
@@ -199,8 +231,8 @@ public static class SyntheticDisc
             b[e + 3] = (byte)((y0 >> 4) & 0x3F);
             b[e + 4] = (byte)((y0 & 0x0F) << 4 | (y1 >> 8) & 0x03);
             b[e + 5] = (byte)(y1 & 0xFF);
-            b[e + 6] = (byte)(n == 1 ? 3 : n - 1);             // up
-            b[e + 7] = (byte)(n == 3 ? 1 : n + 1);             // down
+            b[e + 6] = (byte)(n == 1 ? count : n - 1);         // up
+            b[e + 7] = (byte)(n == count ? 1 : n + 1);         // down
             b[e + 8] = (byte)n;                                // left: none
             b[e + 9] = (byte)n;                                // right: none
             Convert.FromHexString(commands[n - 1]).CopyTo(b, e + 10);
@@ -276,4 +308,13 @@ public enum TitleChain
 
     /// <summary>Two empty titles (1 s and 2 s).</summary>
     AllJunk,
+
+    /// <summary>
+    /// A 1 s title that hands back to the menus, which play a clip without buttons on to another menu (VMGM PGC 2,
+    /// two buttons of its own).
+    /// </summary>
+    StubToOtherMenu,
+
+    /// <summary>A 1 s title that only returns to the menu it was started from.</summary>
+    StubBackToMenu,
 }

@@ -170,6 +170,9 @@ public sealed class DvdVm
 
     private readonly DvdDisc _disc;
 
+    /// <summary>The disc this machine plays.</summary>
+    public DvdDisc Disc => _disc;
+
     public DvdVm(DvdDisc disc, DvdPlayerSettings? settings = null)
     {
         _disc = disc;

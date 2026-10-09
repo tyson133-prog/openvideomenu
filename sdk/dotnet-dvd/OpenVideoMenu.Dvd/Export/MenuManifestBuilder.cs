@@ -196,6 +196,21 @@ public sealed class MenuManifestBuilder
     {
         ResolveLeadIns();
         var media = new Dictionary<string, MediaEntry>(_media);
+        // A file's chapter marks must move forward (spec: chapter times increase). A ripper that holds repeated video
+        // once may mark several of the disc's chapters at the same point; the disc's chapters themselves live in the
+        // plays, which use times and the position map, so only the file's own list loses those marks.
+        foreach (var (id, entry) in media)
+            if (entry.Chapters is { Count: > 1 } chapters && MediaCellsExtensions.Forward(chapters.Select(c => c.Time)) is var kept && kept.Count < chapters.Count)
+            {
+                var keep = new HashSet<Chapter>(ReferenceEqualityComparer.Instance);
+                var last = double.NegativeInfinity;
+                foreach (var c in chapters)
+                    if (c.Time > last + 0.0005) { keep.Add(c); last = c.Time; }
+                var dropped = chapters.Select((c, i) => (c, i)).Where(x => !keep.Contains(x.c)).Select(x => x.i + 1).ToList();
+                entry.Chapters = chapters.Where(keep.Contains).ToList();
+                Warnings.Add(DvdWarningCode.ChaptersNotForward,
+                    $"{id}: chapters {string.Join(", ", dropped)} start at or before the chapter before them (video the file holds once); they're left out of its chapter list.");
+            }
         foreach (var (k, v) in _index.Composites) media[k] = Describe(v);
         var manifest = new Manifest
         {

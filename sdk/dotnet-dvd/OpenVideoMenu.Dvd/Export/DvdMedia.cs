@@ -22,13 +22,17 @@ public static class DvdMedia
     /// or null. Its media id is <c>v{vtsn}p{pgcn}</c>. Default: none.
     /// </param>
     /// <param name="labelOf">A media id's label (default: the id).</param>
+    /// <param name="onceEach">
+    /// The files hold each distinct cell once, though a title lists some again (see <see cref="CellMediaIndex.CellsOf"/>).
+    /// Default: every listing, as MakeMKV and HandBrake rip a title.
+    /// </param>
     public static DvdMediaSet OneFilePerTitle(DvdDisc disc, Func<int, string?> fileOf, Func<int, int, string?>? clipOf = null,
-        Func<string, string?>? labelOf = null)
+        Func<string, string?>? labelOf = null, bool onceEach = false)
     {
         var refs = new Dictionary<string, string>();
         var files = new List<MediaCells>();
         foreach (var t in disc.Vmg.Titles)
-            if (fileOf(t.TitleNumber) is { } file && CellMediaIndex.CellsOf(disc, $"t{t.TitleNumber}", t.TitleNumber, t.TitleNumber, 1, null) is { Cells.Count: > 0 } cells)
+            if (fileOf(t.TitleNumber) is { } file && CellMediaIndex.CellsOf(disc, $"t{t.TitleNumber}", t.TitleNumber, t.TitleNumber, 1, null, onceEach) is { Cells.Count: > 0 } cells)
             {
                 files.Add(cells);
                 refs[cells.Id] = file;
@@ -39,7 +43,7 @@ public static class DvdMedia
             foreach (var (vtsn, vts) in disc.TitleSets.OrderBy(v => v.Key))
                 for (var p = 1; p <= vts.TitlePgcs.Count; p++)
                     if (disc.FindVtsTtnForPgc(vtsn, p) == 0 && clipOf(vtsn, p) is { } file &&
-                        CellMediaIndex.CellsOfPgc(disc, $"v{vtsn}p{p}", order++, vtsn, p) is { Cells.Count: > 0 } orphan)
+                        CellMediaIndex.CellsOfPgc(disc, $"v{vtsn}p{p}", order++, vtsn, p, onceEach) is { Cells.Count: > 0 } orphan)
                     {
                         files.Add(orphan);
                         refs[orphan.Id] = file;

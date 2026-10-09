@@ -1805,7 +1805,7 @@ public sealed class DvdMenuCompiler
             {
                 var cell = pgc.Cells[c - 1];
                 if (cell.IsAngleBlock && cell.BlockMode != 1) continue;
-                run.Cells.Add(new PlayedCell(m.Vtsn, m.Pgcn, c, cell.FirstSector, cell.LastSector, cell.Duration.TotalSeconds));
+                run.Cells.Add(new PlayedCell(m.Vtsn, m.Pgcn, c, cell.FirstSector, cell.LastSector, cell.Duration.TotalSeconds, StartsChapter(m.Vtsn, m.Pgcn, pgc, c)));
                 run.Titles.Add((Single(m.S[4]) ?? 0, Single(m.S[5]) ?? 0));
                 if (cell.CellCommandNumber > 0)
                     Warnings.Add(DvdWarningCode.RandomCellCommand, $"VTS {m.Vtsn} title PGC {m.Pgcn} plays at random and its cell {c} has a command; it isn't exported.");
@@ -2602,6 +2602,17 @@ public sealed class DvdMenuCompiler
 
     // ================================================================== title playback
 
+    /// <summary>
+    /// The cell starts one of the disc's chapters: it is the entry cell of a program that a chapter table of its title
+    /// set lists. A chapter is a place in the title's list of cells, so chapters on the same video are still distinct.
+    /// </summary>
+    private bool StartsChapter(int vtsn, int pgcn, Pgc pgc, int cell)
+    {
+        var pg = pgc.ProgramOfCell(cell);
+        if (pg < 1 || pg > pgc.ProgramMap.Count || pgc.ProgramMap[pg - 1] != cell) return false;
+        return _disc.TitleSets.TryGetValue(vtsn, out var vts) && vts.Ptts.Any(list => list.Any(p => p.Pgcn == pgcn && p.Pgn == pg));
+    }
+
     private void PlayTitleCell(M m, Pgc pgc, CellPlayback cell)
     {
         m.Navigations++;
@@ -2611,7 +2622,7 @@ public sealed class DvdMenuCompiler
         if (cell.IsAngleBlock)
             while (first > 1 && pgc.Cells[first - 1].BlockMode != 1 && pgc.Cells[first - 2].IsAngleBlock) first--;
         var c = pgc.Cells[first - 1];
-        var played = new PlayedCell(m.Vtsn, m.Pgcn, first, c.FirstSector, c.LastSector, c.Duration.TotalSeconds);
+        var played = new PlayedCell(m.Vtsn, m.Pgcn, first, c.FirstSector, c.LastSector, c.Duration.TotalSeconds, StartsChapter(m.Vtsn, m.Pgcn, pgc, first));
 
         if (m.Run is null)
         {

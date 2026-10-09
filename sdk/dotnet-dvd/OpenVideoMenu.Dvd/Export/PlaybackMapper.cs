@@ -5,8 +5,11 @@ using OpenVideoMenu;
 
 namespace OpenVideoMenu.Dvd.Export;
 
-/// <summary>A title cell that playback passes through, in play order.</summary>
-public readonly record struct PlayedCell(int Vtsn, int Pgcn, int Cell, uint FirstSector, uint LastSector, double Seconds);
+/// <summary>
+/// A title cell that playback passes through, in play order. <paramref name="ChapterStart"/>: the cell starts one of
+/// the disc's chapters (the entry cell of a program its chapter table lists), where a composite gets a chapter.
+/// </summary>
+public readonly record struct PlayedCell(int Vtsn, int Pgcn, int Cell, uint FirstSector, uint LastSector, double Seconds, bool ChapterStart = false);
 
 /// <summary>
 /// How a run of disc cells plays from the rip: one media (a file, or a composite of file ranges), from
@@ -180,7 +183,7 @@ public sealed class CellMediaIndex : IPlaybackMapper
         {
             Segments = new List<Segment> { new() { Media = media } },
             Duration = file.Duration, Kind = "other",
-            Chapters = file.ChapterTimes.Count >= 2 ? file.ChapterTimes.Select(t => new Chapter { Time = t }).ToList() : null,
+            Chapters = MediaCellsExtensions.Forward(file.ChapterTimes) is { Count: >= 2 } times ? times.Select(t => new Chapter { Time = t }).ToList() : null,
         };
         return id;
     }
@@ -294,16 +297,28 @@ public sealed class CellMediaIndex : IPlaybackMapper
         {
             id = $"play{_composites.Count + 1}";
             _composites[key] = id;
-            // Its chapters: where each segment starts, and its files' chapters inside the segments.
+            // Its chapters: where the disc's chapters start on its timeline, when the run says (a title that lists one
+            // clip many times is one chapter, not one per listing; chapters on repeated video are distinct points).
+            // Otherwise where each segment starts, and its files' chapters inside the segments.
             var chapters = new SortedSet<double>();
-            var at = 0.0;
-            foreach (var (file, from, count, _) in spans)
+            if (cells.Any(c => c.ChapterStart))
             {
-                var start = file.Starts[from];
-                var end = from + count < file.Cells.Count ? file.Starts[from + count] : file.Duration;
-                chapters.Add(Math.Round(at, 3));
-                foreach (var t in file.ChapterTimes.Where(t => t > start + 0.001 && t < end - 0.001)) chapters.Add(Math.Round(at + t - start, 3));
-                at += end - start;
+                chapters.Add(0);
+                for (var k = 0; k < cells.Count; k++)
+                    if (cells[k].ChapterStart && (k == 0 ? 0.0 : ends[k - 1]) is { } cellStart && ends[k] is not null)
+                        chapters.Add(Math.Round(cellStart, 3));
+            }
+            else
+            {
+                var at = 0.0;
+                foreach (var (file, from, count, _) in spans)
+                {
+                    var start = file.Starts[from];
+                    var end = from + count < file.Cells.Count ? file.Starts[from + count] : file.Duration;
+                    chapters.Add(Math.Round(at, 3));
+                    foreach (var t in file.ChapterTimes.Where(t => t > start + 0.001 && t < end - 0.001)) chapters.Add(Math.Round(at + t - start, 3));
+                    at += end - start;
+                }
             }
             Composites[id] = new MediaEntry
             {
@@ -317,6 +332,15 @@ public sealed class CellMediaIndex : IPlaybackMapper
 
 internal static class MediaCellsExtensions
 {
+    /// <summary>Chapter marks that move forward: one at the same time as, or before, the mark before it is dropped.</summary>
+    public static List<double> Forward(IEnumerable<double> times)
+    {
+        var kept = new List<double>();
+        foreach (var t in times)
+            if (kept.Count == 0 || t > kept[^1] + 0.0005) kept.Add(t);
+        return kept;
+    }
+
     public static MediaCells With(this MediaCells m, List<(uint, uint)> cells, List<double> starts)
     {
         m.Cells.AddRange(cells);

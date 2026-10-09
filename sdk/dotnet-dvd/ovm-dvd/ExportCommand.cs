@@ -32,7 +32,8 @@ internal static class ExportCommand
             IEnumerable<string> candidates = named.TryGetValue(title, out var file) ? [file] : patterns.Select(p => p.Replace("{n}", title.ToString()));
             return candidates.FirstOrDefault(rel => File.Exists(Path.Combine(folder, rel)))?.Replace('\\', '/');
         }
-        var set = DvdMedia.OneFilePerTitle(disc, FileOf);
+        // --cells-once: the files hold each distinct cell once, as DVD Tamer's rips do.
+        var set = DvdMedia.OneFilePerTitle(disc, FileOf, onceEach: args.Contains("--cells-once"));
         if (set.Media.Count == 0)
             throw new ArgumentException($"No title's file was found next to the bundle ({string.Join(", ", patterns.Concat(named.Values))} in {folder}).");
 

@@ -64,6 +64,12 @@ public enum DvdWarningCode
     /// a "white rabbit" mode's): playback skips them.
     /// </summary>
     CellsNotRipped,
+
+    /// <summary>
+    /// A file's chapter list has marks at or before the mark before them (chapters that start on video the file holds
+    /// once, as the disc lists it again): they're left out of that list. Plays use times, so none of them moves.
+    /// </summary>
+    ChaptersNotForward,
 }
 
 /// <summary>A warning: what it's about, and a sentence for people.</summary>
