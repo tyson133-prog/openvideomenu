@@ -36,7 +36,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..\build\out
-OutputBaseFilename=OpenVideoMenu-MenuServer-Setup-{#AppVersion}
+OutputBaseFilename=OpenVideoMenu-MenuServer-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -83,14 +83,16 @@ var
 
 { --- the helper ------------------------------------------------------------------------------------- }
 
+{ Setup runs its own copy: the wizard pages come before the program folder is set, and an earlier install's copy
+  may be older. The uninstaller runs the installed one. }
 function HelperPath(): String;
 begin
-  if FileExists(ExpandConstant('{app}\setup-helper.ps1')) then
+  if IsUninstaller() then
     Result := ExpandConstant('{app}\setup-helper.ps1')
   else
   begin
-    ExtractTemporaryFile('setup-helper.ps1');
     Result := ExpandConstant('{tmp}\setup-helper.ps1');
+    if not FileExists(Result) then ExtractTemporaryFile('setup-helper.ps1');
   end;
 end;
 

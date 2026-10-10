@@ -52,7 +52,8 @@ pwsh packaging/windows/build.ps1 -Version 0.1.0
 It needs Node.js, the repository's npm packages (`npm ci`) and Inno Setup 6 or 7. It bundles the server
 (`packaging/bundle.mjs`), downloads Node.js for Windows (checked against nodejs.org's `SHASUMS256.txt`) and WinSW
 2.12.0 (checked against a pinned hash) into `packaging/build/cache`, and writes
-`packaging/build/out/OpenVideoMenu-MenuServer-Setup-<version>.exe` and `OpenVideoMenu-MenuServer-Setup.exe`.
+`packaging/build/out/OpenVideoMenu-MenuServer-Setup.exe` (no version in the name, so download links to the latest
+release stay the same; the installer shows its version).
 
 The files: `menu-server.iss` (the installer: wizard pages and steps), `setup-helper.ps1` (talks to Plex and Jellyfin,
 writes the settings, installs the service and the firewall rules), `OpenVideoMenuServer.template.xml` (the service),

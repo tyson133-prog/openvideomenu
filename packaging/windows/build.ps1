@@ -1,5 +1,5 @@
-# Builds the Windows installer for the menu server: OpenVideoMenu-MenuServer-Setup-<version>.exe, plus a copy named
-# OpenVideoMenu-MenuServer-Setup.exe for "latest" download links, in packaging/build/out.
+# Builds the Windows installer for the menu server, packaging/build/out/OpenVideoMenu-MenuServer-Setup.exe. The name
+# has no version, so "latest" download links stay the same; the installer shows its version.
 #
 #   pwsh packaging/windows/build.ps1 [-Version 0.1.0] [-Iscc "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"]
 #
@@ -133,8 +133,6 @@ $isccArgs += (Join-Path $PSScriptRoot "menu-server.iss")
 & $Iscc @isccArgs
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)." }
 
-$setup = Join-Path $out "OpenVideoMenu-MenuServer-Setup-$Version.exe"
-Copy-Item $setup (Join-Path $out "OpenVideoMenu-MenuServer-Setup.exe") -Force
+$setup = Join-Path $out "OpenVideoMenu-MenuServer-Setup.exe"
 $size = [math]::Round((Get-Item $setup).Length / 1MB, 1)
-Write-Host "$setup ($size MB)"
-Write-Host (Join-Path $out "OpenVideoMenu-MenuServer-Setup.exe")
+Write-Host "$setup $Version ($size MB)"
