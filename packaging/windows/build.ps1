@@ -59,7 +59,11 @@ function Assert-Hash($path, $expected) {
 
 # 1. The server, bundled into one file.
 Push-Location $root
-try { node packaging/bundle.mjs; if ($LASTEXITCODE -ne 0) { throw "Bundling the menu server failed." } }
+try {
+    # The bundle reads @openvideomenu/core from its build output, as packaging/linux/build.sh does.
+    npx tsc -b packages/core; if ($LASTEXITCODE -ne 0) { throw "Building @openvideomenu/core failed." }
+    node packaging/bundle.mjs; if ($LASTEXITCODE -ne 0) { throw "Bundling the menu server failed." }
+}
 finally { Pop-Location }
 
 # 2. Node.js for Windows, checked against nodejs.org's published checksums.
