@@ -93,7 +93,7 @@ finally { $zip.Dispose() }
 Copy-Item (Join-Path $build "menu-server.mjs") $stage
 Copy-Item $winswExe (Join-Path $stage "OpenVideoMenuServer.exe")
 Copy-Item (Join-Path $PSScriptRoot "OpenVideoMenuServer.template.xml") $stage
-Copy-Item (Join-Path $PSScriptRoot "setup-helper.ps1") $stage
+Copy-Item (Join-Path $PSScriptRoot "setup-helper.mjs") $stage
 Copy-Item (Join-Path $root "LICENSE") (Join-Path $stage "LICENSE.txt")
 Copy-Item (Join-Path $root "NOTICE") (Join-Path $stage "NOTICE.txt")
 $notices = @(

@@ -55,9 +55,9 @@ It needs Node.js, the repository's npm packages (`npm ci`) and Inno Setup 6 or 7
 `packaging/build/out/OpenVideoMenu-MenuServer-Setup.exe` (no version in the name, so download links to the latest
 release stay the same; the installer shows its version).
 
-The files: `menu-server.iss` (the installer: wizard pages and steps), `setup-helper.ps1` (talks to Plex and Jellyfin,
-writes the settings, installs the service and the firewall rules), `OpenVideoMenuServer.template.xml` (the service),
-`install-readme.txt` (installed as README.txt).
+The files: `menu-server.iss` (the installer: wizard pages and steps), `setup-helper.mjs` (talks to Plex and Jellyfin,
+writes the settings, installs the service and the firewall rules; setup runs it on the Node.js it ships, so it needs
+no PowerShell), `OpenVideoMenuServer.template.xml` (the service), `install-readme.txt` (installed as README.txt).
 
 ### Signing
 

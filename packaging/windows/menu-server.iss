@@ -4,8 +4,8 @@
 ;
 ; The wizard asks which media server to use, gets a sign-in for it (Plex's own on this PC, a plex.tv code, or a
 ; Jellyfin API key made with an administrator's sign-in), shows the library folders the server will follow, and
-; asks for a Windows account only when a folder is on a network share. The PowerShell helper (setup-helper.ps1)
-; does the network calls and the system changes.
+; asks for a Windows account only when a folder is on a network share. The helper (setup-helper.mjs, run on the
+; Node.js this installer ships) does the network calls and the system changes, so setup needs no PowerShell or .NET.
 ;
 ; Silent install (testing, scripted setups):
 ;   OpenVideoMenu-MenuServer-Setup.exe /VERYSILENT /PLEXURL=http://127.0.0.1:32400 /PLEXTOKEN=...
@@ -54,7 +54,7 @@ Source: "{#Stage}\node.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\menu-server.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\OpenVideoMenuServer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\OpenVideoMenuServer.template.xml"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Stage}\setup-helper.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\setup-helper.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
@@ -83,16 +83,16 @@ var
 
 { --- the helper ------------------------------------------------------------------------------------- }
 
-{ Setup runs its own copy: the wizard pages come before the program folder is set, and an earlier install's copy
-  may be older. The uninstaller runs the installed one. }
-function HelperPath(): String;
+{ Setup runs its own copies of Node.js and the helper: the wizard pages come before the program folder is set, and
+  an earlier install's copies may be older. The uninstaller runs the installed ones. }
+function SetupFile(const Name: String): String;
 begin
   if IsUninstaller() then
-    Result := ExpandConstant('{app}\setup-helper.ps1')
+    Result := ExpandConstant('{app}\' + Name)
   else
   begin
-    Result := ExpandConstant('{tmp}\setup-helper.ps1');
-    if not FileExists(Result) then ExtractTemporaryFile('setup-helper.ps1');
+    Result := ExpandConstant('{tmp}\' + Name);
+    if not FileExists(Result) then ExtractTemporaryFile(Name);
   end;
 end;
 
@@ -103,27 +103,48 @@ begin
 end;
 
 { Runs one helper command. Input is KEY=VALUE lines (written to a temporary file, never on the command line);
-  Output gets the result lines, or the reason it failed as Output[0]. }
+  Output gets the result lines, or the reason it failed as Output[0]. When the helper writes no answer (Node.js
+  didn't start, or stopped before the helper could), the reason is what Windows or Node.js said, also in setup's
+  log (/LOG). }
 function RunHelper(const Cmd: String; const Input: TArrayOfString; var Output: TArrayOfString): Boolean;
 var
-  InFile, OutFile: String;
-  Code: Integer;
+  InFile, OutFile, ErrFile, Reason: String;
+  Errors: TArrayOfString;
+  Started: Boolean;
+  Code, I: Integer;
 begin
   InFile := AddBackslash(TempFolder()) + 'ovm-helper-in.txt';
   OutFile := AddBackslash(TempFolder()) + 'ovm-helper-out.txt';
+  ErrFile := AddBackslash(TempFolder()) + 'ovm-helper-err.txt';
   DeleteFile(OutFile);
+  DeleteFile(ErrFile);
   SaveStringsToUTF8File(InFile, Input, False);
-  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + HelperPath() + '" -Command ' + Cmd +
-    ' -In "' + InFile + '" -Out "' + OutFile + '"', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+  { Through cmd.exe so that Node.js's own errors land in ErrFile. }
+  Started := Exec(ExpandConstant('{cmd}'), '/S /C ""' + SetupFile('node.exe') + '" "' + SetupFile('setup-helper.mjs') +
+    '" ' + Cmd + ' "' + InFile + '" "' + OutFile + '" > "' + ErrFile + '" 2>&1"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := Started and (Code = 0);
   DeleteFile(InFile);
   SetArrayLength(Output, 0);
   if not LoadStringsFromFile(OutFile, Output) then
   begin
+    if not Started then
+      Reason := 'Windows couldn''t start it: ' + SysErrorMessage(Code)
+    else
+    begin
+      Reason := 'Node.js ended with code ' + IntToStr(Code);
+      if LoadStringsFromFile(ErrFile, Errors) then
+        for I := 0 to GetArrayLength(Errors) - 1 do
+          if Trim(Errors[I]) <> '' then Reason := Reason + #13#10 + Trim(Errors[I]);
+    end;
+    Log('Setup helper ' + Cmd + ' gave no answer. ' + Reason);
     SetArrayLength(Output, 1);
-    Output[0] := 'The setup helper gave no answer.';
-  end;
+    Output[0] := 'The setup helper gave no answer. ' + Reason;
+    Result := False;
+  end
+  else if not Result and (GetArrayLength(Output) > 0) then
+    Log('Setup helper ' + Cmd + ' failed: ' + Output[0]);
   DeleteFile(OutFile);
+  DeleteFile(ErrFile);
 end;
 
 procedure AddLine(var A: TArrayOfString; const S: String);
@@ -135,6 +156,36 @@ end;
 function FirstLine(const A: TArrayOfString): String;
 begin
   if GetArrayLength(A) > 0 then Result := A[0] else Result := '';
+end;
+
+{ --- the service account -------------------------------------------------------------------------------- }
+
+function LogonUser(User, Domain, Password: String; LogonType, LogonProvider: DWORD; var Token: THandle): BOOL;
+  external 'LogonUserW@advapi32.dll stdcall';
+function CloseHandle(Handle: THandle): BOOL;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+{ Is this a real Windows account with this password? A network logon (3) checks the password without needing
+  interactive or service rights, and starts nothing. }
+function CheckAccount(const Account, Password: String): Boolean;
+var
+  Domain, User: String;
+  Token: THandle;
+  Slash: Integer;
+begin
+  Slash := Pos('\', Account);
+  if Slash > 0 then
+  begin
+    Domain := Copy(Account, 1, Slash - 1);
+    User := Copy(Account, Slash + 1, Length(Account));
+  end
+  else
+  begin
+    Domain := '.';
+    User := Account;
+  end;
+  Result := LogonUser(User, Domain, Password, 3, 0, Token);
+  if Result then CloseHandle(Token);
 end;
 
 function UsePlex(): Boolean;
@@ -351,8 +402,6 @@ begin
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  Input, Output: TArrayOfString;
 begin
   Result := True;
   if CurPageID = PlexPage.ID then
@@ -373,10 +422,8 @@ begin
   end
   else if CurPageID = AccountPage.ID then
   begin
-    AddLine(Input, 'ACCOUNT=' + Trim(AccountPage.Values[0]));
-    AddLine(Input, 'PASSWORD=' + AccountPage.Values[1]);
-    Result := RunHelper('check-account', Input, Output);
-    if not Result then MsgBox(FirstLine(Output), mbError, MB_OK);
+    Result := CheckAccount(Trim(AccountPage.Values[0]), AccountPage.Values[1]);
+    if not Result then MsgBox('That Windows user name or password isn''t right.', mbError, MB_OK);
   end;
 end;
 
