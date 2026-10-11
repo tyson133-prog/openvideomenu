@@ -40,6 +40,8 @@ internal static class ExportCommand
         var builder = new MenuManifestBuilder(disc, map, set.Media, set.Index, new DvdManifestOptions
         {
             Title = Program.Option(args, "--title") ?? disc.VolumeLabel,
+            Season = Number(args, "--season", 0),
+            Volume = Number(args, "--volume", 1),
             Generator = "ovm-dvd",
             TrackChoices = !args.Contains("--no-tracks"),
             Transitions = true,
@@ -56,6 +58,13 @@ internal static class ExportCommand
               (builder.MissingTitles.Count > 0 ? $"; titles the menus play that have no file: {string.Join(", ", builder.MissingTitles)}" : "")
             : "Not written.");
         return result.Written ? 0 : 3;
+    }
+
+    /// <summary>An optional whole-number option, at least <paramref name="min"/>.</summary>
+    private static int? Number(string[] args, string name, int min)
+    {
+        if (Program.Option(args, name) is not { } text) return null;
+        return int.TryParse(text, out var n) && n >= min ? n : throw new ArgumentException($"{name} needs a whole number, {min} or more; got \"{text}\".");
     }
 
     private static string? FindOnPath(string tool)

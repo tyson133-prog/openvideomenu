@@ -57,6 +57,7 @@ import com.ovmplayer.tv.BrowseTab
 import com.ovmplayer.tv.ShowState
 import com.ovmplayer.tv.Tile
 import com.ovmplayer.tv.TileRow
+import com.ovmplayer.tv.assets.place
 
 private val Gold = Color(0xFFFFCF6A)
 private val PosterWidth = 132.dp
@@ -177,7 +178,7 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
         }
         is Tile.Manifest -> Quad(
             tile.entry.title?.name ?: "Menu",
-            if (tile.pending) tile.entry.title?.year?.toString() ?: "" else manifestLabel(tile),
+            if (tile.pending) listOfNotNull(tile.entry.title?.year?.toString(), tile.entry.place.ifEmpty { null }).joinToString(" · ") else manifestLabel(tile),
             tile.show?.image,
             true,
         )
@@ -208,8 +209,12 @@ fun TileCard(vm: AppViewModel, tile: Tile, modifier: Modifier = Modifier) {
 
 private data class Quad(val title: String, val subtitle: String, val thumb: String?, val hasMenu: Boolean)
 
-/** "Season 01" etc. from where the manifest or bundle sits, e.g. Show/Season 01/Volume 2.ovmz */
+/**
+ * Which season and disc the menu is ("Season 5 · Disc 2"); for a menu that doesn't say, the name of its file or
+ * folder, e.g. "Volume 2" for Show/Season 01/Volume 2.ovmz.
+ */
 private fun manifestLabel(manifest: Tile.Manifest): String {
+    manifest.entry.place.takeIf { it.isNotEmpty() }?.let { return it }
     val parts = manifest.entry.path.split('/')
     val file = parts.last().removeSuffix(".openvideomenu.json").removeSuffix(".ovmz")
     val folder = parts.getOrNull(parts.size - 2) ?: ""

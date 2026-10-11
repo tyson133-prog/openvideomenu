@@ -465,6 +465,7 @@ sub onIndex(res as object, ctx as dynamic)
     for each e in res.json["manifests"]
         if e["valid"] = true and e["hasMenus"] = true then m.catalog.push(e)
     end for
+    sortCatalog()
     if isPlex()
         plexLibraries()
         return
@@ -541,7 +542,9 @@ sub chooseTile(tile as object, screen as string, list as object)
         if e["id"] = tile.entryId then entry = e
     end for
     if entry = invalid then return
-    setStatus("Opening " + tile.title + "…")
+    opening = tile.title
+    if placeOf(entry) <> "" then opening = menuName(entry)
+    setStatus("Opening " + opening + "…")
     ' Fetch the manifest, then the title's files (film + extras) so menu buttons can play them.
     m.opening = { entry: entry, movie: m.found[entry["id"]], files: [], waiting: 1 }
     http(m.menuBase + entry["url"], "GET", invalid, "onManifest")
@@ -670,7 +673,7 @@ end function
 sub askResume()
     resumes = m.opening.resumes
     dialog = CreateObject("roSGNode", "StandardMessageDialog")
-    dialog.title = msOr(m.opening.entry["title"]["name"], "Menu")
+    dialog.title = menuName(m.opening.entry)
     buttons = []
     if resumes.Count() = 1 and m.opening.movie <> invalid and itemKey(resumes[0].item) = itemKey(m.opening.movie)
         ' Just the film: "Resume from 1:02:13".

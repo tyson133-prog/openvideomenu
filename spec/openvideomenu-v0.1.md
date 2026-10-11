@@ -48,7 +48,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 |---|---|---|
 | `format` | yes | Always `"openvideomenu"`. |
 | `version` | yes | `"MAJOR.MINOR"`. This document is `0.1`. |
-| `title` | yes | `{ name, year?, ids? }`. `ids` holds strings such as `imdb`, `tmdb` or `tvdb`. |
+| `title` | yes | `{ name, year?, ids?, season?, volume? }`. `ids` holds strings such as `imdb`, `tmdb` or `tvdb`. See [§3.1](#31-season-and-volume). |
 | `source` | no | `{ kind, generator? }`. `kind` is e.g. `"dvd"`, `"authored"` or `"generated"`. |
 | `media` | yes | Map of media id → [media](#4-media). At least one entry. |
 | `menus` | no | Map of menu id → [menu](#5-menus). |
@@ -63,6 +63,23 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | `counters` | no | *(Level 3)* Variables that [count seconds](#67-time-the-navigation-timer-and-counters-level-3) by themselves. |
 | `fallback` | **yes** | [Fallback list](#8-fallback-list-level-0) for players without menu support. |
 | `x-*` | no | Vendor extensions (§9). |
+
+### 3.1 Season and volume
+
+A series or a long film often comes as several menus with the same `title.name`: one per season, or
+several per season. Two optional integers in `title` tell them apart:
+
+- `season` (0 or more): the season of a series the menu belongs to; `0` is specials.
+- `volume` (1 or more): which one of a set of menus for the same title and season it is, e.g. the second
+  disc of a season, or the second part of a film.
+
+```json
+"title": { "name": "Example Show", "year": 1971, "season": 5, "volume": 2 }
+```
+
+Players SHOULD show them with the name wherever a viewer chooses or opens a menu (e.g.
+"Season 5 · Disc 2") and SHOULD order menus with the same name by `season`, then `volume`. A player MAY
+word `volume` to suit `source.kind`, e.g. "Disc" for `"dvd"` or `"bluray"`, otherwise "Volume".
 
 ## 4. Media
 

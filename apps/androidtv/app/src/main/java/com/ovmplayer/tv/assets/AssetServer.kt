@@ -32,6 +32,7 @@ data class CatalogEntry(
     val valid: Boolean,
     val errors: List<String> = emptyList(),
     val title: CatalogTitle? = null,
+    val source: CatalogSource? = null,
     val hasMenus: Boolean = false,
     val media: List<CatalogMedia> = emptyList(),
     /** The media server's items that play its media, when the menu server knows them (server API `items`). */
@@ -43,7 +44,33 @@ data class CatalogEntry(
 data class CatalogItem(val media: String, val server: String, val id: String, val type: String, val show: String? = null)
 
 @Serializable
-data class CatalogTitle(val name: String, val year: Int? = null)
+data class CatalogTitle(val name: String, val year: Int? = null, val season: Int? = null, val volume: Int? = null)
+
+@Serializable
+data class CatalogSource(val kind: String? = null)
+
+/**
+ * Which season and disc a menu is, e.g. "Season 5 · Disc 2" ("" when it doesn't say). Discs are "Disc"
+ * for menus from a DVD or Blu-ray, "Volume" otherwise.
+ */
+val CatalogEntry.place: String
+    get() {
+        val season = title?.season?.let { if (it == 0) "Specials" else "Season $it" }
+        val volume = title?.volume?.let { if (source?.kind == "dvd" || source?.kind == "bluray") "Disc $it" else "Volume $it" }
+        return listOfNotNull(season, volume).joinToString(" · ")
+    }
+
+/** A menu's name with its season and disc, for headings: "All in the Family — Season 5 · Disc 2". */
+fun CatalogEntry.menuName(fallback: String = "Menu"): String {
+    val name = title?.name ?: fallback
+    return if (place.isEmpty()) name else "$name — $place"
+}
+
+/** Menus by name, then season, then disc (spec §3.1), then where they sit. */
+val MenuOrder: Comparator<CatalogEntry> = compareBy<CatalogEntry> { (it.title?.name ?: it.path).lowercase() }
+    .thenBy(nullsFirst()) { it.title?.season }
+    .thenBy(nullsFirst()) { it.title?.volume }
+    .thenBy { it.path.lowercase() }
 
 @Serializable
 data class CatalogMedia(

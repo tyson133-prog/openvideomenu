@@ -20,7 +20,7 @@ export interface ValidationResult {
 
 const KNOWN_KEYS: Record<string, readonly string[]> = {
   manifest: ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
-  title: ["name", "year", "ids"],
+  title: ["name", "year", "season", "volume", "ids"],
   source: ["kind", "generator"],
   media: ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "prohibitsAt", "holds", "number"],
   prohibitWindow: ["from", "to", "ops"],
@@ -358,6 +358,10 @@ class Validator {
     this.unknownKeys(value, KNOWN_KEYS.title!, "/title");
     if (!isNonEmptyString(value.name)) this.error("/title/name", "Required.");
     if (value.year !== undefined && !Number.isInteger(value.year)) this.error("/title/year", "Must be an integer.");
+    if (value.season !== undefined && !(Number.isInteger(value.season) && (value.season as number) >= 0))
+      this.error("/title/season", "Must be an integer, 0 or more.");
+    if (value.volume !== undefined && !(Number.isInteger(value.volume) && (value.volume as number) >= 1))
+      this.error("/title/volume", "Must be an integer, 1 or more.");
     if (value.ids !== undefined) {
       if (!isObject(value.ids)) this.error("/title/ids", "Must be an object of strings.");
       else

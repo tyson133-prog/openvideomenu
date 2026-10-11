@@ -37,9 +37,11 @@ sub startLibraries()
         row.title = "Menus"
         for each entry in m.catalog
             tile = row.createChild("ContentNode")
-            tile.addFields({ kind: "manifest", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
+            tile.addFields({ kind: "manifest", entryId: entry["id"], badge: true, itemRef: -1, wide: false, place: placeOf(entry) })
             tile.title = msOr(entry["title"]["name"], "")
-            if entry["title"]["year"] <> invalid then tile.shortDescriptionLine2 = entry["title"]["year"].ToStr()
+            year = ""
+            if entry["title"]["year"] <> invalid then year = entry["title"]["year"].ToStr()
+            tile.shortDescriptionLine2 = joinDots([year, tile.place])
             m.manifestTiles[entry["id"]] = tile
         end for
     end if
@@ -160,10 +162,11 @@ sub updateManifestTile(id as string)
     series = m.manifestShow[id]
     if movie <> invalid
         tile.HDPosterUrl = posterOf(movie)
-        tile.shortDescriptionLine2 = yearOf(movie)
+        tile.shortDescriptionLine2 = joinDots([yearOf(movie), tile.place])
     else if series <> invalid
         tile.HDPosterUrl = posterOf(series)
-        tile.shortDescriptionLine2 = titleOf(series)
+        ' The tile's title is already the show's; say which season and disc instead when the menu does.
+        if tile.place <> "" then tile.shortDescriptionLine2 = tile.place else tile.shortDescriptionLine2 = titleOf(series)
     end if
 end sub
 
@@ -389,6 +392,50 @@ function manifestsOfShow(key as string) as object
     return out
 end function
 
+' Which season and disc a menu is, e.g. "Season 5 · Disc 2" ("" when it doesn't say). Discs are
+' "Disc" for menus from a DVD or Blu-ray, "Volume" otherwise.
+function placeOf(entry as object) as string
+    t = entry["title"]
+    if t = invalid then return ""
+    parts = []
+    if t["season"] <> invalid
+        if t["season"] = 0 then parts.push("Specials") else parts.push("Season " + t["season"].ToStr())
+    end if
+    if t["volume"] <> invalid
+        word = "Volume "
+        src = entry["source"]
+        if src <> invalid
+            kind = msOr(src["kind"], "")
+            if kind = "dvd" or kind = "bluray" then word = "Disc "
+        end if
+        parts.push(word + t["volume"].ToStr())
+    end if
+    return joinDots(parts)
+end function
+
+' A menu's name with its season and disc, for headings: "All in the Family — Season 5 · Disc 2".
+function menuName(entry as object) as string
+    name = msOr(entry["title"]["name"], "Menu")
+    place = placeOf(entry)
+    if place = "" then return name
+    return name + " — " + place
+end function
+
+' Menus by name, then season, then disc (spec §3.1); otherwise in the server's order.
+sub sortCatalog()
+    for i = 0 to m.catalog.Count() - 1
+        e = m.catalog[i]
+        t = e["title"]
+        e["sortKey"] = LCase(msOr(t["name"], "")) + Chr(1) + sortNumber(t["season"]) + Chr(1) + sortNumber(t["volume"]) + Chr(1) + Right("00000" + i.ToStr(), 6)
+    end for
+    m.catalog.SortBy("sortKey")
+end sub
+
+function sortNumber(n as dynamic) as string
+    if n = invalid then return ""
+    return Right("0000" + n.ToStr(), 5)
+end function
+
 ' --- reading Plex or Jellyfin items -------------------------------------------------------------
 
 function itemKey(item as object) as string
@@ -601,6 +648,7 @@ sub buildShow(showItem as object)
             t = row.createChild("ContentNode")
             t.addFields({ kind: "manifest", entryId: entry["id"], badge: true, itemRef: -1, wide: false })
             t.title = msOr(entry["title"]["name"], "Menu")
+            t.shortDescriptionLine2 = placeOf(entry)
             t.HDPosterUrl = posterOf(showItem)
         end for
     end if

@@ -14,7 +14,7 @@ internal sealed class Validator
     private static readonly Dictionary<string, string[]> KnownKeys = new()
     {
         ["manifest"] = ["format", "version", "title", "source", "media", "menus", "rootMenu", "firstPlay", "fallback", "vars", "actions", "resumePoint", "keys", "counters", "level", "cuePlayback", "$schema"],
-        ["title"] = ["name", "year", "ids"],
+        ["title"] = ["name", "year", "season", "volume", "ids"],
         ["source"] = ["kind", "generator"],
         ["media"] = ["ref", "segments", "label", "kind", "duration", "chapters", "angles", "angleTracks", "cues", "keys", "prohibits", "prohibitsAt", "holds", "number"],
         ["prohibitWindow"] = ["from", "to", "ops"],
@@ -594,6 +594,16 @@ internal sealed class Validator
         if (t["year"] is { } year && !IsInteger(year))
         {
             Error("/title/year", "Must be an integer.");
+        }
+
+        if (t["season"] is { } season && !(IsInteger(season) && season.GetDouble() >= 0))
+        {
+            Error("/title/season", "Must be an integer, 0 or more.");
+        }
+
+        if (t["volume"] is { } volume && !(IsInteger(volume) && volume.GetDouble() >= 1))
+        {
+            Error("/title/volume", "Must be an integer, 1 or more.");
         }
 
         if (t["ids"] is { } ids)

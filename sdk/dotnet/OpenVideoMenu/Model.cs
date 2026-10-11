@@ -89,6 +89,12 @@ public sealed class Title
 
     public int? Year { get; set; }
 
+    /// <summary>The season of a series this menu belongs to; 0 is specials.</summary>
+    public int? Season { get; set; }
+
+    /// <summary>Which one of a set of menus for the same title and season, from 1 (e.g. a season's second disc).</summary>
+    public int? Volume { get; set; }
+
     /// <summary>External ids such as imdb, tmdb, tvdb.</summary>
     public Dictionary<string, string>? Ids { get; set; }
 

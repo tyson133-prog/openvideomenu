@@ -1,0 +1,15 @@
+{
+  "description": "A title's season and volume (spec §3.1) tell apart menus with the same name: one per season, or several per season. Season 0 is specials.",
+  "level": 0,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Example Show", "year": 1971, "season": 0, "volume": 2 },
+    "media": { "e1": { "ref": "Example Show - S00E01.mp4", "kind": "episode" } },
+    "fallback": [
+      { "label": "Episodes", "items": [{ "label": "Episode 1", "action": { "type": "play", "media": "e1" } }] }
+    ]
+  },
+  "steps": [{ "event": { "type": "start" }, "expect": { "mode": "fallback" } }]
+}

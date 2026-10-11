@@ -42,6 +42,13 @@ exists wins:
 ovm-dvd export Heat.iso "Heat (1995).ovmz" --file "1=Heat (1995).mkv" --files "Featurettes/Title {n}.mkv" --files "Other/Title {n}.mkv"
 ```
 
+For a series, `--season` and `--volume` say which season and which of its discs the menu is (`title.season`,
+`title.volume`), so players can tell a season's discs apart:
+
+```
+ovm-dvd export S5D2.iso "Season 05/Example Show - Season 05 - Disc 2.ovmz" --title "Example Show" --season 5 --volume 2 --files "Title {n}.mkv"
+```
+
 ## The layers
 
 Each is public and usable on its own.

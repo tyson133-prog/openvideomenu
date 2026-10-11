@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import com.ovmplayer.tv.assets.AssetServerClient
 import com.ovmplayer.tv.assets.CatalogEntry
+import com.ovmplayer.tv.assets.MenuOrder
 import com.ovmplayer.tv.store.KeptSession
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.put
 import com.ovmplayer.tv.assets.discoverAssetServers
+import com.ovmplayer.tv.assets.menuName
 import com.ovmplayer.tv.jellyfin.FoundJellyfin
 import com.ovmplayer.tv.jellyfin.JellyfinAccount
 import com.ovmplayer.tv.jellyfin.JfAuthResult
@@ -481,7 +483,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun loadMenusTab() = coroutineScope {
         val src = source ?: return@coroutineScope
-        val menus = catalog.filter { it.valid && it.hasMenus }.sortedBy { (it.title?.name ?: it.path).lowercase() }
+        val menus = catalog.filter { it.valid && it.hasMenus }.sortedWith(MenuOrder)
         val found = HashMap<String, Tile>() // manifest id → its tile, once found
         var continueWatching = emptyList<Tile>()
         var recentlyAdded = emptyList<Tile>()
@@ -800,7 +802,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Menus: manifests whose media are this show's episode files.
         val files = attempt { src.allEpisodes(show) }.getOrDefault(emptyList()).flatMap { e -> e.files.mapNotNull { it.path } }
         val manifests = files.flatMap(menuIndex::manifestsFor).distinct()
-            .sortedBy { it.path.lowercase() }
+            .sortedWith(MenuOrder)
             .map { Tile.Manifest(it, show) }
         (_screen.value as? Screen.Show)?.takeIf { it.state.show.id == show.id }?.let {
             _screen.value = Screen.Show(it.state.copy(manifests = manifests))
@@ -832,7 +834,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val extras = show?.let { attempt { src.extras(it) }.getOrDefault(emptyList()) } ?: emptyList()
         val files = filesOf(episodes + extras)
         val media = MenuMatcher.resolveMedia(manifest.entry, files)
-        openAsking(manifest.entry.title?.name ?: show?.title ?: "Menu", manifest.entry, media, film = null, angles = MenuMatcher.resolveAngles(manifest.entry, files))
+        openAsking(manifest.entry.menuName(show?.title ?: "Menu"), manifest.entry, media, film = null, angles = MenuMatcher.resolveAngles(manifest.entry, files))
     }
 
     /** What plays now outside a menu, so where it stops can be remembered. */

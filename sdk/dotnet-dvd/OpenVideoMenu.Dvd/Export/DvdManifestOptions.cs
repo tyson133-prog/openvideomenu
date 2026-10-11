@@ -45,6 +45,10 @@ public sealed class DvdManifestOptions
     public int? Year { get; init; }
     public Dictionary<string, string>? Ids { get; init; }
 
+    /// <summary>For a series: the season this disc belongs to (0 is specials), and which disc of it, from 1.</summary>
+    public int? Season { get; init; }
+    public int? Volume { get; init; }
+
     /// <summary>The manifest's <c>source.generator</c>.</summary>
     public string Generator { get; init; } = "OpenVideoMenu.Dvd";
 

@@ -1,0 +1,15 @@
+{
+  "description": "A title's season is a whole number, 0 or more, and its volume a whole number, 1 or more.",
+  "level": 0,
+  "valid": false,
+  "errors": ["/title/season", "/title/volume"],
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "0.1",
+    "title": { "name": "Example Show", "season": -1, "volume": 0 },
+    "media": { "e1": { "ref": "Example Show - S01E01.mp4", "kind": "episode" } },
+    "fallback": [
+      { "label": "Episodes", "items": [{ "label": "Episode 1", "action": { "type": "play", "media": "e1" } }] }
+    ]
+  }
+}

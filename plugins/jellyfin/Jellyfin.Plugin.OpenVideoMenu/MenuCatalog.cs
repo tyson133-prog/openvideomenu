@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using MediaBrowser.Controller;
@@ -370,7 +371,7 @@ public sealed class MenuCatalog
                 Url = url,
                 Valid = true,
                 Version = version,
-                Title = m.TryGetProperty("title", out var t) ? t.Clone() : null,
+                Title = m.TryGetProperty("title", out var t) ? TitleWithPlace(t, path) : null,
                 Source = m.TryGetProperty("source", out var src) ? src.Clone() : null,
                 HasMenus = hasMenus,
                 Media = media.EnumerateObject().Select(p =>
@@ -396,6 +397,31 @@ public sealed class MenuCatalog
                 Modified = modified.ToString("O"),
             }, members);
         }
+    }
+
+    /// <summary>The manifest's title, with season and volume from its path where it has none (spec §3.1).</summary>
+    private static JsonElement TitleWithPlace(JsonElement title, string path)
+    {
+        var hasSeason = title.TryGetProperty("season", out _);
+        var hasVolume = title.TryGetProperty("volume", out _);
+        var (season, volume) = Place.FromPath(path);
+        if ((hasSeason || season is null) && (hasVolume || volume is null))
+        {
+            return title.Clone();
+        }
+
+        var o = JsonNode.Parse(title.GetRawText())!.AsObject();
+        if (!hasSeason && season is { } s)
+        {
+            o["season"] = s;
+        }
+
+        if (!hasVolume && volume is { } v)
+        {
+            o["volume"] = v;
+        }
+
+        return JsonSerializer.SerializeToElement(o);
     }
 
     private static readonly Regex UrlScheme = new("^[a-z][a-z0-9+.-]*:", RegexOptions.IgnoreCase | RegexOptions.Compiled);

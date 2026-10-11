@@ -123,7 +123,7 @@ Signed in. Every manifest the server found, and the media each one references.
 | `path` | yes | The manifest's path under that folder, with forward slashes. |
 | `url` | yes | Where to fetch the manifest, relative to `B`. Relative asset paths in the manifest resolve against this URL. |
 | `valid` | yes | Whether the manifest could be read. Invalid entries carry `errors` (strings) instead of the fields below. |
-| `version`, `title`, `source` | if valid | Copied from the manifest. |
+| `version`, `title`, `source` | if valid | Copied from the manifest. When `title` has no `season` or `volume` (manifest §3.1), servers SHOULD fill them in from the manifest's path, the name nearest the file winning: "Season N" or "Specials" (0) for the season, "Disc N" for the volume, or "SnnDnn" for both. So `Example Show/Season 05/Example Show - Disc 2.ovmz` is season 5, volume 2. |
 | `hasMenus` | if valid | Whether it has any menus. A manifest with only a fallback list is still valid. |
 | `media` | if valid | One entry per media item: `id`, `kind`, `label` and `ref` (when it has one) from the manifest, plus `path`. |
 | `media[].path` | when `ref` is a relative path | The media file's path under the same folder, with forward slashes. Apps match it against the media server's file paths by their **trailing segments** (at least the folder and file name), because the two machines may mount the folder at different places. |

@@ -304,4 +304,19 @@ public sealed class LibraryTests : IDisposable
         Assert.Equal("goto", session.LastStop.After!.Type);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(json), JsonNode.Parse(session.ToJson())));
     }
+
+    [Theory]
+    [InlineData("TV/All in the Family/Season 05/All in the Family (1971) - Season 05 - Disc 2.ovmz", 5, 2)]
+    [InlineData("Show/Season 05/Disc 2/Disc 2.ovmz", 5, 2)]
+    [InlineData("Show/Season 1/Show.openvideomenu.json", 1, null)]
+    [InlineData("Show/Specials/Show - Disk 1.ovmz", 0, 1)]
+    [InlineData("Show/Show S03D4.ovmz", 3, 4)]
+    [InlineData("Show/Season 01/Season 02 extras/Disc 3/menu Disc 4.ovmz", 2, 4)]
+    [InlineData("Movies/Heat (1995)/Disc 2/Heat (1995).ovmz", null, 2)]
+    [InlineData("Movies/Season of the Witch (2011)/Season of the Witch (2011).ovmz", null, null)]
+    [InlineData("Movies/Disclosure (1994)/Disclosure (1994).ovmz", null, null)]
+    public void A_menus_season_and_volume_come_from_its_path_like_the_typescript_server(string path, int? season, int? volume)
+    {
+        Assert.Equal((season, volume), Place.FromPath(path));
+    }
 }

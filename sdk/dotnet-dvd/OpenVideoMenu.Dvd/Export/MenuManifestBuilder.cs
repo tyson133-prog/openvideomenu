@@ -218,6 +218,8 @@ public sealed class MenuManifestBuilder
             {
                 Name = string.IsNullOrWhiteSpace(_options.Title) ? "Untitled disc" : _options.Title,
                 Year = _options.Year,
+                Season = _options.Season,
+                Volume = _options.Volume,
                 Ids = _options.Ids is { Count: > 0 } ids ? new Dictionary<string, string>(ids) : null,
             },
             Source = new Source { Kind = "dvd", Generator = _options.Generator },

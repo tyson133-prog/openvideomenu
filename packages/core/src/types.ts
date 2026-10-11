@@ -81,6 +81,10 @@ export interface ProhibitWindow {
 export interface Title {
   name: string;
   year?: number;
+  /** The season of a series this menu belongs to; 0 is specials. */
+  season?: number;
+  /** Which one of a set of menus for the same title and season, from 1 (e.g. a season's second disc). */
+  volume?: number;
   ids?: { imdb?: string; tmdb?: string; tvdb?: string; [other: string]: string | undefined };
 }
 

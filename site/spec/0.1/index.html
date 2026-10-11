@@ -72,7 +72,7 @@ exactly as for a plain manifest, so the same manifest works in either form.</li>
 <h2 id="3-top-level"><a class="anchor" href="#3-top-level">3. Top level</a></h2>
 <div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>format</code></td><td>yes</td><td>Always <code>&quot;openvideomenu&quot;</code>.</td></tr>
 <tr><td><code>version</code></td><td>yes</td><td><code>&quot;MAJOR.MINOR&quot;</code>. This document is <code>0.1</code>.</td></tr>
-<tr><td><code>title</code></td><td>yes</td><td><code>{ name, year?, ids? }</code>. <code>ids</code> holds strings such as <code>imdb</code>, <code>tmdb</code> or <code>tvdb</code>.</td></tr>
+<tr><td><code>title</code></td><td>yes</td><td><code>{ name, year?, ids?, season?, volume? }</code>. <code>ids</code> holds strings such as <code>imdb</code>, <code>tmdb</code> or <code>tvdb</code>. See <a href="#31-season-and-volume">§3.1</a>.</td></tr>
 <tr><td><code>source</code></td><td>no</td><td><code>{ kind, generator? }</code>. <code>kind</code> is e.g. <code>&quot;dvd&quot;</code>, <code>&quot;authored&quot;</code> or <code>&quot;generated&quot;</code>.</td></tr>
 <tr><td><code>media</code></td><td>yes</td><td>Map of media id → <a href="#4-media">media</a>. At least one entry.</td></tr>
 <tr><td><code>menus</code></td><td>no</td><td>Map of menu id → <a href="#5-menus">menu</a>.</td></tr>
@@ -87,6 +87,19 @@ exactly as for a plain manifest, so the same manifest works in either form.</li>
 <tr><td><code>counters</code></td><td>no</td><td><em>(Level 3)</em> Variables that <a href="#67-time-the-navigation-timer-and-counters-level-3">count seconds</a> by themselves.</td></tr>
 <tr><td><code>fallback</code></td><td><strong>yes</strong></td><td><a href="#8-fallback-list-level-0">Fallback list</a> for players without menu support.</td></tr>
 <tr><td><code>x-*</code></td><td>no</td><td>Vendor extensions (§9).</td></tr></tbody></table></div>
+<h3 id="31-season-and-volume"><a class="anchor" href="#31-season-and-volume">3.1 Season and volume</a></h3>
+<p>A series or a long film often comes as several menus with the same <code>title.name</code>: one per season, or
+several per season. Two optional integers in <code>title</code> tell them apart:</p>
+<ul>
+<li><code>season</code> (0 or more): the season of a series the menu belongs to; <code>0</code> is specials.</li>
+<li><code>volume</code> (1 or more): which one of a set of menus for the same title and season it is, e.g. the second
+disc of a season, or the second part of a film.</li>
+</ul>
+<pre><code class="language-json">&quot;title&quot;: { &quot;name&quot;: &quot;Example Show&quot;, &quot;year&quot;: 1971, &quot;season&quot;: 5, &quot;volume&quot;: 2 }
+</code></pre>
+<p>Players SHOULD show them with the name wherever a viewer chooses or opens a menu (e.g.
+&quot;Season 5 · Disc 2&quot;) and SHOULD order menus with the same name by <code>season</code>, then <code>volume</code>. A player MAY
+word <code>volume</code> to suit <code>source.kind</code>, e.g. &quot;Disc&quot; for <code>&quot;dvd&quot;</code> or <code>&quot;bluray&quot;</code>, otherwise &quot;Volume&quot;.</p>
 <h2 id="4-media"><a class="anchor" href="#4-media">4. Media</a></h2>
 <pre><code class="language-json">&quot;feature&quot;: {
   &quot;ref&quot;: &quot;Sintel (2010).mp4&quot;,

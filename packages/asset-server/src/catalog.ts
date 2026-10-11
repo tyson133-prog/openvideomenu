@@ -6,6 +6,7 @@ import { BUNDLE_MANIFEST_NAME, FORMAT_VERSION, isBundleFileName, MANIFEST_SUFFIX
 import { memberDataOffset, readBundle, readMember, type BundleMember } from "./bundle.js";
 import { scanManifests } from "./files.js";
 import { checkAssetFiles, checkIgnoreFiles, eachLimited, isFaststart } from "./media-check.js";
+import { titleWithPlace } from "./place.js";
 
 export interface CatalogMedia {
   id: string;
@@ -37,7 +38,8 @@ export interface CatalogEntry {
   /** Problems that don't stop the menu working everywhere: missing menu art, MP4s without faststart. */
   warnings?: string[];
   version?: string;
-  title?: { name: string; year?: number; ids?: Record<string, string | undefined> };
+  /** The manifest's title; season and volume come from the path when the manifest has none (spec §3.1). */
+  title?: { name: string; year?: number; season?: number; volume?: number; ids?: Record<string, string | undefined> };
   source?: { kind: string; generator?: string };
   hasMenus: boolean;
   media: CatalogMedia[];
@@ -391,7 +393,7 @@ export class Catalog {
       ...base,
       valid: true,
       version: m.version,
-      title: m.title,
+      title: titleWithPlace(m.title, path),
       source: m.source,
       hasMenus: !!m.menus && Object.keys(m.menus).length > 0,
       media: Object.entries(m.media).map(([mid, media]) => ({
