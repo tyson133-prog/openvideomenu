@@ -1,14 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  A ring with a play mark, in the banner's gold. Everything sits inside the adaptive-icon safe zone
-  (a 66dp circle in the middle of 108dp), so launchers that crop to circles or squircles never clip it.
+  A ring in a foil sweep with a play mark and "OVM", on deep navy. Everything sits inside the
+  adaptive-icon safe zone (a 66dp circle in the middle of 108dp), so launchers that crop to circles or
+  squircles never clip it. apps/roku/tools/images.mjs draws the same mark for the Roku.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- ring -->
-    <path android:strokeColor="#FFFFD27A" android:strokeWidth="3.5" android:fillColor="#00000000"
-        android:pathData="M54,27a27,27 0,1 1,0 54a27,27 0,1 1,0 -54z" />
+    <!-- ring: the sweep starts at the right here, so the stops are a quarter turn on from the Roku's (top) -->
+    <path android:strokeWidth="3.5" android:fillColor="#00000000"
+        android:pathData="M54,27a27,27 0,1 1,0 54a27,27 0,1 1,0 -54z">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="sweep" android:centerX="54" android:centerY="54">
+                <item android:offset="0" android:color="#FF6578ED" />
+                <item android:offset="0.0833" android:color="#FF8F6CE8" />
+                <item android:offset="0.25" android:color="#FFF0A3FA" />
+                <item android:offset="0.4167" android:color="#FFD2F093" />
+                <item android:offset="0.5833" android:color="#FF7FEDDA" />
+                <item android:offset="0.75" android:color="#FF23BEFF" />
+                <item android:offset="0.9167" android:color="#FF3B85F3" />
+                <item android:offset="1" android:color="#FF6578ED" />
+            </gradient>
+        </aapt:attr>
+    </path>
     <!-- play mark, optically centred (nudged right) -->
-    <path android:fillColor="#FFFFD27A" android:pathData="M47,40.5L67.5,54L47,67.5z" />
+    <path android:pathData="M48,38L64.5,48L48,58z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="48" android:startY="38" android:endX="64.5" android:endY="58">
+                <item android:offset="0" android:color="#FF7FEDDA" />
+                <item android:offset="0.45" android:color="#FF23BEFF" />
+                <item android:offset="1" android:color="#FF8F6CE8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- OVM -->
+    <path android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M42,67a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0z M50,63.5L53.5,70.5L57,63.5 M59,70.5V63.5L62.5,68L66,63.5V70.5">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="42" android:startY="67" android:endX="66" android:endY="67">
+                <item android:offset="0" android:color="#FF23BEFF" />
+                <item android:offset="0.5" android:color="#FF3B85F3" />
+                <item android:offset="1" android:color="#FF8F6CE8" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

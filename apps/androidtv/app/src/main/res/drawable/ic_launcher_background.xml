@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Same near-black as the banner, with its warm glow from the top left. -->
+<!-- Deep navy, lighter from the top left, like the banner. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
     <path android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="0" android:centerY="0" android:gradientRadius="110"
-                android:startColor="#FF2A2110" android:endColor="#FF050505" />
+            <gradient android:type="radial" android:centerX="0" android:centerY="0" android:gradientRadius="160"
+                android:startColor="#FF14244A" android:endColor="#FF000517" />
         </aapt:attr>
     </path>
 </vector>
