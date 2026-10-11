@@ -8,7 +8,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Self-describing members (Label, Type, Extensions…) carry no comment of their own. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-    <Version>0.1.16</Version>
+    <Version>0.1.17</Version>
     <PackageId>OpenVideoMenu</PackageId>
     <Authors>Tyson Treasure</Authors>
     <Description>Open Video Menu for .NET: read, write and validate manifests, pack and read bundles, and run menu navigation. Checked against the format's conformance suite.</Description>
