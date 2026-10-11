@@ -122,7 +122,7 @@ jobs:
           V="${VERSION#v}"
           dotnet build plugins/jellyfin/Jellyfin.Plugin.OpenVideoMenu -c Release -p:Version="$V"
           node plugins/jellyfin/tools/package.mjs --version "$V" --out dist \
-            --url "https://github.com/${{ github.repository }}/releases/download/v$V/open-video-menu_$V.0.zip"
+            --url "https://github.com/${{ github.repository }}/releases/download/v$V/open-video-menu_${V%%-*}.0.zip"
       - uses: actions/upload-artifact@v4
         with: { name: dotnet, path: dist/ }
 

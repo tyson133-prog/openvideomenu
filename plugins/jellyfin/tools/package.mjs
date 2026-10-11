@@ -25,7 +25,8 @@ const project = join(here, "Jellyfin.Plugin.OpenVideoMenu");
 const semver = arg("--version");
 const url = arg("--url");
 if (!semver || !url) throw new Error("usage: package.mjs --version X.Y.Z --url <where the zip will be> [--changelog text] [--out dir]");
-const version = `${semver}.0`; // Jellyfin versions have four parts
+// Jellyfin versions are four numbers: 1.0.0-preview.1 ships as 1.0.0.0.
+const version = `${semver.split("-")[0]}.0`;
 const out = resolve(arg("--out", join(here, "dist")));
 const bin = join(project, "bin", "Release", "net10.0");
 
