@@ -27,7 +27,9 @@ permissions:
   contents: write
 
 env:
-  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+  # Not VERSION: MSBuild reads environment variables as properties (case-insensitively), so VERSION
+  # would become every .NET project's Version, and "v1.0.0-preview.1" fails the restore.
+  RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
   test:
@@ -78,7 +80,7 @@ jobs:
           OVM_KEY_ALIAS: ${{ secrets.OVM_KEY_ALIAS }}
           OVM_KEY_PASSWORD: ${{ secrets.OVM_KEY_PASSWORD }}
         run: |
-          V="${VERSION#v}"
+          V="${RELEASE_TAG#v}"
           ./gradlew --no-daemon assembleRelease bundleRelease -PversionCode=${{ github.run_number }} -PversionName="$V"
           mkdir -p ../../dist
           cp app/build/outputs/apk/release/app-release*.apk "../../dist/ovmplayer-androidtv-$V.apk"
@@ -96,7 +98,7 @@ jobs:
       - working-directory: apps/roku
         run: |
           npm ci
-          node tools/package.mjs --version "${VERSION#v}"
+          node tools/package.mjs --version "${RELEASE_TAG#v}"
           mkdir -p ../../dist && cp out/ovmplayer-roku-*.zip ../../dist/
       - uses: actions/upload-artifact@v4
         with: { name: roku, path: dist/ }
@@ -112,14 +114,14 @@ jobs:
         with: { node-version: 24 }
       - name: NuGet packages
         run: |
-          V="${VERSION#v}"
+          V="${RELEASE_TAG#v}"
           # OpenVideoMenu.Dvd depends on OpenVideoMenu at the same version; the tool on both.
           dotnet pack sdk/dotnet/OpenVideoMenu/OpenVideoMenu.csproj -c Release -p:Version="$V" -o dist
           dotnet pack sdk/dotnet-dvd/OpenVideoMenu.Dvd/OpenVideoMenu.Dvd.csproj -c Release -p:Version="$V" -o dist
           dotnet pack sdk/dotnet-dvd/ovm-dvd/ovm-dvd.csproj -c Release -p:Version="$V" -o dist
       - name: Jellyfin plugin
         run: |
-          V="${VERSION#v}"
+          V="${RELEASE_TAG#v}"
           dotnet build plugins/jellyfin/Jellyfin.Plugin.OpenVideoMenu -c Release -p:Version="$V"
           node plugins/jellyfin/tools/package.mjs --version "$V" --out dist \
             --url "https://github.com/${{ github.repository }}/releases/download/v$V/open-video-menu_${V%%-*}.0.zip"
@@ -136,7 +138,7 @@ jobs:
       - run: npm ci
       - name: npm packages
         run: |
-          node scripts/set-npm-version.mjs "${VERSION#v}"
+          node scripts/set-npm-version.mjs "${RELEASE_TAG#v}"
           npm run build
           mkdir -p dist
           npm pack --workspaces --pack-destination dist
@@ -185,7 +187,7 @@ jobs:
       - run: choco install innosetup --no-progress -y
       - name: Installer (unsigned until a signing certificate is set up)
         shell: pwsh
-        run: ./packaging/windows/build.ps1 -Version "$($env:VERSION -replace '^v','')"
+        run: ./packaging/windows/build.ps1 -Version "$($env:RELEASE_TAG -replace '^v','')"
       - uses: actions/upload-artifact@v4
         with: { name: menu-server-windows, path: packaging/build/out/*.exe }
 
@@ -200,6 +202,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$VERSION" dist/* --repo "${{ github.repository }}" --draft \
-            --title "Open Video Menu $VERSION" \
-            --notes "Draft: players, Jellyfin plugin, the menu server (Windows installer, Linux downloads; its Docker image is pushed when this is published), .NET and npm packages, and the example titles for $VERSION. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
+          gh release create "$RELEASE_TAG" dist/* --repo "${{ github.repository }}" --draft \
+            --title "Open Video Menu $RELEASE_TAG" \
+            --notes "Draft: players, Jellyfin plugin, the menu server (Windows installer, Linux downloads; its Docker image is pushed when this is published), .NET and npm packages, and the example titles for $RELEASE_TAG. Sign the Roku zip on a device before uploading it to the Roku Developer Dashboard."
