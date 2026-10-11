@@ -36,7 +36,7 @@ Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">`
 
 One page, a how-to: what Open Video Menu is, then four numbered steps (see it, get the players, make
 menus, implement it). Keep it that way: details belong in the specification and the READMEs it links
-to, not on the site. `privacy.html` (both app stores require it) and `404.html` are the only other pages, besides the
+to, not on the site. `privacy.html` and `terms.html` (the app stores require them) and `404.html` are the only other pages, besides the
 specification (below).
 
 ## The specification
