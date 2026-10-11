@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>OvmDvd</RootNamespace>
     <AssemblyName>ovm-dvd</AssemblyName>
-    <Version>0.1.7</Version>
+    <Version>1.0.0-preview.1</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>ovm-dvd</ToolCommandName>
     <PackageId>OpenVideoMenu.Dvd.Tool</PackageId>

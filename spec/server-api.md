@@ -1,6 +1,6 @@
-# Open Video Menu server API — v1 (draft)
+# Open Video Menu server API — v1 (preview)
 
-> **Status: draft.** It follows the manifest format's versioning. After v1.0 the
+> **Status: preview.** It follows the manifest format's versioning: from v1.0 the
 > [compatibility charter](COMPATIBILITY.md) applies to this API too: `v1` endpoints and fields are
 > never removed or redefined.
 
@@ -75,7 +75,7 @@ The API uses the viewer's existing media-server sign-in. There are no Open Video
 No sign-in. Tells apps the server is there and what it speaks.
 
 ```json
-{ "ok": true, "name": "Open Video Menu for Jellyfin", "api": "1", "format": "0.1", "manifests": 3, "auth": "jellyfin" }
+{ "ok": true, "name": "Open Video Menu for Jellyfin", "api": "1", "format": "1.0", "manifests": 3, "auth": "jellyfin" }
 ```
 
 | Field | Meaning |
@@ -94,7 +94,7 @@ Signed in. Every manifest the server found, and the media each one references.
 ```json
 {
   "api": "1",
-  "format": "0.1",
+  "format": "1.0",
   "roots": 2,
   "manifests": [
     {
@@ -103,7 +103,7 @@ Signed in. Every manifest the server found, and the media each one references.
       "path": "The Matrix (1999)/The Matrix (1999).openvideomenu.json",
       "url": "/v1/files/0/The%20Matrix%20(1999)/The%20Matrix%20(1999).openvideomenu.json",
       "valid": true,
-      "version": "0.1",
+      "version": "1.0",
       "title": { "name": "The Matrix", "year": 1999 },
       "source": { "kind": "dvd" },
       "hasMenus": true,

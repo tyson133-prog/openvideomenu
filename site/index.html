@@ -123,19 +123,19 @@ Sintel (2010)/
       <p class="muted">Free to implement in any software, with no fees and no permission needed.</p>
       <h3>In a player</h3>
       <ol>
-        <li>Start with the <a href="https://github.com/tyson133-prog/openvideomenu/blob/main/docs/implementing.md">implementer's guide</a>, then the <a href="spec/0.1/">specification</a> and its <a href="spec/0.1/manifest.schema.json">JSON Schema</a>.</li>
+        <li>Start with the <a href="https://github.com/tyson133-prog/openvideomenu/blob/main/docs/implementing.md">implementer's guide</a>, then the <a href="spec/1.0/">specification</a> and its <a href="spec/1.0/manifest.schema.json">JSON Schema</a>.</li>
         <li>Start at <strong>Level 0</strong>: show the manifest's plain list of titles and play them. It takes about an afternoon. Menus (Level 1) and the rest build on the same file.</li>
         <li>Use a library, or write your own: <code>npm install @openvideomenu/core</code> (TypeScript) or <code>dotnet add package OpenVideoMenu</code> (.NET). Navigation is a state machine; your player supplies three things: playing a URL from a time, turning remote presses into up, down, left, right, enter and back, and finding the file a menu names.</li>
         <li>Run the <a href="https://github.com/tyson133-prog/openvideomenu/tree/main/conformance">conformance suite</a>. When it passes, your player is <strong>compatible</strong>.</li>
       </ol>
       <h3>In a media server</h3>
       <ol>
-        <li>Serve the read-only <a href="spec/0.1/server-api.html">server API</a>: a list of the library's menus, and their manifests and art, with byte ranges.</li>
+        <li>Serve the read-only <a href="spec/1.0/server-api.html">server API</a>: a list of the library's menus, and their manifests and art, with byte ranges.</li>
         <li>Announce it on the network as <code>_openvideomenu._tcp</code>. The Jellyfin plugin and the Plex menu server are working examples.</li>
       </ol>
       <h3>In an importer</h3>
       <ol>
-        <li>Follow the <a href="spec/0.1/dvd-profile.html">DVD profile</a>, or build on <code>OpenVideoMenu.Dvd</code>.</li>
+        <li>Follow the <a href="spec/1.0/dvd-profile.html">DVD profile</a>, or build on <code>OpenVideoMenu.Dvd</code>.</li>
         <li>Check your output: <code>openvideomenu validate</code> and <code>openvideomenu preview</code> (<code>npm install -g @openvideomenu/cli</code>).</li>
       </ol>
       <p class="muted small">Say your software "supports Open Video Menu" any time, and "compatible" once it passes the conformance suite. Please don't name a product "Open Video Menu".</p>
@@ -147,7 +147,7 @@ Sintel (2010)/
 <footer class="site-footer">
   <div class="wrap">
     <div class="legal">
-      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="spec/">Specification</a> · <a href="privacy.html">Privacy</a> · <a href="https://github.com/tyson133-prog/openvideomenu">Source code</a> · <span class="tbd">Contact</span></span>
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="spec/">Specification</a> · <a href="privacy.html">Privacy</a> · <a href="https://github.com/tyson133-prog/openvideomenu">Source code</a> · <a href="mailto:tyson@openvideomenu.org">Contact</a></span>
       <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
     </div>
   </div>

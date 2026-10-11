@@ -1,4 +1,4 @@
-# Builds every release artifact from a version tag (v0.1.2) and attaches them to a DRAFT GitHub
+# Builds every release artifact from a version tag (v1.0.0-preview.1) and attaches them to a DRAFT GitHub
 # release. Nothing is public until someone publishes the draft by hand.
 #
 # Secrets (Settings → Secrets and variables → Actions):

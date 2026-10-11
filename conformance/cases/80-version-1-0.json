@@ -1,0 +1,15 @@
+{
+  "description": "A 1.0 manifest. Readers of 1.x read both 1.x manifests and those of the 0.1 draft (every other case here is 0.1); a different major version, such as 2.0, is rejected (case 54).",
+  "level": 0,
+  "valid": true,
+  "manifest": {
+    "format": "openvideomenu",
+    "version": "1.0",
+    "title": { "name": "Minimal" },
+    "media": { "feature": { "ref": "Minimal.mp4", "kind": "feature" } },
+    "fallback": [
+      { "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }
+    ]
+  },
+  "steps": [{ "event": { "type": "start" }, "expect": { "mode": "fallback" } }]
+}

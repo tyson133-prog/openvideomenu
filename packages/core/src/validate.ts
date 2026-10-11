@@ -338,14 +338,15 @@ class Validator {
 
   private version(value: unknown) {
     if (!isNonEmptyString(value) || !/^\d+\.\d+$/.test(value)) {
-      this.error("/version", 'Must be "MAJOR.MINOR", e.g. "0.1".');
+      this.error("/version", 'Must be "MAJOR.MINOR", e.g. "1.0".');
       return;
     }
     const [major, minor] = value.split(".").map(Number) as [number, number];
     const [ourMajor, ourMinor] = FORMAT_VERSION.split(".").map(Number) as [number, number];
-    if (major !== ourMajor) {
+    // 0.x was the draft that became 1.0, so a 1.x reader reads 0.x manifests too (compatibility charter rule 1).
+    if (major !== ourMajor && !(ourMajor === 1 && major === 0)) {
       this.error("/version", `Major version ${major} is not supported by this reader (supports ${ourMajor}.x).`);
-    } else if (minor > ourMinor) {
+    } else if (major === ourMajor && minor > ourMinor) {
       this.warn("/version", `Written for ${value}; this reader knows ${FORMAT_VERSION}. Newer fields will be ignored.`);
     }
   }

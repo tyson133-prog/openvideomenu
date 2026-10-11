@@ -134,7 +134,7 @@ end sub
 ' older X-Emby-Token header and api_key parameter off by default).
 function authHeader(token as dynamic) as string
     q = Chr(34)
-    h = "MediaBrowser Client=" + q + "ovmplayer" + q + ", Device=" + q + "Roku" + q + ", DeviceId=" + q + m.deviceId + q + ", Version=" + q + "0.1" + q
+    h = "MediaBrowser Client=" + q + "ovmplayer" + q + ", Device=" + q + "Roku" + q + ", DeviceId=" + q + m.deviceId + q + ", Version=" + q + "1.0.0" + q
     if token <> invalid then h = h + ", Token=" + q + token + q
     return h
 end function

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace OpenVideoMenu;
 
-// The manifest as C# types. The normative definition is spec/openvideomenu-v0.1.md and
+// The manifest as C# types. The normative definition is spec/openvideomenu-v1.0.md and
 // spec/schema/manifest.schema.json; this mirrors packages/core/src/types.ts.
 //
 // Unknown properties are allowed everywhere (compatibility charter rule 3) and vendor extensions

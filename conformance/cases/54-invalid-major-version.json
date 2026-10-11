@@ -6,7 +6,7 @@
   "errors": ["/version"],
   "manifest": {
     "format": "openvideomenu",
-    "version": "1.0",
+    "version": "2.0",
     "title": { "name": "Next Major" },
     "media": { "feature": { "ref": "a.mp4" } },
     "fallback": [{ "label": "Movie", "items": [{ "label": "Play", "action": { "type": "play", "media": "feature" } }] }]

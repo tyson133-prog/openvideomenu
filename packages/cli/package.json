@@ -1,6 +1,6 @@
 {
   "name": "@openvideomenu/cli",
-  "version": "0.1.0",
+  "version": "1.0.0-preview.1",
   "description": "Open Video Menu command line: validate manifests and bundles, preview menus in a browser, and pack or unpack bundles.",
   "license": "Apache-2.0",
   "homepage": "https://openvideomenu.org/",
@@ -17,9 +17,9 @@
     "NOTICE"
   ],
   "dependencies": {
-    "@openvideomenu/core": "0.1.0",
-    "@openvideomenu/renderer-web": "0.1.0",
-    "@openvideomenu/asset-server": "0.1.0"
+    "@openvideomenu/core": "1.0.0-preview.1",
+    "@openvideomenu/renderer-web": "1.0.0-preview.1",
+    "@openvideomenu/asset-server": "1.0.0-preview.1"
   },
   "scripts": {
     "build": "tsc -b",

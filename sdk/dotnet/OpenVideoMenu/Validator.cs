@@ -554,18 +554,19 @@ internal sealed class Validator
     {
         if (!IsNonEmptyString(value) || !Regex.IsMatch(value!.Value.GetString()!, @"^\d+\.\d+$"))
         {
-            Error("/version", "Must be \"MAJOR.MINOR\", e.g. \"0.1\".");
+            Error("/version", "Must be \"MAJOR.MINOR\", e.g. \"1.0\".");
             return;
         }
 
         var text = value.Value.GetString()!;
         var (major, minor) = SplitVersion(text);
         var (ourMajor, ourMinor) = SplitVersion(Format.Version);
-        if (major != ourMajor)
+        // 0.x was the draft that became 1.0, so a 1.x reader reads 0.x manifests too (compatibility charter rule 1).
+        if (major != ourMajor && !(ourMajor == 1 && major == 0))
         {
             Error("/version", $"Major version {Num(major)} is not supported by this reader (supports {Num(ourMajor)}.x).");
         }
-        else if (minor > ourMinor)
+        else if (major == ourMajor && minor > ourMinor)
         {
             Warn("/version", $"Written for {text}; this reader knows {Format.Version}. Newer fields will be ignored.");
         }

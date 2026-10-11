@@ -1,7 +1,7 @@
 # Conformance suite
 
 A player is **compatible** with Open Video Menu 0.1 at a level when it passes every case for that level
-and the levels below it. The levels are in [spec §10](../spec/openvideomenu-v0.1.md#10-conformance-levels):
+and the levels below it. The levels are in [spec §10](../spec/openvideomenu-v1.0.md#10-conformance-levels):
 0 Basic, 1 Menus, 2 Enhanced, 3 Disc logic.
 
 The cases are plain JSON files in [`cases/`](cases), 69 of them. Any language can run them. The reference
@@ -19,7 +19,7 @@ Each file is one manifest and what must happen with it. The smallest one,
   "valid": true,
   "manifest": {
     "format": "openvideomenu",
-    "version": "0.1",
+    "version": "1.0",
     "title": { "name": "Minimal" },
     "media": { "feature": { "ref": "Minimal.mp4", "kind": "feature" } },
     "fallback": [

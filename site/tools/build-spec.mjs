@@ -94,7 +94,8 @@ const header = readFileSync(join(root, "site", "index.html"), "utf8").match(/<he
   .replace(/href="index.html"/g, 'href="../../index.html"')
   .replace(/src="assets\//g, 'src="../../assets/');
 const footer = readFileSync(join(root, "site", "index.html"), "utf8").match(/<footer class="site-footer">[\s\S]*?<\/footer>/)[0]
-  .replace(/href="privacy.html"/g, 'href="../../privacy.html"');
+  .replace(/href="privacy.html"/g, 'href="../../privacy.html"')
+  .replace(/href="spec\/"/g, 'href="../"');
 
 function page({ title, body, contents, current }) {
   const nav = [...pages, schema]

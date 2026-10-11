@@ -1,6 +1,6 @@
-# Compatibility charter (draft)
+# Compatibility charter
 
-> Takes effect at **v1.0**. Until then the format is a v0.x draft and may change.
+> In effect from **v1.0** (released as 1.0 preview). The v0.x drafts before it are read as 1.0.
 
 Open Video Menu is meant to outlive any one player, tool or maintainer. These rules are permanent from v1.0 onward:
 
@@ -13,6 +13,6 @@ Open Video Menu is meant to outlive any one player, tool or maintainer. These ru
 
 ## What "compatible" means
 
-An implementation is compatible when it passes the conformance suite for the level it claims (0, 1, 2 or 3). The name, and any "compatible" badge, is reserved for implementations that pass. (A trademark policy will say this formally before v1.0.)
+An implementation is compatible when it passes the conformance suite for the level it claims (0, 1, 2 or 3). The name, and any "compatible" badge, is reserved for implementations that pass. (A trademark policy will say this formally.)
 
 The code is Apache-2.0, so forks are welcome. A fork that breaks these rules just can't call itself Open Video Menu compatible.

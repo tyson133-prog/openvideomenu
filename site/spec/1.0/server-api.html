@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Server API · Open Video Menu 1.0</title>
+  <meta name="description" content="Open Video Menu 1.0: Server API.">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../../index.html"><img src="../../assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
+    <nav class="nav" aria-label="Main">
+      <a href="../../index.html#see">See it</a>
+      <a href="../../index.html#players">Get the players</a>
+      <a href="../../index.html#make">Make menus</a>
+      <a href="../../index.html#implement">Implement it</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="spec-page">
+    <div class="wrap">
+      <p class="small muted spec-nav">Open Video Menu 1.0 · <a href="index.html">Specification 1.0</a> · <strong>Server API</strong> · <a href="dvd-profile.html">DVD profile</a> · <a href="compatibility.html">Compatibility</a> · <a href="license.html">License</a> · <a href="manifest.schema.json">JSON Schema</a></p>
+      <details class="spec-toc" open><summary>Contents</summary><ul><li><a href="#1-purpose">1. Purpose</a></li><li><a href="#2-finding-a-server-client-behaviour">2. Finding a server (client behaviour)</a></li><li><a href="#3-sign-in">3. Sign-in</a></li><li><a href="#4-endpoints">4. Endpoints</a></li><li><a href="#5-network">5. Network</a></li><li><a href="#6-versions">6. Versions</a></li></ul></details>
+      <article class="prose spec">
+<h1 id="open-video-menu-server-api--v1-preview"><a class="anchor" href="#open-video-menu-server-api--v1-preview">Open Video Menu server API — v1 (preview)</a></h1>
+<blockquote>
+<p><strong>Status: preview.</strong> It follows the manifest format&#39;s versioning: from v1.0 the
+<a href="compatibility.html">compatibility charter</a> applies to this API too: <code>v1</code> endpoints and fields are
+never removed or redefined.</p>
+</blockquote>
+<p>The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.</p>
+<h2 id="1-purpose"><a class="anchor" href="#1-purpose">1. Purpose</a></h2>
+<p>A TV app needs two things to show a menu: the <strong>manifest</strong> and the <strong>menu art</strong> it names. This
+API is how any server hands them to any app. Video is never part of it: the app plays media from the
+media server it already uses.</p>
+<p>Two kinds of server implement the same API:</p>
+<div class="table-wrap"><table><thead><tr><th>Kind</th><th>Example</th><th>Base URL <code>B</code></th></tr></thead><tbody><tr><td><strong>Native</strong>: the media server itself</td><td>Jellyfin with the Open Video Menu plugin (<a href="https://github.com/tyson133-prog/openvideomenu/blob/main/plugins/jellyfin"><code>plugins/jellyfin</code></a>)</td><td><code>{media server}/OpenVideoMenu</code></td></tr>
+<tr><td><strong>Standalone asset server</strong>, for media servers that don&#39;t support Open Video Menu yet</td><td><a href="https://github.com/tyson133-prog/openvideomenu/blob/main/packages/asset-server"><code>packages/asset-server</code></a></td><td><code>http://{host}:{port}</code></td></tr></tbody></table></div>
+<p>An app written against this API works with both, and keeps working unchanged when a media server
+adopts Open Video Menu natively.</p>
+<h2 id="2-finding-a-server-client-behaviour"><a class="anchor" href="#2-finding-a-server-client-behaviour">2. Finding a server (client behaviour)</a></h2>
+<p>Apps SHOULD look in this order and use the first that answers:</p>
+<ol>
+<li><p><strong>The media server itself:</strong> <code>GET {media server}/OpenVideoMenu/v1/health</code>. Native implementations
+MUST serve the API under that base path, so this one request tells an app whether its server
+supports menus.</p>
+</li>
+<li><p><strong>An asset server the viewer chose before</strong> (a saved address).</p>
+</li>
+<li><p><strong>An asset server on the network:</strong> DNS-SD service type <code>_openvideomenu._tcp</code>. The instance&#39;s
+address and port form <code>B</code> (<code>http://{address}:{port}</code>). A host may advertise several addresses;
+apps SHOULD use the first whose <code>/v1/health</code> answers. If a saved address stops answering, apps
+SHOULD look on the network again before asking the viewer (the host may have a new address).</p>
+<p>Servers that advertise MUST also answer <em>legacy unicast</em> queries (RFC 6762 §6.7): a query from a
+port other than 5353 is answered directly to that address and port, repeating the query&#39;s ID and
+question. TV platforms often can&#39;t bind port 5353 or join the multicast group, so this is how
+their apps browse. Apple&#39;s mDNSResponder and Avahi already do this; some mDNS libraries don&#39;t.
+An app then takes the server&#39;s address from where the answer came from, which also avoids
+addresses the TV can&#39;t reach (e.g. a container&#39;s own address), and the port from the SRV record.</p>
+</li>
+</ol>
+<p>If none answers, titles MUST still play, just without menus.</p>
+<h2 id="3-sign-in"><a class="anchor" href="#3-sign-in">3. Sign-in</a></h2>
+<p>The API uses the viewer&#39;s existing media-server sign-in. There are no Open Video Menu accounts.</p>
+<ul>
+<li><p><strong>Native servers</strong> use their own authentication, exactly as for their other endpoints (e.g.
+Jellyfin&#39;s <code>Authorization: MediaBrowser …, Token=&quot;…&quot;</code> header).</p>
+</li>
+<li><p><strong>Standalone servers</strong> accept the sign-in of the media servers they are configured for, and check
+it with that media server:</p>
+<div class="table-wrap"><table><thead><tr><th>Media server</th><th>Header the app sends</th><th>How the asset server checks it</th></tr></thead><tbody><tr><td>Plex</td><td><code>X-Plex-Token: …</code> (or <code>Authorization: Bearer …</code>)</td><td>The configured Plex server accepts the token (it answers <code>GET /library/sections</code> with it). When that server lets its network in without signing in (it accepts a made-up token too), or can&#39;t be reached, plex.tv must list this Plex server among the token&#39;s resources instead.</td></tr>
+<tr><td>Jellyfin</td><td><code>Authorization: MediaBrowser …, Token=&quot;…&quot;</code></td><td>The configured Jellyfin server answers <code>GET /Users/Me</code></td></tr></tbody></table></div>
+</li>
+<li><p>Credentials MUST travel in headers, never in URLs.</p>
+</li>
+<li><p>A request without a valid sign-in MUST get <code>401</code>.</p>
+</li>
+<li><p>Servers MUST NOT store viewers&#39; credentials. They MAY cache verdicts briefly in memory.</p>
+</li>
+<li><p>A standalone server MAY keep one credential of its own, given by whoever sets it up: a media-server
+token or API key it uses to read that media server&#39;s library folders and items, so it scans them,
+follows them when libraries change, and says which item each menu&#39;s media is (the index&#39;s <code>items</code>). It
+MUST NOT log it, and SHOULD keep it where only the server and the
+machine&#39;s administrators can read it. It uses it only to read; it MUST NOT change anything on the
+media server.</p>
+</li>
+</ul>
+<h2 id="4-endpoints"><a class="anchor" href="#4-endpoints">4. Endpoints</a></h2>
+<h3 id="get-bv1health"><a class="anchor" href="#get-bv1health"><code>GET {B}/v1/health</code></a></h3>
+<p>No sign-in. Tells apps the server is there and what it speaks.</p>
+<pre><code class="language-json">{ &quot;ok&quot;: true, &quot;name&quot;: &quot;Open Video Menu for Jellyfin&quot;, &quot;api&quot;: &quot;1&quot;, &quot;format&quot;: &quot;1.0&quot;, &quot;manifests&quot;: 3, &quot;auth&quot;: &quot;jellyfin&quot; }
+</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Meaning</th></tr></thead><tbody><tr><td><code>api</code></td><td>API major version, <code>&quot;1&quot;</code> here.</td></tr>
+<tr><td><code>format</code></td><td>Newest manifest format version the server reads.</td></tr>
+<tr><td><code>manifests</code></td><td>Manifests found so far. It MAY be 0 while a first scan runs.</td></tr>
+<tr><td><code>auth</code></td><td>What sign-in the server accepts, as a human-readable hint.</td></tr></tbody></table></div>
+<p>Servers MAY add fields; apps MUST ignore fields they don&#39;t know.</p>
+<h3 id="get-bv1index"><a class="anchor" href="#get-bv1index"><code>GET {B}/v1/index</code></a></h3>
+<p>Signed in. Every manifest the server found, and the media each one references.</p>
+<pre><code class="language-json">{
+  &quot;api&quot;: &quot;1&quot;,
+  &quot;format&quot;: &quot;1.0&quot;,
+  &quot;roots&quot;: 2,
+  &quot;manifests&quot;: [
+    {
+      &quot;id&quot;: &quot;3f1c0d9a8b7e6f50&quot;,
+      &quot;root&quot;: 0,
+      &quot;path&quot;: &quot;The Matrix (1999)/The Matrix (1999).openvideomenu.json&quot;,
+      &quot;url&quot;: &quot;/v1/files/0/The%20Matrix%20(1999)/The%20Matrix%20(1999).openvideomenu.json&quot;,
+      &quot;valid&quot;: true,
+      &quot;version&quot;: &quot;1.0&quot;,
+      &quot;title&quot;: { &quot;name&quot;: &quot;The Matrix&quot;, &quot;year&quot;: 1999 },
+      &quot;source&quot;: { &quot;kind&quot;: &quot;dvd&quot; },
+      &quot;hasMenus&quot;: true,
+      &quot;media&quot;: [
+        { &quot;id&quot;: &quot;feature&quot;, &quot;kind&quot;: &quot;feature&quot;, &quot;label&quot;: &quot;The Matrix&quot;, &quot;ref&quot;: &quot;The Matrix (1999).mp4&quot;, &quot;path&quot;: &quot;The Matrix (1999)/The Matrix (1999).mp4&quot; }
+      ],
+      &quot;modified&quot;: &quot;2026-09-26T23:39:12.000Z&quot;
+    }
+  ]
+}
+</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Field</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>id</code></td><td>yes</td><td>Stable id for this manifest on this server.</td></tr>
+<tr><td><code>root</code></td><td>yes</td><td>Which media folder it is in (index into the server&#39;s folders). A server that follows the media server&#39;s libraries may number its folders differently after a library changes; apps take <code>root</code> and <code>url</code> from the latest index.</td></tr>
+<tr><td><code>path</code></td><td>yes</td><td>The manifest&#39;s path under that folder, with forward slashes.</td></tr>
+<tr><td><code>url</code></td><td>yes</td><td>Where to fetch the manifest, relative to <code>B</code>. Relative asset paths in the manifest resolve against this URL.</td></tr>
+<tr><td><code>valid</code></td><td>yes</td><td>Whether the manifest could be read. Invalid entries carry <code>errors</code> (strings) instead of the fields below.</td></tr>
+<tr><td><code>version</code>, <code>title</code>, <code>source</code></td><td>if valid</td><td>Copied from the manifest. When <code>title</code> has no <code>season</code> or <code>volume</code> (manifest §3.1), servers SHOULD fill them in from the manifest&#39;s path, the name nearest the file winning: &quot;Season N&quot; or &quot;Specials&quot; (0) for the season, &quot;Disc N&quot; for the volume, or &quot;SnnDnn&quot; for both. So <code>Example Show/Season 05/Example Show - Disc 2.ovmz</code> is season 5, volume 2.</td></tr>
+<tr><td><code>hasMenus</code></td><td>if valid</td><td>Whether it has any menus. A manifest with only a fallback list is still valid.</td></tr>
+<tr><td><code>media</code></td><td>if valid</td><td>One entry per media item: <code>id</code>, <code>kind</code>, <code>label</code> and <code>ref</code> (when it has one) from the manifest, plus <code>path</code>.</td></tr>
+<tr><td><code>media[].path</code></td><td>when <code>ref</code> is a relative path</td><td>The media file&#39;s path under the same folder, with forward slashes. Apps match it against the media server&#39;s file paths by their <strong>trailing segments</strong> (at least the folder and file name), because the two machines may mount the folder at different places.</td></tr>
+<tr><td><code>media[].segments</code></td><td>when the media is made of segments</td><td><em>(Level 2)</em> The media ids it plays, in order; such media have no <code>ref</code> or <code>path</code> (the files are those of the media listed).</td></tr>
+<tr><td><code>media[].angles</code></td><td>when the media has angle files</td><td><em>(Level 2)</em> One <code>{ ref, path }</code> per other angle (angle 2, 3, …), <code>path</code> as for the media itself, so apps can match those files too.</td></tr>
+<tr><td><code>modified</code></td><td>yes</td><td>When the manifest last changed (ISO 8601).</td></tr>
+<tr><td><code>items</code></td><td>no</td><td>The media server&#39;s items that play the manifest&#39;s media, when the server knows them: one <code>{ media, server, id, type, show? }</code> per media and media server. <code>media</code> is the manifest&#39;s media id; <code>server</code> the media server&#39;s id (Plex&#39;s <code>machineIdentifier</code>, Jellyfin&#39;s server <code>Id</code>); <code>id</code> the item&#39;s id there (Plex <code>ratingKey</code>, Jellyfin item <code>Id</code>); <code>type</code> <code>&quot;movie&quot;</code> or <code>&quot;episode&quot;</code>; <code>show</code> an episode&#39;s show id.</td></tr></tbody></table></div>
+<p><strong>Items.</strong> Native servers know which of their items each <code>media[].path</code> is; a standalone server knows
+when it has the media server&#39;s token (§3). Servers SHOULD then include <code>items</code>. Apps use an item only
+when its <code>server</code> is the server they are signed in to, and MUST fall back to matching <code>media[].path</code>
+themselves when <code>items</code> is absent or has nothing for that server. An item lets an app show a menu&#39;s
+title without paging through the library to find it, and find a TV menu&#39;s show by its id.</p>
+<p>The index MUST NOT list menu asset paths; the server keeps its allowlist to itself. Apps MUST
+ignore fields they don&#39;t know.</p>
+<p><strong>Caching.</strong> Responses SHOULD carry an <code>ETag</code> and <code>Cache-Control: private, no-cache</code>, and answer
+<code>If-None-Match</code> with <code>304</code>, so an unchanged index costs one small request. Servers SHOULD gzip the
+index when the app accepts it. <code>?refresh</code> asks the server to rescan before answering. Without it,
+servers answer from their latest scan and SHOULD rescan in the background.</p>
+<h3 id="get-bv1filesrootpath"><a class="anchor" href="#get-bv1filesrootpath"><code>GET {B}/v1/files/{root}/{path}</code></a></h3>
+<p>Signed in. One manifest, or one menu asset a manifest names.</p>
+<ul>
+<li>The server MUST serve <strong>only</strong> the manifests in its index and the menu assets they name (the
+assets <code>menuAssets()</code> in <a href="https://github.com/tyson133-prog/openvideomenu/blob/main/packages/core/src/assets.ts"><code>packages/core</code></a> returns). Everything
+else, in particular media files, MUST get <code>404</code>, the same answer as for a file that doesn&#39;t exist.</li>
+<li>Paths MUST NOT escape their folder (<code>..</code>, absolute paths).</li>
+<li><strong>Range requests MUST be supported</strong>, because players seek in motion menus and transitions.</li>
+<li><code>Content-Type</code> SHOULD match the file. Servers MAY let apps cache art briefly
+(<code>Cache-Control: private, max-age=60</code>).</li>
+<li><strong>Bundles</strong> (format spec §2.1) are served as if they were folders: the manifest at
+<code>{path to bundle}/manifest.json</code> and each asset at <code>{path to bundle}/{asset path}</code>, for example
+<code>/v1/files/0/Movies/The%20Matrix%20(1999)/The%20Matrix%20(1999).ovmz/menus/main.jpg</code>. Relative
+asset URLs then resolve inside the bundle on their own. Range requests work the same way (members
+are stored uncompressed, so a range maps straight onto the bundle file). The index lists a bundle
+with <code>path</code> = the bundle&#39;s own path and <code>url</code> = its <code>manifest.json</code>; <code>media</code> paths are relative to
+the folder that holds the bundle, as for a plain manifest.</li>
+</ul>
+<h2 id="5-network"><a class="anchor" href="#5-network">5. Network</a></h2>
+<p>Standalone servers SHOULD answer only home-network and VPN addresses by default (loopback,
+RFC 1918, link-local, IPv6 unique-local, 100.64.0.0/10). Native servers follow their own
+remote-access settings.</p>
+<h2 id="6-versions"><a class="anchor" href="#6-versions">6. Versions</a></h2>
+<ul>
+<li>The path carries the API major version (<code>/v1/</code>) and <code>health.api</code> repeats it.</li>
+<li>Within v1, changes are additive: new optional fields and new endpoints only.</li>
+<li>A breaking change would be <code>/v2/</code>, served alongside <code>/v1/</code>.</li>
+</ul>
+
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>Specification CC BY 4.0 with a royalty-free patent pledge (OWFa 1.0); code Apache-2.0. <a href="../">Specification</a> · <a href="../../privacy.html">Privacy</a> · <a href="https://github.com/tyson133-prog/openvideomenu">Source code</a> · <a href="mailto:tyson@openvideomenu.org">Contact</a></span>
+      <span>Sintel © Blender Foundation, <a href="https://durian.blender.org/">durian.blender.org</a>, CC BY 3.0.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

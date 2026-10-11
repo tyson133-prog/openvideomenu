@@ -6,7 +6,7 @@ import { BUNDLE_EXTENSION, BUNDLE_MANIFEST_NAME, FORMAT_NAME, FORMAT_VERSION, is
 import { checkAssetFiles, checkIgnoreFiles, findManifests, isFaststart, memberDataOffset, packBundle, readBundle, readMember, unpackBundle } from "@openvideomenu/asset-server";
 import { startPreview } from "./serve.js";
 
-const USAGE = `${FORMAT_NAME} ${FORMAT_VERSION} (draft)
+const USAGE = `${FORMAT_NAME} ${FORMAT_VERSION} (preview)
 
 Usage:
   openvideomenu validate <file-or-folder>     Check manifests and bundles; exits 1 when any has errors

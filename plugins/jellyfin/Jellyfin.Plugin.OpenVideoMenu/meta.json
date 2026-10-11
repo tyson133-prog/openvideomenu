@@ -1,14 +1,14 @@
 {
   "category": "General",
-  "changelog": "First version: serves Open Video Menu manifests and menu art (API v1).",
+  "changelog": "1.0 preview: serves Open Video Menu manifests (format 1.0, and 0.1) and their menu art (API v1).",
   "description": "Menus for your films and shows: serves .openvideomenu.json manifests and their menu art to Open Video Menu players such as ovmplayer, so no separate asset server is needed.",
   "guid": "6d1c3a52-4f0b-4d7e-9a5e-3c2b7f1e8a90",
   "name": "Open Video Menu",
   "overview": "Menus for your library",
   "owner": "openvideomenu",
   "targetAbi": "12.0.0.0",
-  "timestamp": "2026-09-27T00:00:00.0000000Z",
-  "version": "0.1.0.0",
+  "timestamp": "2026-10-11T00:00:00.0000000Z",
+  "version": "1.0.0.0",
   "status": "Active",
   "autoUpdate": false,
   "assemblies": ["OpenVideoMenu.dll", "Jellyfin.Plugin.OpenVideoMenu.dll"]

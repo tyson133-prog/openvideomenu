@@ -3,11 +3,11 @@
  */
 export const FORMAT_NAME = "Open Video Menu";
 export const FORMAT_ID = "openvideomenu";
-export const FORMAT_VERSION = "0.1";
+export const FORMAT_VERSION = "1.0";
 export const MANIFEST_SUFFIX = ".openvideomenu.json";
 export const BUNDLE_EXTENSION = ".ovmz";
 export const BUNDLE_MANIFEST_NAME = "manifest.json";
-export const SCHEMA_ID = "urn:openvideomenu:schema:manifest:0.1";
+export const SCHEMA_ID = "urn:openvideomenu:schema:manifest:1.0";
 
 /** Whether a file name is a manifest's (any case). */
 export function isManifestFileName(name: string): boolean {

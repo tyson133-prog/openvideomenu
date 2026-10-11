@@ -387,7 +387,9 @@ export class Catalog {
     };
     const assets = menuAssets(m).map(assetInRoot).filter((p): p is string => p !== undefined);
     const warnings: string[] = [];
-    if (m.version !== FORMAT_VERSION && Number(m.version.split(".")[1]) > Number(FORMAT_VERSION.split(".")[1]))
+    const [major, minor] = m.version.split(".").map(Number) as [number, number];
+    const [ourMajor, ourMinor] = FORMAT_VERSION.split(".").map(Number) as [number, number];
+    if (major === ourMajor && minor > ourMinor)
       warnings.unshift(`Written for ${m.version}; this server reads ${FORMAT_VERSION}. Newer fields are ignored.`);
     return {
       ...base,

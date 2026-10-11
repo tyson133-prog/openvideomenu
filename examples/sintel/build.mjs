@@ -198,7 +198,7 @@ const chapterLabel = (n) => `Chapter ${n}`;
 
 const manifest = {
   format: "openvideomenu",
-  version: "0.1",
+  version: "1.0",
   title: { name: "Sintel", year: 2010, ids: { imdb: "tt1727587", tmdb: "45745" } },
   source: { kind: "authored", generator: "examples/sintel/build.mjs" },
   media: {

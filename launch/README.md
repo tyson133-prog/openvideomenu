@@ -39,7 +39,7 @@ work;** nothing here publishes anything by itself.
 
 ### Each release
 
-1. Tag the version: `git tag v0.1.2 && git push origin v0.1.2`. The workflow tests everything and
+1. Tag the version: `git tag v1.0.0-preview.1 && git push origin v1.0.0-preview.1`. The workflow tests everything and
    drafts a release with the APK, App Bundle (AAB), unsigned Roku zip, Jellyfin plugin zip and
    repository manifest, the NuGet packages (OpenVideoMenu, OpenVideoMenu.Dvd, the ovm-dvd tool), the npm
    packages (`@openvideomenu/core`, `renderer-web`, `asset-server`, `cli`), and

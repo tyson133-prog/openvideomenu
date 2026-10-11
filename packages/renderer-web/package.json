@@ -1,6 +1,6 @@
 {
   "name": "@openvideomenu/renderer-web",
-  "version": "0.1.0",
+  "version": "1.0.0-preview.1",
   "description": "Reference 10-foot web renderer for Open Video Menu menus. Plugs into any host through playback, input and media-resolver adapters.",
   "license": "Apache-2.0",
   "homepage": "https://openvideomenu.org/",
@@ -22,7 +22,7 @@
     "NOTICE"
   ],
   "dependencies": {
-    "@openvideomenu/core": "0.1.0"
+    "@openvideomenu/core": "1.0.0-preview.1"
   },
   "scripts": {
     "build": "tsc -b && esbuild src/bundle.ts --bundle --format=iife --global-name=OpenVideoMenuPlayer --target=es2020 --outfile=dist/openvideomenu-player.js --sourcemap && node -e \"require('fs').copyFileSync('src/host.html','dist/host.html')\"",

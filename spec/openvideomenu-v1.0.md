@@ -1,7 +1,7 @@
-# Open Video Menu manifest format — v0.1 (draft)
+# Open Video Menu manifest format — v1.0 (preview)
 
-> **Status: draft.** Fields may change before v1.0.
-> After v1.0 the [compatibility charter](COMPATIBILITY.md) applies and nothing here is ever removed or redefined.
+> **Status: 1.0 preview.** The [compatibility charter](COMPATIBILITY.md) applies: nothing here is ever removed or
+> redefined, and later versions only add optional fields. 1.0 grew from the 0.1 draft, so 1.0 readers read 0.1 manifests too.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as described in RFC 2119.
 
@@ -47,7 +47,7 @@ The machine-readable schema is [`schema/manifest.schema.json`](schema/manifest.s
 | Field | Required | Meaning |
 |---|---|---|
 | `format` | yes | Always `"openvideomenu"`. |
-| `version` | yes | `"MAJOR.MINOR"`. This document is `0.1`. |
+| `version` | yes | `"MAJOR.MINOR"`. This document is `1.0`. Readers of 1.x MUST also read `0.x` manifests, the draft this version grew from, as 1.0. |
 | `title` | yes | `{ name, year?, ids?, season?, volume? }`. `ids` holds strings such as `imdb`, `tmdb` or `tvdb`. See [§3.1](#31-season-and-volume). |
 | `source` | no | `{ kind, generator? }`. `kind` is e.g. `"dvd"`, `"authored"` or `"generated"`. |
 | `media` | yes | Map of media id → [media](#4-media). At least one entry. |

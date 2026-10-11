@@ -95,7 +95,7 @@ const overlays = (name, b) => {
 // --- manifest ----------------------------------------------------------------------------------------
 const manifest = {
   format: "openvideomenu",
-  version: "0.1",
+  version: "1.0",
   title: { name: "Example Show", year: 1999 },
   source: { kind: "dvd", generator: "examples/dvd-shaped/build.mjs (synthetic)" },
   media: {

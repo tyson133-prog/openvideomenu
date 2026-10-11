@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:openvideomenu:schema:manifest:0.1",
-  "title": "Open Video Menu manifest v0.1 (draft)",
-  "description": "Menus over existing media files. Structural rules only; cross-references (menu ids, button ids, media ids, chapter numbers) are checked by the reference validator and described in spec/openvideomenu-v0.1.md. Unknown properties are allowed (readers ignore them); vendor extensions use keys starting with \"x-\".",
+  "$id": "urn:openvideomenu:schema:manifest:1.0",
+  "title": "Open Video Menu manifest v1.0 (preview)",
+  "description": "Menus over existing media files. Structural rules only; cross-references (menu ids, button ids, media ids, chapter numbers) are checked by the reference validator and described in spec/openvideomenu-v1.0.md. Unknown properties are allowed (readers ignore them); vendor extensions use keys starting with \"x-\".",
   "type": "object",
   "required": [
     "format",
@@ -20,7 +20,7 @@
     },
     "version": {
       "type": "string",
-      "pattern": "^0\\.[0-9]+$"
+      "pattern": "^[01]\\.[0-9]+$"
     },
     "title": {
       "$ref": "#/$defs/title"

@@ -8,7 +8,7 @@ function plexHeaders(token as dynamic) as object
     h = {
         "Accept": "application/json",
         "X-Plex-Product": "ovmplayer",
-        "X-Plex-Version": "0.1",
+        "X-Plex-Version": "1.0.0",
         "X-Plex-Client-Identifier": m.deviceId,
         "X-Plex-Platform": "Roku",
         "X-Plex-Device": "Roku",

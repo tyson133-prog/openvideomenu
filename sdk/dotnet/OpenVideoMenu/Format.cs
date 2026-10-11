@@ -10,7 +10,7 @@ public static class Format
     public const string Id = "openvideomenu";
 
     /// <summary>The version this library reads and writes (MAJOR.MINOR).</summary>
-    public const string Version = "0.1";
+    public const string Version = "1.0";
 
     /// <summary>A loose manifest's file name ends with this: <c>&lt;Title&gt;.openvideomenu.json</c>.</summary>
     public const string ManifestSuffix = ".openvideomenu.json";
@@ -22,7 +22,7 @@ public static class Format
     public const string BundleManifestName = "manifest.json";
 
     /// <summary>The JSON Schema's id.</summary>
-    public const string SchemaId = "urn:openvideomenu:schema:manifest:0.1";
+    public const string SchemaId = "urn:openvideomenu:schema:manifest:1.0";
 
     /// <summary>Whether a file name is a loose manifest's (any case).</summary>
     public static bool IsManifestFileName(string name) => name.EndsWith(ManifestSuffix, StringComparison.OrdinalIgnoreCase);

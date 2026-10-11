@@ -103,7 +103,7 @@ code, pre { font-family: var(--mono); font-size: 0.88em; }
   background: repeating-linear-gradient(135deg, rgba(255, 207, 106, 0.05) 0 10px, transparent 10px 20px);
   color: var(--muted); padding: 8px 14px; font-size: 0.92rem;
 }
-.tbd::before { content: "Placeholder"; font: 700 0.68rem/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
+.tbd::before { content: "Coming soon"; font: 700 0.68rem/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); }
 .tbd-block { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 160px; padding: 24px; }
 .tbd-block::before { margin-bottom: 6px; }
 .btn.tbd-link { border-style: dashed; border-color: rgba(255, 207, 106, 0.55); color: var(--muted); background: transparent; cursor: default; }

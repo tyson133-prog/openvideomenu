@@ -1,6 +1,6 @@
 /**
- * Open Video Menu manifest v0.1 (draft) — TypeScript model.
- * The normative definition is spec/openvideomenu-v0.1.md and spec/schema/manifest.schema.json.
+ * Open Video Menu manifest v1.0 (preview) — TypeScript model.
+ * The normative definition is spec/openvideomenu-v1.0.md and spec/schema/manifest.schema.json.
  *
  * Unknown properties are allowed everywhere (compatibility charter rule 3); vendor
  * extensions use keys that start with "x-".

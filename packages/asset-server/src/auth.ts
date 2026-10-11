@@ -96,7 +96,7 @@ export class PlexTokenCheck implements TokenCheck {
     return {
       Accept: "application/json",
       "X-Plex-Product": "Open Video Menu Asset Server",
-      "X-Plex-Version": "0.1",
+      "X-Plex-Version": "1.0.0",
       "X-Plex-Client-Identifier": this.clientId,
       ...(token ? { "X-Plex-Token": token } : {}),
     };
@@ -179,7 +179,7 @@ export class JellyfinTokenCheck implements TokenCheck {
     if (credential?.kind !== "jellyfin" || !credential.token) return false;
     const token = credential.token.replace(/"/g, "");
     return this.verdicts.get(token, async () => {
-      const auth = `MediaBrowser Client="Open Video Menu Asset Server", Device="asset-server", DeviceId="${this.deviceId}", Version="0.1", Token="${token}"`;
+      const auth = `MediaBrowser Client="Open Video Menu Asset Server", Device="asset-server", DeviceId="${this.deviceId}", Version="1.0.0", Token="${token}"`;
       const res = await this.fetchImpl(new URL("/Users/Me", this.jellyfinUrl), { headers: { Authorization: auth, Accept: "application/json" } });
       if (!res.ok) return false;
       const user = (await res.json()) as { Id?: string };
