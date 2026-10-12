@@ -22,6 +22,7 @@
   <div class="wrap">
     <a class="brand" href="index.html"><img src="assets/img/mark.svg" alt="" width="30" height="30">Open Video Menu</a>
     <nav class="nav" aria-label="Main">
+      <a href="#setup">Set it up</a>
       <a href="#see">See it</a>
       <a href="#players">Get the players</a>
       <a href="#make">Make menus</a>
@@ -53,8 +54,39 @@ Sintel (2010)/
       <div class="callout">
         <h2 style="margin-top:0">Easy for any player to add</h2>
         <p>Open Video Menu is built to be simple to implement. A player can show a menu's titles in an afternoon, and free libraries for TypeScript and .NET handle the menus themselves. It's open and royalty-free, with no fees and no permission needed.</p>
-        <p><strong>Want menus in your player?</strong> Try them on your TV with ovmplayer's demo (<a href="#see">step 1</a>), then ask Plex to add Open Video Menu in the <a href="https://forums.plex.tv/c/feature-suggestions/8">Plex Feature Suggestions forum</a>. Requests from viewers are what bring a feature to a player.</p>
+        <p><strong>Want menus in your player?</strong> Try them on your TV with ovmplayer's demo (<a href="#see">See it</a>, below), then ask Plex to add Open Video Menu in the <a href="https://forums.plex.tv/c/feature-suggestions/8">Plex Feature Suggestions forum</a>. Requests from viewers are what bring a feature to a player.</p>
       </div>
+    </div>
+  </section>
+
+  <section id="setup">
+    <div class="wrap">
+      <h2>Set it up in minutes</h2>
+      <p class="muted">Menus for your own Plex or Jellyfin library, in four steps.</p>
+      <ol class="steps steps-4">
+        <li class="card">
+          <h3>Get ovmplayer on your TV</h3>
+          <p>Free, from your TV's app store.</p>
+          <p><strong>Google TV and Android TV:</strong><br><span class="btn btn-small tbd-link">Google Play</span></p>
+          <p><strong>Roku:</strong><br><span class="btn btn-small tbd-link">Add the Roku channel</span></p>
+        </li>
+        <li class="card">
+          <h3>Add menus to your server</h3>
+          <p><strong>Jellyfin:</strong> in Dashboard → Plugins → Repositories, add<br><code style="word-break:break-all">https://github.com/tyson133-prog/openvideomenu/releases/latest/download/jellyfin-repository.json</code><br>then install <strong>Open Video Menu</strong> and restart Jellyfin.</p>
+          <p><strong>Plex:</strong> on the computer that runs Plex, <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/OpenVideoMenu-MenuServer-Setup.exe">run the installer</a> (Windows; Linux and Docker <a href="#players">below</a>). It signs in to Plex for you.</p>
+        </li>
+        <li class="card">
+          <h3>Rip your DVDs with their menus</h3>
+          <p>DVD Tamer turns your DVDs into video files for your library and brings their original menus along. Put the files in your Plex or Jellyfin library folders, then scan the library.</p>
+          <p><span class="btn btn-small tbd-link">Get DVD Tamer</span></p>
+          <p class="small muted">Want to try it first? <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/openvideomenu-examples.zip">Download two example titles</a> and copy their <code>Movies</code> and <code>TV</code> folders into your libraries.</p>
+        </li>
+        <li class="card">
+          <h3>Open it on your TV</h3>
+          <p>Start ovmplayer and choose <strong>Plex</strong> (enter the code it shows at plex.tv/link) or <strong>Jellyfin</strong> (pick your server and sign in).</p>
+          <p>Open a film: its menu comes up, just like the DVD.</p>
+        </li>
+      </ol>
     </div>
   </section>
 
@@ -98,7 +130,7 @@ Sintel (2010)/
         <div class="card">
           <h3>On your server</h3>
           <ul>
-            <li><strong>Jellyfin:</strong> in Dashboard → Plugins → Repositories, add <span class="tbd">Repository URL</span>, install <strong>Open Video Menu</strong>, and restart Jellyfin.</li>
+            <li><strong>Jellyfin:</strong> in Dashboard → Plugins → Repositories, add <code style="word-break:break-all">https://github.com/tyson133-prog/openvideomenu/releases/latest/download/jellyfin-repository.json</code>, install <strong>Open Video Menu</strong>, and restart Jellyfin.</li>
             <li><strong>Plex:</strong> run the menu server beside Plex. Give it a Plex token and it follows your libraries by itself; it only answers people signed in to your Plex server.
               <ul>
                 <li><strong>Windows:</strong> <a href="https://github.com/tyson133-prog/openvideomenu/releases/latest/download/OpenVideoMenu-MenuServer-Setup.exe">download the installer</a>, which sets it up as a service. Windows may warn about an unknown publisher: choose More info, then Run anyway.</li>
