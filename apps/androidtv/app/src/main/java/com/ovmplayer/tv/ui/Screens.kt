@@ -146,7 +146,7 @@ fun PickServerScreen(servers: List<PlexResource>, onPick: (PlexResource) -> Unit
     }
 }
 
-/** First run: which kind of media server to use. */
+/** First run: which kind of media server to use, or the public demo. */
 @Composable
 fun ChooseSourceScreen(onChoose: (String) -> Unit) = Centered {
     Text("Where are your movies?", style = MaterialTheme.typography.displaySmall)
@@ -157,6 +157,7 @@ fun ChooseSourceScreen(onChoose: (String) -> Unit) = Centered {
         val focus = remember { FocusRequester() }
         Button(onClick = { onChoose("plex") }, modifier = Modifier.width(240.dp).focusRequester(focus)) { Text("Plex") }
         Button(onClick = { onChoose("jellyfin") }, modifier = Modifier.width(240.dp)) { Text("Jellyfin") }
+        Button(onClick = { onChoose("demo") }, modifier = Modifier.width(240.dp)) { Text("Try the demo") }
         LaunchedEffect(Unit) { focus.requestFocus() }
     }
 }

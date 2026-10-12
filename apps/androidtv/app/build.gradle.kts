@@ -20,7 +20,7 @@ android {
         targetSdk = (project.findProperty("targetSdkOverride") as String?)?.toInt() ?: 36
         // Release builds set these from the tag (-PversionCode=… -PversionName=…).
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = project.findProperty("versionName") as String? ?: "1.0.0"
+        versionName = project.findProperty("versionName") as String? ?: "1.0.1"
     }
 
     // Release signing comes only from the environment (CI secrets, or your shell), never from the repo:

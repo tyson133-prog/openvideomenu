@@ -167,6 +167,9 @@ data class LetterState(val letters: List<Letter> = emptyList(), val selected: Le
 /** Movies per request when paging a library for the Menus row. */
 private const val MOVIE_PAGE = 300
 
+/** The public demo server: Jellyfin with the Open Video Menu plugin and the example titles. */
+private const val DEMO_URL = "https://demo.openvideomenu.org"
+
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = Settings(app)
     private val identity = PlexIdentity(settings.clientId)
@@ -236,8 +239,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun choose(kind: String) {
+        if (kind == "demo") return tryDemo()
         settings.sourceKind = kind
         if (kind == "plex") signIn() else findJellyfin()
+    }
+
+    /**
+     * The demo server, signed in as the public demo account the website gives (demo / demo): nothing to
+     * type, so anyone can see what the app does before they have a server of their own.
+     */
+    fun tryDemo() {
+        signInJob?.cancel()
+        passwordJob?.cancel()
+        pendingJellyfin = null
+        signInJob = viewModelScope.launch {
+            _screen.value = Screen.Busy("Connecting to the demo…")
+            val jf = JellyfinAccount(DEMO_URL, settings.clientId)
+            val info = attempt { jf.publicInfo() }.getOrElse {
+                _screen.value = Screen.Failed("The demo didn't answer (${it.message}). Try again in a while.")
+                return@launch
+            }
+            val auth = attempt { jf.authenticateByName("demo", "demo") }.getOrElse {
+                _screen.value = Screen.Failed("Couldn't sign in to the demo: ${it.message}")
+                return@launch
+            }
+            finishJellyfin(PendingJellyfin(jf, DEMO_URL, info), auth)
+        }
     }
 
     fun signOut() {
