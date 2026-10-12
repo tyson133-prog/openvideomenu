@@ -749,16 +749,20 @@ end sub
 ' --- deep links -----------------------------------------------------------------------------------
 ' A deep link names a title by its ID on the signed-in server (Jellyfin Id, Plex ratingKey). It opens
 ' once the library is on screen: a movie's menu if it has one, a show's screen, else the title plays.
-' Signed out, there's nothing to open it from: the link is dropped and sign-in carries on.
+' Signed out, it opens on the demo server (whose IDs Roku's certification tests use): the app signs in
+' to the demo, and the library opens the link once it's loaded.
 
 sub onDeepLink()
     link = m.top.deepLink
     if link = invalid or link.contentId = invalid then return
+    m.deepLink = link
     if m.login = invalid
-        m.deepLink = invalid
+        if m.top.dialog <> invalid then m.top.dialog.close = true
+        m.pin = invalid
+        m.pollTimer.control = "stop"
+        tryDemo()
         return
     end if
-    m.deepLink = link
     ' Already running: leave whatever is open and open it now. Still loading: startLibraries opens it.
     if m.launched = true and m.libraries <> invalid
         leaveForDeepLink()

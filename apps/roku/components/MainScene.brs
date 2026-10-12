@@ -54,20 +54,57 @@ sub init()
     end if
 end sub
 
-' First run (or after switching server): Plex or Jellyfin?
+' First run (or after switching server): Plex, Jellyfin, or the public demo? For a viewer without a
+' server signed in, this is the app's home page, so the launch is complete once it's on screen.
 sub chooseKind()
-    launchDialog()
     show("choose")
     content = CreateObject("roSGNode", "ContentNode")
     content.createChild("ContentNode").title = "Plex"
     content.createChild("ContentNode").title = "Jellyfin"
+    content.createChild("ContentNode").title = "Try the demo"
     m.chooseList.content = content
     m.chooseList.setFocus(true)
+    launchComplete()
 end sub
 
 sub onKindChosen()
     m.plexServers = invalid
-    if m.chooseList.itemSelected = 0 then plexSignIn() else findServers()
+    i = m.chooseList.itemSelected
+    if i = 0
+        plexSignIn()
+    else if i = 1
+        findServers()
+    else
+        tryDemo()
+    end if
+end sub
+
+' --- the demo -------------------------------------------------------------------------------------
+' The public demo server: Jellyfin with the Open Video Menu plugin and the example titles, signed in
+' as the public demo account the website gives (demo / demo). Nothing to type.
+
+function demoServer() as string
+    return "https://demo.openvideomenu.org"
+end function
+
+sub tryDemo()
+    m.login = invalid
+    m.pending = { url: demoServer() }
+    setStatus("Connecting to the demo…")
+    http(m.pending.url + "/System/Info/Public", "GET", invalid, "onDemoInfo")
+end sub
+
+sub onDemoInfo(res as object, ctx as dynamic)
+    if m.pending = invalid then return
+    if res.code <> 200 or res.json = invalid
+        m.deepLink = invalid
+        setStatus("The demo didn't answer. Try again in a while.")
+        return
+    end if
+    m.pending.id = res.json["Id"]
+    m.pending.name = res.json["ServerName"]
+    body = FormatJson({ "Username": "demo", "Pw": "demo" })
+    http(m.pending.url + "/Users/AuthenticateByName", "POST", body, "onPasswordAuthenticated", invalid, { headers: headers(), timeoutMs: 30000 })
 end sub
 
 function isPlex() as boolean
@@ -81,8 +118,9 @@ function assetHeaders() as object
 end function
 
 ' --- launch beacons (Roku certification 3.2) ------------------------------------------------
-' Launch time runs until the library is on screen. Questions asked before it (Plex or Jellyfin,
-' sign-in, the menu server) are dialogs, whose time the beacons leave out.
+' Launch time runs until the home page is on screen: the library when signed in, else the first
+' screen (Plex, Jellyfin or the demo). Questions asked before the library on a saved sign-in (the
+' menu server) are dialogs, whose time the beacons leave out.
 
 sub launchDialog()
     if m.launched = true or m.inLaunchDialog = true then return
@@ -184,6 +222,7 @@ sub onHttp(event as object)
     res.json = data
     ' Handlers are called by name so each step of a flow reads top to bottom.
     if pending.handler = "onServerInfo" then onServerInfo(res, pending.context)
+    if pending.handler = "onDemoInfo" then onDemoInfo(res, pending.context)
     if pending.handler = "onInitiate" then onInitiate(res, pending.context)
     if pending.handler = "onCheck" then onCheck(res, pending.context)
     if pending.handler = "onAuthenticated" then onAuthenticated(res, pending.context)
