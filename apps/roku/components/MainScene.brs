@@ -358,8 +358,25 @@ sub onInitiate(res as object, ctx as dynamic)
     m.pollTimer.control = "start"
 end sub
 
+' Roku requires its Request for Information screen in an app's sign-in (certification RP 2.1): it asks
+' whether to share the viewer's Roku email. Shown once, before the username. The answer isn't used,
+' kept or sent: the account is on the viewer's own server, so sign-in carries on either way.
 sub onCodeOption()
-    askSignIn("Username", false, "onUsernameEntered")
+    if m.askedUserData = true
+        askSignIn("Username", false, "onUsernameEntered")
+        return
+    end if
+    m.askedUserData = true
+    m.store = CreateObject("roSGNode", "ChannelStore")
+    m.store.requestedUserData = "email"
+    m.store.observeField("userData", "onUserData")
+    m.store.command = "getUserData"
+end sub
+
+sub onUserData()
+    m.store.unobserveField("userData")
+    m.store = invalid
+    if m.pending <> invalid then askSignIn("Username", false, "onUsernameEntered")
 end sub
 
 ' Roku's own keyboard for one sign-in field; the password is masked.
