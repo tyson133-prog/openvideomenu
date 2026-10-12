@@ -24,11 +24,10 @@ grep -n "tbd" *.html
 
 | Where | Placeholder |
 |---|---|
+| Set it up | Google Play, Roku channel, dvdtamer.com link |
 | 1. See it | Demo video |
-| 2. Get the players | Google Play, APK download, Roku channel, Jellyfin plugin repository URL |
-| 3. Make menus | DVD Tamer link |
-| Footer | Contact link |
-| privacy | Effective date, contact email, host name and log retention |
+| 2. Get the players | Google Play, APK download, Roku channel |
+| 3. Make menus | dvdtamer.com link |
 
 Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">` for buttons).
 
