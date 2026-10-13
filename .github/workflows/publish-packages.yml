@@ -82,7 +82,8 @@ jobs:
           # Trusted publishing (npm 11.5 or later) when the package has a trusted publisher, else NPM_TOKEN.
           npm install -g npm@latest
           # core first: the others depend on it. "latest" also for a preview: it's what plain npm install takes.
-          for f in npm/openvideomenu-core-*.tgz $(ls npm/*.tgz | grep -v openvideomenu-core-); do
+          # "./": npm reads "npm/x.tgz" as a GitHub repository (user/repo).
+          for f in ./npm/openvideomenu-core-*.tgz $(ls ./npm/*.tgz | grep -v openvideomenu-core-); do
             npm publish "$f" --access public --tag latest
           done
 
