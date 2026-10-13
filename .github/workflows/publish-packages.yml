@@ -8,8 +8,10 @@
 # nuget.org: trusted publishing. A nuget.org trusted publishing policy names this repository and this workflow file;
 # NuGet/login trades the run's GitHub identity for a short-lived API key. No stored key.
 #   variable NUGET_USER   the nuget.org account (profile name, not email) that owns the policy
-# npm:
-#   secret NPM_TOKEN      an npm token with publish rights to the @openvideomenu scope
+# npm: trusted publishing too, once each package has a trusted publisher on npmjs.com (repository and this workflow
+# file); npm can only add one to a package that exists. Until then, or for a new package:
+#   secret NPM_TOKEN      an npm token with publish rights to the @openvideomenu scope (leave unset once every
+#                         package has a trusted publisher)
 #
 # A release event runs this file as it was at the release's tag. To run the current file for a release already
 # published (a registry that failed, or one added later), start it by hand with the tag and the registry.
@@ -63,6 +65,9 @@ jobs:
   npm:
     if: github.event_name == 'release' || inputs.registry == 'npm' || inputs.registry == 'all'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/setup-node@v4
         with: { node-version: 24, registry-url: "https://registry.npmjs.org" }
@@ -74,7 +79,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "NPM_TOKEN isn't set: nothing published." >&2; exit 1; fi
+          # Trusted publishing (npm 11.5 or later) when the package has a trusted publisher, else NPM_TOKEN.
+          npm install -g npm@latest
           # core first: the others depend on it. "latest" also for a preview: it's what plain npm install takes.
           for f in npm/openvideomenu-core-*.tgz $(ls npm/*.tgz | grep -v openvideomenu-core-); do
             npm publish "$f" --access public --tag latest
