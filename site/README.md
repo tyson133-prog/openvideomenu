@@ -25,7 +25,7 @@ grep -n "tbd" *.html
 | Where | Placeholder |
 |---|---|
 | Set it up | Google Play, Roku channel |
-| 2. Get the players | Google Play, APK download, Roku channel |
+| 2. Get the players | Google Play, Roku channel |
 
 Replace a placeholder with a real link (`<a class="btn btn-primary" href="…">` for buttons).
 
