@@ -5,37 +5,63 @@
 #   - the menu server's Docker image: ghcr.io/<owner>/openvideomenu-menu-server, tagged with the version and
 #     latest, for linux/amd64 and linux/arm64, built from the release's tag (needs no secret: GITHUB_TOKEN)
 #
-# Secrets (Settings → Secrets and variables → Actions):
-#   NUGET_API_KEY   a nuget.org API key allowed to push these package ids
-#   NPM_TOKEN       an npm automation token with publish rights to the @openvideomenu scope
+# nuget.org: trusted publishing. A nuget.org trusted publishing policy names this repository and this workflow file;
+# NuGet/login trades the run's GitHub identity for a short-lived API key. No stored key.
+#   variable NUGET_USER   the nuget.org account (profile name, not email) that owns the policy
+# npm:
+#   secret NPM_TOKEN      an npm token with publish rights to the @openvideomenu scope
+#
+# A release event runs this file as it was at the release's tag. To run the current file for a release already
+# published (a registry that failed, or one added later), start it by hand with the tag and the registry.
 
 name: Publish packages
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v1.0.0-preview.1
+        required: true
+      registry:
+        description: Which to publish
+        type: choice
+        options: [nuget, npm, docker, all]
+        default: nuget
 
 permissions:
   contents: read
 
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
 jobs:
   nuget:
+    if: github.event_name == 'release' || inputs.registry == 'nuget' || inputs.registry == 'all'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: "10.0.x" }
       - name: The release's packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "*.nupkg" --dir nupkg
+        run: gh release download "$TAG" --repo "${{ github.repository }}" --pattern "*.nupkg" --dir nupkg
+      - name: nuget.org sign-in
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
       - name: Push
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [ -z "$NUGET_API_KEY" ]; then echo "NUGET_API_KEY isn't set: nothing published." >&2; exit 1; fi
-          dotnet nuget push "nupkg/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "nupkg/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   npm:
+    if: github.event_name == 'release' || inputs.registry == 'npm' || inputs.registry == 'all'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-node@v4
@@ -43,7 +69,7 @@ jobs:
       - name: The release's packages
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "openvideomenu-*.tgz" --dir npm
+        run: gh release download "$TAG" --repo "${{ github.repository }}" --pattern "openvideomenu-*.tgz" --dir npm
       - name: Publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -55,13 +81,14 @@ jobs:
           done
 
   docker:
+    if: github.event_name == 'release' || inputs.registry == 'docker' || inputs.registry == 'all'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with: { ref: "${{ github.event.release.tag_name }}" }
+        with: { ref: "${{ env.TAG }}" }
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -72,7 +99,6 @@ jobs:
       - name: Image name and tags
         id: image
         run: |
-          TAG="${{ github.event.release.tag_name }}"
           IMAGE="ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/openvideomenu-menu-server"
           echo "tags=$IMAGE:${TAG#v},$IMAGE:latest" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
