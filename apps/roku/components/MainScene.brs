@@ -1158,6 +1158,8 @@ sub openPlayer(content as object)
     m.player.height = 1080
     m.player.observeField("state", "onPlayerState")
     m.player.observeField("availableAudioTracks", "onAudioTracks")
+    ' Every title: its position is kept as it plays (see playerPosition), and cues are timed on it.
+    m.player.observeField("position", "onPlayerPosition")
     m.player.content = content
     m.top.appendChild(m.player)
     ' Level 2: a menu's overlay buttons draw over the title, so the menu goes above the player (it
@@ -1169,17 +1171,14 @@ sub openPlayer(content as object)
         if m.segPlay <> invalid
             m.cueClock = m.segClock
             m.player.notificationInterval = 0.25
-            m.player.observeField("position", "onPlayerPosition")
         else if m.recoverClock <> invalid
             ' The same title reopened after it broke off: its cues go on from where they were.
             m.cueClock = m.recoverClock
             m.recoverClock = invalid
             m.player.notificationInterval = 0.25
-            m.player.observeField("position", "onPlayerPosition")
         else if req.cues <> invalid or req["end"] <> invalid or req.holds <> invalid
             m.cueClock = newCueClock(req)
             m.player.notificationInterval = 0.25
-            m.player.observeField("position", "onPlayerPosition")
         end if
     end if
     m.player.setFocus(true)
@@ -1190,7 +1189,9 @@ end sub
 ' when playback passes them in ordinary play (not seeking), overlays while inside their window, and
 ' the item's end as the title ending.
 sub onPlayerPosition()
-    if m.player = invalid or m.menu = invalid then return
+    if m.player = invalid then return
+    if m.playing <> invalid and m.player.position > 0 then m.playing.lastPosition = msOr(m.playing.offset, 0) + m.player.position
+    if m.menu = invalid then return
     ' A segment that ends inside its file hands over to the next one there.
     if m.segPlay <> invalid
         piece = m.segPlay.pieces[m.segPlay.index]
@@ -1631,10 +1632,11 @@ end function
 
 function playerPosition() as float
     if m.player = invalid or m.playing = invalid then return 0
-    offset = 0
-    if m.playing.offset <> invalid then offset = m.playing.offset
-    if m.player.position = 0 and offset = 0 then return m.playing.req.start
-    return offset + m.player.position
+    if m.player.position > 0 then return msOr(m.playing.offset, 0) + m.player.position
+    ' The player reads 0 before its first frame, and again once a stream has broken off (after a long
+    ' pause): then it's the last real reading, else where playback started.
+    if m.playing.lastPosition <> invalid then return m.playing.lastPosition
+    return m.playing.req.start
 end function
 
 sub reportProgress()
