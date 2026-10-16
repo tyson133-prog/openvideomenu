@@ -21,6 +21,9 @@ android {
         // Release builds set these from the tag (-PversionCode=… -PversionName=…).
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = project.findProperty("versionName") as String? ?: "1.0.1"
+        // -PforceTranscode=true: every title asks the server for a transcode, for testing it on a TV that
+        // decodes everything.
+        buildConfigField("boolean", "FORCE_TRANSCODE", (project.findProperty("forceTranscode") as String? ?: "false"))
     }
 
     // Release signing comes only from the environment (CI secrets, or your shell), never from the repo:
@@ -38,6 +41,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Installs beside the released app (signed with another key) instead of replacing it.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             if (keystore != null) signingConfig = signingConfigs.getByName("release")
@@ -99,6 +107,7 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    implementation(libs.media3.hls)
     implementation(libs.media3.ffmpeg)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)

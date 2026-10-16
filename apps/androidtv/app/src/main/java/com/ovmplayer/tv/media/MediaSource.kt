@@ -64,9 +64,10 @@ interface MediaSource {
 
     /**
      * Everything the player needs to play [file] of [item]: stream URL, headers and progress reporting
-     * back to the server. [audio] is a 1-based audio track, [subtitle] 1-based with 0 = off.
+     * back to the server. [audio] is a 1-based audio track, [subtitle] 1-based with 0 = off. A file this
+     * device can't decode is transcoded by the server; [transcode] asks for that whatever the file.
      */
-    suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int? = null, subtitle: Int? = null): PlayRequest
+    suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int? = null, subtitle: Int? = null, transcode: Boolean = false): PlayRequest
 }
 
 enum class LibraryKind { MOVIES, SHOWS }
@@ -79,9 +80,10 @@ enum class ItemType { MOVIE, SHOW, SEASON, EPISODE, OTHER }
 
 /**
  * One file of an item (a version, or a part of one). [path] is the file path as the server sees it,
- * matched against manifest media paths; [ref] is the source's own handle for playing it.
+ * matched against manifest media paths; [ref] is the source's own handle for playing it. [videoCodec]
+ * and [container], when the server lists them, tell whether this device can play it as it is.
  */
-data class MediaFile(val ref: String, val path: String?)
+data class MediaFile(val ref: String, val path: String?, val videoCodec: String? = null, val container: String? = null)
 
 data class Item(
     val id: String,

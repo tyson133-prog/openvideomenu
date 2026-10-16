@@ -15,6 +15,7 @@ import com.ovmplayer.tv.media.LibraryKind
 import com.ovmplayer.tv.media.MediaFile
 import com.ovmplayer.tv.media.MediaSource
 import com.ovmplayer.tv.media.Page
+import com.ovmplayer.tv.player.Decoders
 import com.ovmplayer.tv.player.PlayRequest
 import com.ovmplayer.tv.player.PlaybackReporter
 
@@ -57,10 +58,13 @@ class PlexSource(val server: PlexServer) : MediaSource {
      * Plex's playback handshake: ask for a direct-play decision for this exact file, then stream the
      * part with the same session id, and report progress with it too. If Plex won't approve direct
      * play, fall back to fetching the raw file as a download (lower priority; can be forbidden for
-     * shared users). Transcoding comes later.
+     * shared users). A file this device can't decode is transcoded instead.
      */
-    override suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int?, subtitle: Int?): PlayRequest {
+    override suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int?, subtitle: Int?, transcode: Boolean): PlayRequest {
         val ref = PartRef.parse(file.ref)
+        if (transcode || BuildConfig.FORCE_TRANSCODE || !Decoders.canPlay(file.videoCodec, file.container)) {
+            return transcodeRequest(item, ref, startSeconds, audio, subtitle)
+        }
         val session = UUID.randomUUID().toString()
         val decision = attempt { server.directPlayDecision(item.id, ref.mediaIndex, ref.partIndex, session) }
         val directPlay = decision.getOrNull()?.directPlayOk == true
@@ -79,6 +83,32 @@ class PlexSource(val server: PlexServer) : MediaSource {
             reporter = reporterFor(item, session),
             audioTrack = audio,
             subtitleTrack = subtitle,
+            transcode = { at -> transcodeRequest(item, ref, at, audio, subtitle) },
+        )
+    }
+
+    /** The file as Plex's transcode, with the menu's soundtrack and subtitles set on the part first. */
+    private suspend fun transcodeRequest(item: Item, ref: PartRef, startSeconds: Double, audio: Int?, subtitle: Int?): PlayRequest {
+        val session = UUID.randomUUID().toString()
+        if (audio != null || subtitle != null) {
+            // Lists don't carry a part's streams: its full metadata does.
+            val part = attempt { server.item(item.id) }.getOrNull()?.media?.getOrNull(ref.mediaIndex)?.parts?.getOrNull(ref.partIndex)
+            if (part != null) attempt { server.selectStreams(part, audio, subtitle) }
+        }
+        val url = server.transcodeUrl(item.id, ref.mediaIndex, ref.partIndex, session, startSeconds)
+        val report = reporterFor(item, session)
+        return PlayRequest(
+            url = url,
+            headers = server.authHeaders() + ("X-Plex-Session-Identifier" to session),
+            startSeconds = startSeconds,
+            title = item.title,
+            reporter = PlaybackReporter { state, positionMs, durationMs ->
+                report.report(state, positionMs, durationMs)
+                if (state == "stopped") scope.launch { attempt { server.stopTranscode(session) } }
+            },
+            // The stream carries only the chosen soundtrack, with the chosen subtitles burned in.
+            subtitleTrack = subtitle?.takeIf { it == 0 },
+            transcoded = true,
         )
     }
 
@@ -125,7 +155,7 @@ class PlexSource(val server: PlexServer) : MediaSource {
         watched = (p.viewCount ?: 0) > 0,
         lastPlayedMs = p.lastViewedAt?.let { it * 1000 },
         files = p.media.flatMapIndexed { mi, m ->
-            m.parts.mapIndexed { pi, part -> MediaFile(PartRef(mi, pi, part.key).toString(), part.file) }
+            m.parts.mapIndexed { pi, part -> MediaFile(PartRef(mi, pi, part.key).toString(), part.file, m.videoCodec, part.container ?: m.container) }
         },
     )
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,6 +35,7 @@ import com.ovmplayer.tv.media.MediaSource
 import com.ovmplayer.tv.media.Page
 import com.ovmplayer.tv.net.Http
 import com.ovmplayer.tv.net.json
+import com.ovmplayer.tv.player.Decoders
 import com.ovmplayer.tv.player.PlayRequest
 import com.ovmplayer.tv.player.PlaybackReporter
 import com.ovmplayer.tv.plex.HttpStatusException
@@ -98,7 +100,22 @@ data class JfItem(
 )
 
 @Serializable
-data class JfPlaybackInfo(@SerialName("PlaySessionId") val playSessionId: String? = null)
+data class JfPlaybackInfo(
+    @SerialName("PlaySessionId") val playSessionId: String? = null,
+    @SerialName("MediaSources") val mediaSources: List<JfPlaybackSource> = emptyList(),
+)
+
+/** The server's playback decision for one file: direct play, or the URL of its transcode. */
+@Serializable
+data class JfPlaybackSource(
+    @SerialName("SupportsDirectPlay") val supportsDirectPlay: Boolean = false,
+    @SerialName("TranscodingUrl") val transcodingUrl: String? = null,
+    @SerialName("TranscodeReasons") val transcodeReasons: List<String> = emptyList(),
+    @SerialName("MediaStreams") val mediaStreams: List<JfStream> = emptyList(),
+)
+
+@Serializable
+data class JfStream(@SerialName("Index") val index: Int, @SerialName("Type") val type: String = "")
 
 /** Jellyfin durations and positions are .NET ticks: 100 ns. */
 private const val TICKS_PER_SECOND = 10_000_000.0
@@ -321,38 +338,115 @@ class JellyfinSource(
     override fun imageHeaders() = http.headers
 
     /**
-     * Direct play: ask the server for a play session for this file (PlaybackInfo), then stream the file
-     * as-is (static=true) with that session id, and report progress under it. Transcoding comes later.
+     * Ask the server for a play session for this file (PlaybackInfo), with this device's profile. When
+     * it can play the file, stream it as-is (static=true) with that session id; otherwise play the
+     * server's transcode. [transcode] asks for a transcode whatever the file. Progress is reported under
+     * the session.
      */
-    override suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int?, subtitle: Int?): PlayRequest {
-        val body = buildJsonObject {
-            put("UserId", userId)
-            put("MediaSourceId", file.ref)
-            put("StartTimeTicks", (startSeconds * TICKS_PER_SECOND).toLong())
-            put("EnableDirectPlay", true)
-            put("EnableDirectStream", true)
-            put("EnableTranscoding", false)
-            put("AutoOpenLiveStream", false)
-            put("IsPlayback", true)
-        }.toString()
-        val session = attempt { http.post<JfPlaybackInfo>("/Items/${item.id}/PlaybackInfo", body).playSessionId }.getOrNull()
-            ?: java.util.UUID.randomUUID().toString().replace("-", "")
+    override suspend fun playRequest(item: Item, file: MediaFile, startSeconds: Double, audio: Int?, subtitle: Int?, transcode: Boolean): PlayRequest {
+        val force = transcode || BuildConfig.FORCE_TRANSCODE
+        var info = attempt { playbackInfo(item, file, startSeconds, force) }.getOrNull()
+        var source = info?.mediaSources?.firstOrNull()
+        if (source?.transcodingUrl != null && (force || !source.supportsDirectPlay)) {
+            if (audio != null || subtitle != null) {
+                // The transcode carries only the chosen soundtrack and subtitles, named by the server's stream numbers.
+                val streams = source.mediaStreams
+                val a = audio?.let { n -> streams.filter { it.type == "Audio" }.getOrNull(n - 1)?.index }
+                val s = subtitle?.let { n -> if (n == 0) -1 else streams.filter { it.type == "Subtitle" }.getOrNull(n - 1)?.index }
+                attempt { playbackInfo(item, file, startSeconds, force, a, s) }.getOrNull()?.let { again ->
+                    info = again
+                    source = again.mediaSources.firstOrNull() ?: source
+                }
+            }
+            val url = source?.transcodingUrl
+            if (url != null) {
+                if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "jellyfin transcode ${item.title}: ${source?.transcodeReasons}")
+                val session = info?.playSessionId ?: newSession()
+                return PlayRequest(
+                    url = http.baseUrl + url,
+                    headers = http.headers,
+                    startSeconds = startSeconds,
+                    title = item.title,
+                    reporter = reporterFor(item, file, session, "Transcode"),
+                    // The stream carries only the chosen soundtrack, with image subtitles burned in.
+                    subtitleTrack = subtitle?.takeIf { it == 0 },
+                    transcoded = true,
+                )
+            }
+        }
+        val session = info?.playSessionId ?: newSession()
         return PlayRequest(
             url = http.url("/Videos/${item.id}/stream", "static" to true, "mediaSourceId" to file.ref, "playSessionId" to session),
             headers = http.headers,
             startSeconds = startSeconds,
             title = item.title,
-            reporter = reporterFor(item, file, session),
+            reporter = reporterFor(item, file, session, "DirectPlay"),
             audioTrack = audio,
             subtitleTrack = subtitle,
+            transcode = { at -> playRequest(item, file, at, audio, subtitle, transcode = true) },
         )
+    }
+
+    private fun newSession() = java.util.UUID.randomUUID().toString().replace("-", "")
+
+    private suspend fun playbackInfo(item: Item, file: MediaFile, startSeconds: Double, transcode: Boolean, audio: Int? = null, subtitle: Int? = null): JfPlaybackInfo {
+        val body = buildJsonObject {
+            put("UserId", userId)
+            put("MediaSourceId", file.ref)
+            put("StartTimeTicks", (startSeconds * TICKS_PER_SECOND).toLong())
+            put("EnableDirectPlay", !transcode)
+            // Copying the video into a stream wouldn't help a device that can't decode it.
+            put("EnableDirectStream", !transcode)
+            put("EnableTranscoding", true)
+            put("AutoOpenLiveStream", false)
+            put("IsPlayback", true)
+            audio?.let { put("AudioStreamIndex", it) }
+            subtitle?.let { put("SubtitleStreamIndex", it) }
+            put("DeviceProfile", deviceProfile())
+        }.toString()
+        return http.post("/Items/${item.id}/PlaybackInfo", body)
+    }
+
+    /**
+     * What this device plays as it is: the containers Media3 reads, with the video codecs it has decoders
+     * for, and any audio (the bundled FFmpeg decoder covers what the device can't). Anything else becomes
+     * H.264 over HLS. Subtitles stay in the file for direct play; a transcode burns in image subtitles.
+     */
+    private fun deviceProfile() = buildJsonObject {
+        put("Name", "ovmplayer")
+        put("MaxStreamingBitrate", 120_000_000)
+        put("MaxStaticBitrate", 120_000_000)
+        put("DirectPlayProfiles", kotlinx.serialization.json.buildJsonArray {
+            add(buildJsonObject {
+                put("Type", "Video")
+                put("Container", Decoders.containers.joinToString(","))
+                put("VideoCodec", Decoders.videoCodecs.joinToString(","))
+            })
+        })
+        put("TranscodingProfiles", kotlinx.serialization.json.buildJsonArray {
+            add(buildJsonObject {
+                put("Type", "Video")
+                put("Container", "ts")
+                put("Protocol", "hls")
+                put("Context", "Streaming")
+                put("VideoCodec", "h264")
+                put("AudioCodec", "aac,ac3,eac3,mp3")
+                put("MaxAudioChannels", "6")
+                put("BreakOnNonKeyFrames", true)
+            })
+        })
+        put("SubtitleProfiles", kotlinx.serialization.json.buildJsonArray {
+            for (format in listOf("srt", "subrip", "ass", "ssa", "vtt", "webvtt", "pgssub", "dvdsub", "dvbsub")) {
+                add(buildJsonObject { put("Format", format); put("Method", "Embed") })
+            }
+        })
     }
 
     /**
      * Playback reports (start, progress, stopped), sent in order by one worker so a late "progress"
      * never lands after "stopped". Failures are ignored: playback matters more than the report.
      */
-    private fun reporterFor(item: Item, file: MediaFile, session: String): PlaybackReporter {
+    private fun reporterFor(item: Item, file: MediaFile, session: String, playMethod: String): PlaybackReporter {
         data class Report(val state: String, val positionMs: Long)
         val queue = Channel<Report>(Channel.UNLIMITED)
         scope.launch {
@@ -365,7 +459,7 @@ class JellyfinSource(
                     put("PositionTicks", (r.positionMs / 1000.0 * TICKS_PER_SECOND).toLong())
                     put("IsPaused", r.state == "paused")
                     put("CanSeek", true)
-                    put("PlayMethod", "DirectPlay")
+                    put("PlayMethod", playMethod)
                 }.toString()
                 val path = when {
                     r.state == "stopped" -> "/Sessions/Playing/Stopped"

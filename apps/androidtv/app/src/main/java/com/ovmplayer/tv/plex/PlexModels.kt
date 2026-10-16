@@ -126,7 +126,19 @@ data class PlexMedia(
 )
 
 @Serializable
-data class PlexPart(val id: Long, val key: String, val file: String? = null, val duration: Long? = null, val container: String? = null)
+data class PlexPart(
+    val id: Long,
+    val key: String,
+    val file: String? = null,
+    val duration: Long? = null,
+    val container: String? = null,
+    /** The part's video, audio and subtitle streams (only in an item's full metadata). */
+    @SerialName("Stream") val streams: List<PlexStream> = emptyList(),
+)
+
+/** One stream of a part. [streamType] 1 = video, 2 = audio, 3 = subtitle. */
+@Serializable
+data class PlexStream(val id: Long, val streamType: Int = 0)
 
 @Serializable
 data class PlexChapter(val index: Int? = null, val startTimeOffset: Long = 0, val tag: String? = null)

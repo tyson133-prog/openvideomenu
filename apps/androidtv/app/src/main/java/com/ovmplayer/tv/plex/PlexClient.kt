@@ -217,6 +217,67 @@ class PlexServer(
     fun partUrl(partKey: String, download: Boolean = false): String =
         if (download) url(partKey, "download" to "1") else url(partKey)
 
+    /**
+     * Choose a part's soundtrack and subtitles (the Nth of each, subtitle 0 = off), as Plex's own apps
+     * do: a transcode carries only the chosen ones.
+     */
+    suspend fun selectStreams(part: PlexPart, audio: Int?, subtitle: Int?) {
+        val params = buildList {
+            audio?.let { n -> part.streams.filter { it.streamType == 2 }.getOrNull(n - 1)?.let { add("audioStreamID" to "${it.id}") } }
+            subtitle?.let { n ->
+                val id = if (n == 0) 0L else part.streams.filter { it.streamType == 3 }.getOrNull(n - 1)?.id
+                id?.let { add("subtitleStreamID" to "$it") }
+            }
+        }
+        if (params.isEmpty()) return
+        val req = Request.Builder().url(url("/library/parts/${part.id}", "allParts" to "1", *params.toTypedArray()))
+            .headers(identity.headers(token)).put(FormBody.Builder().build()).build()
+        withContext(Dispatchers.IO) { http.newCall(req).execute().close() }
+    }
+
+    /**
+     * A transcode of one file to H.264 over HLS, from [startSeconds]. The video is always converted (it's
+     * what this device can't decode); the sound is passed through when it can be. The chosen subtitles
+     * are burned in. The player's clock still reads the file's time.
+     */
+    private fun transcodeParams(ratingKey: String, mediaIndex: Int, partIndex: Int, sessionId: String, startSeconds: Double) = arrayOf(
+        "path" to "/library/metadata/$ratingKey",
+        "mediaIndex" to "$mediaIndex",
+        "partIndex" to "$partIndex",
+        "protocol" to "hls",
+        "location" to "lan",
+        "session" to sessionId,
+        "directPlay" to "0",
+        "directStream" to "0",
+        "directStreamAudio" to "1",
+        "fastSeek" to "1",
+        "hasMDE" to "1",
+        "subtitles" to "burn",
+        "offset" to "${startSeconds.toLong()}",
+        "videoCodec" to "h264",
+        "maxVideoBitrate" to "20000",
+    )
+
+    /**
+     * Ask Plex for the transcode's decision first, on the same session (as for direct play: without one
+     * PMS only allows an ad-hoc session), then return the stream's URL. The token travels as a header.
+     */
+    suspend fun transcodeUrl(ratingKey: String, mediaIndex: Int, partIndex: Int, sessionId: String, startSeconds: Double): String {
+        val params = transcodeParams(ratingKey, mediaIndex, partIndex, sessionId, startSeconds)
+        val decision = http.getJson<DecisionResponse>(
+            url("/video/:/transcode/universal/decision", *params),
+            identity.headers(token) + ("X-Plex-Session-Identifier" to sessionId),
+        ).container
+        if (BuildConfig.DEBUG) android.util.Log.d("ovmplayer", "transcode decision $ratingKey: ${decision.explanation}")
+        return url("/video/:/transcode/universal/start.m3u8", *params)
+    }
+
+    /** End a transcode when its playback stops, so Plex doesn't keep converting. */
+    suspend fun stopTranscode(sessionId: String) = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(url("/video/:/transcode/universal/stop", "session" to sessionId)).headers(identity.headers(token)).build())
+            .execute().close()
+    }
+
     /** Headers needed to fetch [partUrl] and images. */
     fun authHeaders(): Map<String, String> = identity.headers(token)
 

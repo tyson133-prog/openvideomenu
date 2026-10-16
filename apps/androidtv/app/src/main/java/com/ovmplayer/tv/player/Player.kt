@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,6 +19,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.launch
 
 /** Receives playback state for the media server: "playing", "paused" or "stopped", with times in ms. */
 fun interface PlaybackReporter {
@@ -41,6 +44,13 @@ data class PlayRequest(
      * clip's, and [startSeconds] and every reported position are on the title's own timeline.
      */
     val segments: List<Clip> = emptyList(),
+    /** A stream the server transcodes (HLS); its position is still the file's time. */
+    val transcoded: Boolean = false,
+    /**
+     * The same title as a transcode from a position, for when this device turns out not to decode the
+     * file after all (a profile or size it can't handle). Null when there's no such fallback.
+     */
+    val transcode: (suspend (startSeconds: Double) -> PlayRequest?)? = null,
 )
 
 /** One segment of a title: a range of a file (seconds into it), with its angle's video track if any. */
@@ -121,23 +131,28 @@ fun VideoPlayer(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // What plays: the request, or the transcode that replaced it when this device couldn't decode the file.
+    var active by remember(request) { androidx.compose.runtime.mutableStateOf(request) }
     // Segments play as clipped items in one playlist (gapless where the formats allow); each clip's
     // place on the title's timeline is the sum of the lengths before it.
-    val offsets = remember(request) {
-        request.segments.runningFold(0.0) { at, clip -> at + ((clip.endSeconds ?: Double.MAX_VALUE) - clip.startSeconds) }.dropLast(1)
+    val offsets = remember(active) {
+        active.segments.runningFold(0.0) { at, clip -> at + ((clip.endSeconds ?: Double.MAX_VALUE) - clip.startSeconds) }.dropLast(1)
     }
-    val player = remember(request) {
-        buildPlayer(context, request.headers, request.segments.associate { it.url to it.headers }).apply {
-            if (request.segments.isEmpty()) {
-                setMediaItem(MediaItem.Builder().setUri(request.url).build(), (request.startSeconds * 1000).toLong())
+    val player = remember(active) {
+        buildPlayer(context, active.headers, active.segments.associate { it.url to it.headers }).apply {
+            if (active.segments.isEmpty()) {
+                val item = MediaItem.Builder().setUri(active.url)
+                if (active.transcoded) item.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                setMediaItem(item.build(), (active.startSeconds * 1000).toLong())
             } else {
-                val items = request.segments.map { clip ->
+                val items = active.segments.map { clip ->
                     val clipping = MediaItem.ClippingConfiguration.Builder().setStartPositionMs((clip.startSeconds * 1000).toLong())
                     clip.endSeconds?.let { clipping.setEndPositionMs((it * 1000).toLong()) }
                     MediaItem.Builder().setUri(clip.url).setClippingConfiguration(clipping.build()).build()
                 }
-                val index = offsets.indexOfLast { it <= request.startSeconds }.coerceAtLeast(0)
-                setMediaItems(items, index, ((request.startSeconds - offsets[index]) * 1000).toLong())
+                val index = offsets.indexOfLast { it <= active.startSeconds }.coerceAtLeast(0)
+                setMediaItems(items, index, ((active.startSeconds - offsets[index]) * 1000).toLong())
             }
             playWhenReady = true
             prepare()
@@ -154,9 +169,29 @@ fun VideoPlayer(
         // not overwrite the title's resume point (e.g. with a chapter start that never played).
         var started = false
         val report = { state: String ->
-            if (started) request.reporter?.report(state, player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it > 0 } ?: 0)
+            if (started) active.reporter?.report(state, player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it > 0 } ?: 0)
         }
         val listener = object : Player.Listener {
+            private var fallingBack = false
+
+            /**
+             * This device can't decode the file after all (a profile, bit depth or size its decoder refuses):
+             * play it again as the server's transcode, from where it was. False when there's no such fallback.
+             */
+            fun transcodeInstead(why: String): Boolean {
+                val transcode = active.transcode ?: return false
+                if (active.transcoded || active.segments.isNotEmpty() || fallingBack) return false
+                fallingBack = true
+                val at = if (player.currentPosition > 0) player.currentPosition / 1000.0 else active.startSeconds
+                android.util.Log.i("ovmplayer", "$why: asking the server for a transcode from ${at}s")
+                player.stop()
+                scope.launch {
+                    val next = runCatching { transcode(at) }.getOrNull()
+                    if (next != null) active = next else onError("This TV can't play this video's format, and the server couldn't convert it.")
+                }
+                return true
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     report("stopped")
@@ -173,12 +208,21 @@ fun VideoPlayer(
             /** Apply the menu's track choices once the file's tracks are known. */
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 if (tracksApplied || tracks.groups.isEmpty()) return
+                val video = tracks.groups.filter { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }
+                if (video.isNotEmpty() && video.none { it.isSupported }) {
+                    // Media3 would play the sound alone.
+                    if (!transcodeInstead("no video track this device can decode")) {
+                        player.stop()
+                        onError("This TV can't play this video's format.")
+                    }
+                    return
+                }
                 tracksApplied = true
-                val video = request.segments.getOrNull(player.currentMediaItemIndex)?.videoTrack ?: request.videoTrack
-                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, request.audioTrack, request.subtitleTrack, video)
+                val angle = active.segments.getOrNull(player.currentMediaItemIndex)?.videoTrack ?: active.videoTrack
+                player.trackSelectionParameters = selectTracks(player.trackSelectionParameters, tracks, active.audioTrack, active.subtitleTrack, angle)
                 if (com.ovmplayer.tv.BuildConfig.DEBUG) android.util.Log.d(
                     "ovmplayer",
-                    "tracks: audio=${request.audioTrack} subtitle=${request.subtitleTrack} video=${request.videoTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
+                    "tracks: audio=${active.audioTrack} subtitle=${active.subtitleTrack} video=${active.videoTrack} of ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_AUDIO }} audio / ${tracks.groups.count { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }} text groups",
                 )
             }
 
@@ -192,6 +236,8 @@ fun VideoPlayer(
             private var reopenedAt = 0L
 
             override fun onPlayerError(error: PlaybackException) {
+                val decoding = error.errorCode in PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED
+                if (decoding && transcodeInstead("decoder error ${error.errorCodeName}")) return
                 val network = error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED..PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
                 val now = android.os.SystemClock.elapsedRealtime()
                 if (now - reopenedAt > 60_000) reopens = 0
@@ -209,7 +255,7 @@ fun VideoPlayer(
                         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                         PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                         PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
-                        -> "This file needs transcoding, which isn't supported yet."
+                        -> "This TV can't play this video's format."
                         PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> when (
                             (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         ) {
@@ -227,7 +273,7 @@ fun VideoPlayer(
             }
         }
         player.addListener(listener)
-        onReady(PlayerHandle(player, if (request.segments.isEmpty()) listOf(0.0) else offsets))
+        onReady(PlayerHandle(player, if (active.segments.isEmpty()) listOf(0.0) else offsets))
         onDispose {
             if (player.playbackState != Player.STATE_ENDED) report("stopped")
             lifecycle.removeObserver(lifecycleObserver)
@@ -239,7 +285,7 @@ fun VideoPlayer(
     androidx.compose.runtime.LaunchedEffect(player) {
         while (true) {
             kotlinx.coroutines.delay(10_000)
-            if (player.isPlaying) request.reporter?.report("playing", player.currentPosition, player.duration.coerceAtLeast(0))
+            if (player.isPlaying) active.reporter?.report("playing", player.currentPosition, player.duration.coerceAtLeast(0))
         }
     }
     AndroidView(
@@ -270,5 +316,7 @@ fun VideoPlayer(
                 })
             }
         },
+        // A transcode replacing the file is a new player in the same view.
+        update = { view -> if (view.player !== player) view.player = player },
     )
 }
