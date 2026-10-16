@@ -13,6 +13,8 @@
 #   secret NPM_TOKEN      an npm token with publish rights to the @openvideomenu scope (leave unset once every
 #                         package has a trusted publisher)
 #
+# Only releases tagged v… publish: a release of one app alone (e.g. ovmplayer-android-…) has no packages.
+#
 # A release event runs this file as it was at the release's tag. To run the current file for a release already
 # published (a registry that failed, or one added later), start it by hand with the tag and the registry.
 
@@ -40,7 +42,7 @@ env:
 
 jobs:
   nuget:
-    if: github.event_name == 'release' || inputs.registry == 'nuget' || inputs.registry == 'all'
+    if: (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) || inputs.registry == 'nuget' || inputs.registry == 'all'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,7 +65,7 @@ jobs:
         run: dotnet nuget push "nupkg/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   npm:
-    if: github.event_name == 'release' || inputs.registry == 'npm' || inputs.registry == 'all'
+    if: (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) || inputs.registry == 'npm' || inputs.registry == 'all'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -88,7 +90,7 @@ jobs:
           done
 
   docker:
-    if: github.event_name == 'release' || inputs.registry == 'docker' || inputs.registry == 'all'
+    if: (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) || inputs.registry == 'docker' || inputs.registry == 'all'
     runs-on: ubuntu-latest
     permissions:
       contents: read
