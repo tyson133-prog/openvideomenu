@@ -13,7 +13,6 @@ sub execute()
     ' HTTPS (plex.tv, plex.direct addresses) needs Roku's certificate bundle.
     if LCase(Left(req.url, 6)) = "https:"
         xfer.SetCertificatesFile("common:/certs/ca-bundle.crt")
-        xfer.InitClientCertificates()
     end if
     if req.headers <> invalid then xfer.SetHeaders(req.headers)
     method = "GET"
