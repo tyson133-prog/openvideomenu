@@ -1190,7 +1190,7 @@ end sub
 ' the item's end as the title ending.
 sub onPlayerPosition()
     if m.player = invalid then return
-    if m.playing <> invalid and m.player.position > 0 then m.playing.lastPosition = msOr(m.playing.offset, 0) + m.player.position
+    if m.playing <> invalid and m.player.position > 0 then m.playing.lastPosition = m.player.position
     if m.menu = invalid then return
     ' A segment that ends inside its file hands over to the next one there.
     if m.segPlay <> invalid
@@ -1632,7 +1632,7 @@ end function
 
 function playerPosition() as float
     if m.player = invalid or m.playing = invalid then return 0
-    if m.player.position > 0 then return msOr(m.playing.offset, 0) + m.player.position
+    if m.player.position > 0 then return m.player.position
     ' The player reads 0 before its first frame, and again once a stream has broken off (after a long
     ' pause): then it's the last real reading, else where playback started.
     if m.playing.lastPosition <> invalid then return m.playing.lastPosition

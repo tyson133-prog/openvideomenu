@@ -294,7 +294,7 @@ end function
 ' own apps do), so it applies to direct play and transcode alike.
 sub plexPlay(req as object, target as object)
     parts = target.source.Split(":")
-    m.playing = { kind: "plex", req: req, item: target.item, source: target.source, path: target.path, partKey: target.part["key"], mediaIndex: parts[0], partIndex: parts[1], session: CreateObject("roDeviceInfo").GetRandomUUID(), method: "DirectPlay", started: false, offset: 0, target: target }
+    m.playing = { kind: "plex", req: req, item: target.item, source: target.source, path: target.path, partKey: target.part["key"], mediaIndex: parts[0], partIndex: parts[1], session: CreateObject("roDeviceInfo").GetRandomUUID(), method: "DirectPlay", started: false, target: target }
     audio = plexStream(target.part, req.audio, 2)
     m.playing.audioCodec = msOr(target.media["audioCodec"], "")
     ' The menu's soundtrack and subtitle choices are set on the part, as Plex's own apps do.
@@ -410,8 +410,7 @@ sub startPlexPlayer()
     end for
     content.HttpHeaders = lines
     if p.method = "Transcode"
-        ' Plex starts the transcode at the offset; the stream's own clock then starts at 0.
-        p.offset = p.req.start
+        ' Plex starts the transcode at the offset; the player's clock still reads the file's time.
         content.url = m.login.url + "/video/:/transcode/universal/start.m3u8?" + plexTranscodeParams() + "&X-Plex-Token=" + m.login.token
         content.StreamFormat = "hls"
     else
